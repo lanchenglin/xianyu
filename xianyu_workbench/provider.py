@@ -1,0 +1,153 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import shutil
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+from filelock import FileLock, Timeout
+
+from .config import Settings
+from .db import DB
+from .security import Vault, canonical, redact
+
+
+class Problem(Exception):
+    def __init__(self, code: str, message: str, status: int = 400):
+        self.code, self.message, self.status = code, message, status
+        super().__init__(message)
+
+
+class Provider:
+    """One bounded account operation at a time; never retries a write."""
+    def __init__(self, settings: Settings, db: DB, vault: Vault):
+        self.s, self.db, self.vault = settings, db, vault
+        self.lock_path = str(settings.data_dir / "operations.lock")
+
+    def account(self, account_id: str) -> dict:
+        account = self.db.one("SELECT * FROM accounts WHERE id=?", (account_id,))
+        if not account:
+            raise Problem("not_found", "账号不存在", 404)
+        return account
+
+    def call(self, account_id: str, operation: str, payload: dict, *, write: bool = False):
+        expected_write = operation in {"message.send", "item.publish", "item.delete"}
+        if operation not in {"search", "item", "chats", "history", "message.send", "item.publish", "item.delete"} or write != expected_write:
+            raise Problem("unsupported", "该操作没有开放；交易操作必须在闲鱼人工完成", 403)
+        try:
+            with FileLock(self.lock_path, timeout=0.1):
+                account = self.account(account_id)
+                if account["paused"]:
+                    raise Problem("account_paused", "账号已暂停：" + account["pause_reason"], 409)
+                if account["mode"] == "demo":
+                    return self.demo(operation, payload)
+                if not self.s.live_enabled:
+                    raise Problem("live_disabled", "真实执行未启用；由部署者设置 XY_LIVE_ENABLED=true", 409)
+                if not account["secret"]:
+                    raise Problem("auth_required", "请管理员导入此账号的登录态", 409)
+                now = time.time()
+                interval = self.s.write_interval if write else self.s.read_interval
+                previous = account["last_write"] if write else account["last_call"]
+                if now - previous < interval:
+                    raise Problem("rate_limited", f"请求过快，请在 {int(interval - (now - previous)) + 1} 秒后重新检查", 429)
+                self.db.execute("UPDATE accounts SET last_call=? WHERE id=?", (now, account_id))
+                if write:
+                    self.db.execute("UPDATE accounts SET last_write=? WHERE id=?", (now, account_id))
+                return self._live(account, operation, payload, write=write)
+        except Timeout as exc:
+            raise Problem("busy", "账号操作队列正在执行其他任务，请稍后再试", 409) from exc
+
+    def _live(self, account: dict, operation: str, payload: dict, *, write: bool):
+        home = self.s.data_dir / "runtime" / account["id"]
+        private = home / ".goofish-cli"
+        private.mkdir(parents=True, exist_ok=True, mode=0o700)
+        home.chmod(0o700)
+        private.chmod(0o700)
+        cookie_file = private / "cookies.json"
+        cookies = self.vault.open(account["secret"])
+        if cookies.get("unb") != account["uid"]:
+            raise Problem("account_mismatch", "登录态所属账号不一致，拒绝执行", 409)
+        fd = os.open(cookie_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(canonical(cookies))
+        safe_keys = {"PATH", "SYSTEMROOT", "WINDIR", "COMSPEC", "TEMP", "TMP", "DISPLAY",
+                     "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR", "XAUTHORITY", "LANG", "LC_ALL",
+                     "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMW6432", "LOCALAPPDATA"}
+        env = {k: v for k, v in os.environ.items() if k.upper() in safe_keys}
+        env.update({"HOME": str(home), "USERPROFILE": str(home), "PYTHONUTF8": "1",
+                    "GOOFISH_COOKIES_PATH": str(cookie_file), "GOOFISH_NO_CHROME_BOOTSTRAP": "1",
+                    "GOOFISH_HEADLESS": "0"})
+        command = [self.s.upstream_python or sys.executable, "-u", "-m", "xianyu_workbench.bridge"]
+        try:
+            process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
+                                       env=env, cwd=home, start_new_session=os.name != "nt")
+            try:
+                stdout, _ = process.communicate(canonical({"operation": operation, "payload": payload}),
+                                                timeout=self.s.operation_timeout)
+            except subprocess.TimeoutExpired:
+                if os.name == "nt":
+                    subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], capture_output=True, timeout=10)
+                else:
+                    os.killpg(process.pid, signal.SIGKILL)
+                process.communicate()
+                raise Problem("uncertain" if write else "timeout", "执行超时；写操作结果不确定，禁止自动重试，请先在闲鱼核对", 504)
+            if len(stdout) > 5_000_000:
+                raise Problem("uncertain" if write else "upstream_error", "上游返回过大，结果需人工核实", 502)
+            try:
+                output = json.loads(stdout)
+            except (ValueError, TypeError):
+                raise Problem("uncertain" if write else "upstream_error", "上游返回无法解析，未记录原始输出以保护登录态", 502)
+            if process.returncode or not output.get("ok"):
+                code = output.get("code", "upstream_error")
+                if code in ("risk_control", "auth_required"):
+                    self.db.execute("UPDATE accounts SET paused=1,pause_reason=? WHERE id=?", (code, account["id"]))
+                messages = {"risk_control": "平台要求安全验证，已暂停账号，请自行验证后人工恢复",
+                            "auth_required": "登录态失效，已暂停账号，请重新导入",
+                            "dependency_missing": "缺少真实连接依赖，请安装 .[live] 和系统 Chrome / Node.js"}
+                raise Problem(code, messages.get(code, "上游操作异常；写操作可能已发出，请先在闲鱼核实"), 502)
+            return redact(output["data"])
+        finally:
+            # Never retain readable login cookies at rest. Crash residue is removed at startup.
+            cookie_file.unlink(missing_ok=True)
+            shutil.rmtree(private / "profiles", ignore_errors=True)
+
+    @staticmethod
+    def demo(operation: str, payload: dict):
+        if operation == "search":
+            seed = int(hashlib.sha256(payload["query"].encode()).hexdigest()[:8], 16)
+            items = [{"item_id": str(100000 + seed % 10000 + i), "title": f"[演示] {payload['query']} 样例 {i+1}",
+                      "price": str(800 + i * 150), "location": ("福建 福州", "福建 厦门", "浙江 杭州")[i % 3],
+                      "condition": "仅演示数据，不代表实际成色", "seller_id": "10001", "url": ""}
+                     for i in range(min(payload.get("limit", 20), 6))]
+            return {"items": items, "total": len(items), "demo": True}
+        if operation == "item":
+            return {"item_id": payload["item_id"], "title": "[演示] 本人商品", "description": "此条为模拟商品",
+                    "price": "1280", "seller_id": "99999", "status": "演示在售", "demo": True}
+        if operation == "chats":
+            return {"sessions": [{"session_id": "demo-chat", "peer_user_id": "10001", "peer_nick": "演示买家",
+                                   "last_msg": "你好，商品还有吗？", "unread": 1}], "demo": True}
+        if operation == "history":
+            return [{"send_user_id": "10001", "send_user_name": "演示买家", "message": "你好，商品还有吗？", "demo": True}]
+        if operation == "message.send":
+            return {"ok": True, "mid": "demo-not-sent", "demo": True, "notice": "演示模式，未发送到闲鱼"}
+        if operation == "item.publish":
+            return {"ok": True, "item_id": "99999001", "demo": True, "notice": "演示模式，未发布到闲鱼"}
+        if operation == "item.delete":
+            return {"ok": True, "item_id": payload["item_id"], "demo": True, "notice": "演示模式，未删除闲鱼商品"}
+        raise Problem("unsupported", "不支持的操作", 501)
+
+
+def asset_path(settings: Settings, row: dict) -> Path:
+    root = (settings.data_dir / "assets").resolve()
+    path = (root / row["filename"]).resolve()
+    if path.parent != root or not path.is_file():
+        raise Problem("asset_invalid", "图片不存在或越过素材目录", 409)
+    if hashlib.sha256(path.read_bytes()).hexdigest() != row["sha256"]:
+        raise Problem("asset_changed", "图片已被修改，请重新上传并审批", 409)
+    return path

@@ -1,0 +1,24 @@
+services:
+  workbench:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8099:8099"
+    env_file: .env
+    environment:
+      XY_DATA_DIR: /app/data
+      XY_LIVE_ENABLED: "false"
+    volumes:
+      - workbench-data:/app/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8099/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+volumes:
+  workbench-data:
