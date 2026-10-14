@@ -6,6 +6,18 @@
 
 > **这是 v0.1.0 工程首版，不是已在你的闲鱼账号验收的全自动店铺系统。** 默认关闭真实执行。演示数据明确标记，不伪装成真实商品或成功操作。付款、下单、退款、确认收货及其他交易动作没有执行接口，必须本人在闲鱼完成。
 
+## 文档入口与本地续开发
+
+| 你要做什么 | 文档 |
+|---|---|
+| 在本地继续开发未完成功能 | [开发交接与未完成清单](docs/DEVELOPMENT_HANDOFF.md)（优先级、代码入口、验收条件、给 AI 的续开发指令） |
+| 安装、启动、导入真实账号、Docker / WSL | [部署说明](docs/DEPLOYMENT.md) |
+| 接入 Hermes / Claude / Codex 或 HTTP API | [接入说明](docs/MCP.md) |
+| 查看实际测试与 CI 状态 | [测试报告](docs/TEST_REPORT.md) |
+| 让 AI 修改代码前了解约束 | [AGENTS.md](AGENTS.md) 与 [安全边界](docs/SECURITY.md) |
+
+**本地完整开发推荐 Python 3.12。** 首轮 GitHub CI 的 Windows / Ubuntu 3.12 基础测试、上游契约与演示页面测试已通过；3.11 开发依赖因 `pyee==14.0.0` 要求 Python >=3.12 而安装失败，尚未修复。运行锁文件不包含 pyee，不能据此认定所有 3.11 基础演示都失败；但不要把代码声明 `>=3.11` 当作完整开发/live 组合已验收。详见上述交接清单 P0-ENV。
+
 ## 能力与边界
 
 | 功能 | 本版实现 |
@@ -30,14 +42,14 @@
 
 ## 先跑通演示
 
-需要 Python 3.11+；推荐 3.12。已有 Python 3.11 的 Windows 电脑也可运行。
+代码声明 Python 3.11+；以下安装示例统一使用已通过 CI 的 Python 3.12。3.11 完整开发依赖存在上述已知阻塞，建议先独立安装 3.12，不覆盖其他项目的 Python 环境。
 
 ### Windows PowerShell
 
 ```powershell
 git clone https://github.com/lanchenglin/xianyu.git
 cd xianyu
-py -3.11 -m venv .venv
+py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.lock
 .\.venv\Scripts\python.exe -m pip install --no-deps -e .
 .\.venv\Scripts\python.exe -m xianyu_workbench.cli init
@@ -53,7 +65,7 @@ py -3.11 -m venv .venv
 ```bash
 git clone https://github.com/lanchenglin/xianyu.git
 cd xianyu
-python3 -m venv .venv
+python3.12 -m venv .venv
 .venv/bin/python -m pip install -r requirements.lock
 .venv/bin/python -m pip install --no-deps -e .
 .venv/bin/python -m xianyu_workbench.cli init
@@ -103,6 +115,8 @@ python3 -m venv .venv
 > 使用 xianyu-workbench，先查看账号和能力。帮我找福州 2000 元以内的显卡，列出候选和需要核实的问题。询价只提交草稿审批，不承诺成交，不付款；演示结果必须注明是模拟数据。
 
 ## 开发与测试
+
+从 [本地开发交接](docs/DEVELOPMENT_HANDOFF.md) 开始；其中明确区分未实现、代码已接入但未实测、以及永久保留人工的交易操作。以下使用已激活的 Python 3.12 虚拟环境。
 
 ```bash
 python -m pip install -e '.[dev,mcp,live]'

@@ -2,6 +2,8 @@
 
 日期：2026-10-14。此文件只记录实际执行的检查，不把待部署步骤写成已验收。
 
+以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
+
 ## 已执行
 
 开发测试环境：Linux，独立 Python 3.12.14 虚拟环境。真实闲鱼登录态未提供，测试没有登录闲鱼，没有实际发送消息、发布商品、删除商品或进行交易。
@@ -31,17 +33,47 @@
 
 当前依赖测试过程中出现 1 条 Starlette 关于 httpx TestClient 的弃用警告，不是测试失败；后续可按依赖更新统一处理。
 
-## 尚未完成的验收
+## 上传后 GitHub CI 核对（2026-10-14）
+
+代码基线：`64556d84c7eed63222dd1352daff69293b8b98c0`。实查 [CI #1 / run 38535793804](https://github.com/lanchenglin/xianyu/actions/runs/38535793804)，总结果为 **failure**，不是全绿。分作业如下：
+
+| 作业 | 结果 |
+|---|---|
+| tests (ubuntu-latest, 3.12) | 安装、ruff 与 pytest 通过 |
+| tests (windows-latest, 3.12) | 安装、ruff 与 pytest 通过 |
+| upstream-contract（Ubuntu / Python 3.12） | 通过；不是登录闲鱼的业务测试 |
+| browser-smoke（Ubuntu / Python 3.12） | 演示页面交互通过；补上本地浏览器下载失败后未执行的这部分 CI 验证 |
+| tests (ubuntu-latest, 3.11) | 安装 requirements-dev.lock 失败；后续测试跳过 |
+| tests (windows-latest, 3.11) | 安装 requirements-dev.lock 失败；后续测试跳过 |
+
+已读取 [Windows 3.11 作业日志](https://github.com/lanchenglin/xianyu/actions/runs/38535793804/job/115758224434)：`pyee==14.0.0` 需要 Python >=3.12，当前开发锁文件无条件固定该版本。运行锁文件不包含 pyee；不能直接据此推断所有 3.11 基础演示安装失败。完整开发/live 环境先使用 3.12，修复依赖和重跑兼容矩阵列为 [交接清单 P0-ENV](DEVELOPMENT_HANDOFF.md)。本次仅更新文档，不改变源码、锁文件或 CI 配置。
+
+基础测试矩阵不安装 live 可选依赖；其成功不能代替上游契约作业，更不能代替真实平台操作。Windows CI 使用托管 Windows Server 环境，不是主人 Windows 桌面的 Chrome/登录态环境。这里的记录绑定上述历史提交，不表示以后所有提交或文档提交后的 CI 也通过。
+
+## 当前验收状态与仍需本地确认的项目
 
 | 项目 | 当前状态 |
 |---|---|
-| Playwright 页面交互烟雾测试 | 脚本与 CI 已加入；本次环境测试浏览器下载超时，未执行页面交互，不算通过 |
-| Windows 3.11/3.12 | 已配置 CI 矩阵；本地开发环境不是 Windows，不能据此声称 Windows 实测通过 |
+| Playwright 页面交互烟雾测试 | 首次本地下载超时未执行；上传后 Ubuntu CI 已通过演示页面测试，主人本地环境仍需验证 |
+| Windows 3.11/3.12 | Windows CI 3.12 基础测试通过；3.11 开发依赖安装失败；主人电脑真实部署未验收 |
 | Docker 镜像构建与运行 | 配置已提供，未在本次环境构建验收 |
 | Hermes / Claude / Codex 客户端联调 | 通用 MCP 配置已提供，未在你的实际客户端运行 |
 | 真实商品搜索和消息 | 未提供账号登录态，未测试 |
 | 真实发布、删除、送达状态 | 未执行；必须人工审批后逐条验收 |
 | 模型服务实际联网生成 | 未提供 API 配置；仅完成配置/错误边界测试 |
+
+## 本次文档交接检查（2026-10-14）
+
+本次只修改 README、AGENTS 和 docs 下的 Markdown，源码、依赖锁、CI 配置与部署配置未改动。
+
+| 检查 | 结果 |
+|---|---|
+| 6 份变更文档的 UTF-8、代码围栏、64 个本地文档链接 | 通过 |
+| `git diff --check` | 通过 |
+| Linux / Python 3.12.14，当前工作副本 `ruff check --no-cache .` | 通过 |
+| 当前工作副本完整 `pytest -q -p no:cacheprovider` | 69 passed，1 条已有 TestClient 弃用警告 |
+
+此轮没有重新运行真实平台操作或本地浏览器页面测试，也没有修复/重新验收 Python 3.11 依赖。CI 分环境结论仍以绑定具体提交的记录为准。
 
 ## 真实账号上线前步骤
 

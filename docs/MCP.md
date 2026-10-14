@@ -1,5 +1,9 @@
 # Hermes / Claude / Codex 接入
 
+文档导航：[部署说明](DEPLOYMENT.md) · [本地开发交接/未完成清单](DEVELOPMENT_HANDOFF.md) · [测试记录](TEST_REPORT.md)。
+
+接入前先按部署说明启动工作台；本地完整开发推荐 Python 3.12。以下示例是当前已提供的通用配置，不代表你的具体客户端或三个远程 Gateway 已联调通过。首次建会话、实时自动客服等待办见交接清单，MCP 不会额外实现后端没有的能力。
+
 ## 先区分两个服务
 
 `xianyu-workbench serve` 是有状态的 Web/API 服务，负责账号、队列、审批。`xianyu-mcp` 是无审批能力的 stdio 代理，负责把 Agent 工具调用转给固定工作台 API。
