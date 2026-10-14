@@ -79,6 +79,13 @@ class ApprovalIn(Model):
     confirm: Literal["确认执行"]
 
 
+class ReconciliationIn(Model):
+    account_id: str = Field(min_length=1, max_length=100)
+    outcome: Literal["observed", "not_observed", "unresolved"]
+    evidence: str = Field(min_length=1, max_length=2000)
+    idempotency_key: str = Field(min_length=8, max_length=100, pattern=r"^[\w.:-]+$")
+
+
 class DraftIn(Model):
     account_id: str
     title: str = Field(default="", max_length=60)

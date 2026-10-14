@@ -2,7 +2,7 @@
 
 更新日期：2026-10-14。代码核对基线：[`64556d8`](https://github.com/lanchenglin/xianyu/commit/64556d84c7eed63222dd1352daff69293b8b98c0)，版本 v0.1.0。
 
-本文件交给在本地继续开发的人、Codex、Claude Code 或 Hermes。**下列任务是待办与设计建议，不代表功能已经实现。** 本次交接只更新文档，不新增平台操作、不调整权限、不修复依赖锁文件。
+本文件交给在本地继续开发的人、Codex、Claude Code 或 Hermes。**下列任务是待办与设计建议，不代表功能已经实现。** 原始交接只更新文档；2026-10-14 续开发在 `feat/local-next` 完成 P0-ENV 本地修复、P2-04 迁移必要基础及 P1-02 人工核对，以下各节标注当前实现与未验收边界，不新增平台动作。
 
 ## 1. 从哪里开始
 
@@ -29,7 +29,7 @@ FastAPI + SQLite 单实例工作台；中文响应式页面；管理员/Agent �
 
 ### 2.2 尚未实现或未开放
 
-首次联系陌生卖家；可靠消息送达核验；不确定操作的核对闭环；平台修改价格/描述；普通下架/重新上架；全量本人商品同步；实时消息监听与无人值守客服；订单只读同步；外部通知推送；批量运营和更完整的草稿管理；数据库版本迁移及自动备份恢复。
+首次联系陌生卖家；可靠消息送达自动核验；平台修改价格/描述；普通下架/重新上架；全量本人商品同步；实时消息监听与无人值守客服；订单只读同步；外部通知推送；批量运营和更完整的草稿管理；自动备份恢复/保留策略。数据库显式迁移基础和管理员人工核对闭环已在本轮实现，详见 P2-04 / P1-02；不等于可靠自动回执。
 
 `GET /api/capabilities` 中的 `false` 必须保留到相应能力真正接入。该接口是粗粒度能力声明，不是账号授权或端到端验收证明。某些增强事项没有独立 capability 字段，不能因为字段不存在就认为已实现。
 
@@ -58,7 +58,7 @@ FastAPI + SQLite 单实例工作台；中文响应式页面；管理员/Agent �
 
 Windows 3.11 作业日志明确显示 `pyee==14.0.0` 要求 `Python >=3.12`，而 `requirements-dev.lock` 将其无条件固定。`requirements.lock` 不包含 pyee；不要由此断言所有 Python 3.11 基础演示安装都会失败，也不要声称完整 3.11 开发/live 组合已通过。
 
-**本地续开发先用独立 Python 3.12 虚拟环境。** `pyproject.toml` 仍声明 `>=3.11`，这与完整开发依赖的已验证范围存在差异。
+**本轮已在独立 3.11/3.12 环境完成 Linux 验证。** `pyproject.toml` 保留 `>=3.11`；Windows 新矩阵结果仍待远端 CI。
 
 待办与验收：
 
@@ -101,7 +101,9 @@ Windows 3.11 作业日志明确显示 `pyee==14.0.0` 要求 `Python >=3.12`，�
 
 ### P1-02 消息回执与不确定操作的核对闭环
 
-**现状：** 真实 `message.send` 即使返回 `mid`，也保存为 `unconfirmed`；发布有有效商品 ID 时为 `submitted`，不是“上架已展示”。没有独立的操作核对页面/API 来附证据并结案。
+**本轮实现：** 真实 `message.send` 仍为 `unconfirmed`，发布 `submitted` 仍不等于展示。新增管理员专用 POST `/api/actions/{id}/reconciliation` 与中文核对表单；记录结论、服务端时间、加密证据摘要和原子审计。独立 v2 表，不改原执行状态/结果。Agent 只读结论/时间，无证据正文、核对或审批权。没有可靠自动上游回执，**自动送达/已读核验仍未实现**。
+
+允许状态 `unconfirmed/submitted/blocked`；每操作一次不可覆盖记录，同账号键唯一；相同请求幂等返回原时间，冲突/并发不同请求 409；不重新入队、不调用上游、不解除暂停。`observed` 仅人工观察、`not_observed` 不证明未发生、`unresolved` 仍无法判断。详细契约见 MCP 文档。
 
 **代码入口：** [service.py](../xianyu_workbench/service.py) 的 `run_once` / `recover` / `action_view`；[db.py](../xianyu_workbench/db.py) 的 `actions` / `audit`；[app.py](../xianyu_workbench/app.py) 的 actions 路由；[前端](../xianyu_workbench/static/app.js)。
 
@@ -109,10 +111,11 @@ Windows 3.11 作业日志明确显示 `pyee==14.0.0` 要求 `Python >=3.12`，�
 
 **验收：**
 
-- [ ] 区分“本地发出”“上游接受”“平台记录可见”“对方已读”；无证据不得混为一谈。
-- [ ] 核对记录绑定原账号与原操作；不会通过新的幂等键自动重发不确定写入。
-- [ ] 重启、重复核对、并发核对不导致写操作再次执行。
-- [ ] 交易仍只能在闲鱼人工完成；核对接口不含任何付款、退款或成交提交。
+- [x] 区分原执行状态与人工观察，不将人工核对冒充自动平台记录、送达或已读。
+- [x] 核对绑定原账号/操作，不通过新幂等键重发；证据加密且不向 Agent 提供。
+- [x] 重启、重复核对、并发核对不导致再次执行（临时数据自动测试）。
+- [x] 核对无交易提交，无上游调用；交易仍永久人工。
+- [ ] 真实账号人工证据验收、可靠自动回执验证（本轮未执行/未实现）。
 
 ### P1-03 全量本人商品同步
 
@@ -387,6 +390,15 @@ docs/DEPLOYMENT.md、docs/MCP.md、docs/SECURITY.md、docs/TEST_REPORT.md。
 分别说明“代码已完成”“自动测试结果”“真实账号验收结果”，
 并列出剩余事项和本地启动命令。
 ```
+
+## 本轮最终交接（2026-10-14）
+
+- 分支 `feat/local-next`，原始 HEAD `2ea8d3b`；已提交 P0-ENV `80afd54`、迁移基础 `8ab9533`；人工核对及连接关闭修复提交与本节一起交付，提交主题 `feat: add admin-only manual reconciliation without replay`。未 push，由 Hermes 审查后推送。
+- 最终 WSL/Linux Python 3.12.14：`pip check` / `ruff check .` 通过；`107 passed, 1 warning in 12.94s`。
+- 最终独立 Python 3.11.16：`pip check` / `ruff check .` 通过；`107 passed, 1 warning in 13.40s`。两者包含固定 live 的 10 项子进程契约；无真实平台访问。
+- 系统 Chromium 155 + 全新临时 profile 的演示 UI 冒烟实际通过，含人工核对、移动端、证据 XSS 安全与 Agent 隔离。官方浏览器包下载未完成/直接下载超时，未冒充成功；使用 `XY_TEST_CHROMIUM=/snap/bin/chromium`，独立浏览器缓存设置不变。
+- 自审已完成；SQLite probe/source/target 显式关闭修复有单测试 RED/GREEN。详细命令、证据和阶段结果见 [TEST_REPORT](TEST_REPORT.md)。
+- **代码完成，不等于真实账号已验收。** Windows 新 CI、真实账号、实际客户端和 Docker 尚未新增验证。P2-04 仅必要基础完成，不勾选自动备份/恢复/保留策略；P1-02 仅人工核对，不声称自动送达/已读验证。
 
 ## 8. 后续维护记录模板
 

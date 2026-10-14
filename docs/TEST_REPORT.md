@@ -113,6 +113,70 @@ pytest -q
 
 范围：无恢复 CLI、无自动备份/保留策略；未做真实数据恢复或账号验证。
 
+## P1-02 人工核对与最终回归（2026-10-14）
+
+本节是本轮最终结果；上面的 69 / 75 项及历史 CI 记录为各阶段真实结果，不覆盖、不冒充当前数量。交付分支 `feat/local-next`，起点 `2ea8d3b`；依赖修复提交 `80afd54`，迁移基础提交 `8ab9533`；第三项源码/测试/文档在本节同一提交中（`feat: add admin-only manual reconciliation without replay`）。
+
+### 实际完成与测试范围
+
+- 管理员核对 API 与中文 UI；原操作/账号绑定，仅 `unconfirmed/submitted/blocked` 可核对；原执行状态、结果、错误原样保留。
+- 每操作一次不可覆盖记录；同键同内容幂等，修改内容、换键覆盖或跨操作复用键 409；并发相同请求仅落库/审计一次，不同请求仅一方成功。
+- 核对与审计同事务；证据正文加密，审计不含正文；Agent 不可核对或审批，仅能读取核对结论/时间等概要，不能读证据。MCP 无新增核对/审批工具。
+- schema v2 独立核对表；旧库和 v1 无损升级，备份含 WAL，失败回滚、备份失败停止升级、未来版本拒绝、单实例锁及错误密钥保护。
+- 自审发现 SQLite connection context manager 不负责 close；先跑 `migration-close-red.log` 确认失败，再用 `closing` 显式关闭 probe/source/target，`migration-close-green.log`：`1 passed in 0.23s`。这只是本地连接生命周期验证，不是 Windows 实测。
+- 完整回归仍覆盖 Agent 不可审批、跨账号拒绝、幂等冲突、并发领取/核对、超时/重启不重放、错误收件人不发送及未知/交易动作拒绝。
+
+### 最终实际输出
+
+| 环境 / 检查 | 结果 |
+|---|---|
+| WSL/Linux Python 3.12.14：pip check | `No broken requirements found.` |
+| Python 3.12.14：ruff check . | `All checks passed!` |
+| Python 3.12.14：pytest -q | **107 passed, 1 warning in 12.94s** |
+| WSL/Linux Python 3.11.16：pip check | `No broken requirements found.` |
+| Python 3.11.16：ruff check . | `All checks passed!` |
+| Python 3.11.16：pytest -q | **107 passed, 1 warning in 13.40s** |
+| `node --check xianyu_workbench/static/app.js` | 退出 0 |
+| `git diff --check` | 退出 0 |
+| 系统 Chromium 155.0.8059.39 + Playwright 1.64 | 完整演示 UI 冒烟通过，独立临时 profile |
+
+两个 Python 环境均已安装固定 live `c2d5a02ad83b18863514389cedf7afbd993b683d`，107 项包含 10 项子进程上游契约，没有跳过。唯一警告是已有 Starlette/httpx TestClient 弃用警告。
+
+实际最终命令（在仓库目录）：
+
+```bash
+export TMPDIR=/home/lan/.hermes/cache/scratch
+.venv/bin/python -m pip check
+.venv/bin/ruff check .
+.venv/bin/pytest -q
+"$TMPDIR/xianyu-venv311/bin/python" -m pip check
+"$TMPDIR/xianyu-venv311/bin/ruff" check .
+"$TMPDIR/xianyu-venv311/bin/pytest" -q
+export PLAYWRIGHT_BROWSERS_PATH="$PWD/.test-browsers"
+export PLAYWRIGHT_SKIP_BROWSER_GC=1
+export XY_TEST_CHROMIUM=/snap/bin/chromium
+export XY_TEST_SCREENSHOT="$TMPDIR/xianyu-next-evidence/ui-agent-mobile.png"
+.venv/bin/python scripts/smoke_ui.py
+node --check xianyu_workbench/static/app.js
+git diff --check
+```
+
+UI 实际输出：
+
+```text
+UI smoke passed: login, account, search, monitor, chat, approvals, manual reconciliation, evidence XSS safety, agent isolation, image upload, publish, mobile, logout
+```
+
+UI 不确定状态由脚本仅在临时演示数据库注入；没有开启 live，没有请求闲鱼。验证原执行结果未变、证据中的 HTML 作为文字展示、移动端不横向溢出、Agent 无证据/核对/审批按钮。系统 Chromium 由 Playwright 创建全新临时 profile，未读取主人 profile。
+
+### RED/GREEN 证据与环境限制
+
+证据目录：`/home/lan/.hermes/cache/scratch/xianyu-next-evidence/`（不提交 Git）。包括 `reconcile-*-red.log`、`reconcile-red.log`、`reconcile-green.log`、`capabilities-red.log`、`migration-close-{red,green}.log`、最终 `final-py312.log` / `final-py311.log` / `ui-final.log` 和 `ui-agent-mobile.png`。单测试 GREEN 曾实际运行；并发/原子回滚等附加回归首次通过，不伪称每个附加测试均有 RED。
+
+官方 Playwright 浏览器包下载缓慢，已停止未完成的安装；直接下载官方包 240 秒超时，退出 28。首次 `ui-red.log` 因缺少浏览器失败，属于环境失败，不算功能 RED。改用系统 Chromium 后 `ui-feature-red.log` 实际因缺少“记录人工核对”按钮失败；实现 UI 后冒烟通过。未删除或清理任何共享浏览器缓存。
+
+**代码完成与真实验收必须分开：** 本轮 P0-ENV 本地兼容修复、P2-04 必要迁移基础、P1-02 人工核对闭环代码与本地自动测试完成。修改后 Windows CI 尚未运行；真实账号、平台送达/已读、Docker、实际 MCP 客户端均未新增验收。无恢复 CLI、自动定时备份或保留策略；无可靠自动平台回执。其余首次联系卖家、全量库存、改价、普通上下架、实时客服、发布完整冻结、订单、外部通知不在本轮实现范围。没有真实发送/发布/删除/交易，没有部署、没有 push。
+
 ## 真实账号上线前步骤
 
 由主人先在 Windows 本机运行演示，确认界面；安装系统 Chrome / Node 与 live 依赖；导入本人登录态；启用真实模式后仅验证一次搜索和一次详情；再验证既有会话；最后审批单条低风险咨询，亲自在闲鱼核实。

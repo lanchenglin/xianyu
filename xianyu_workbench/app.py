@@ -29,6 +29,7 @@ from .models import (
     DraftIn,
     LLMConfigIn,
     MonitorIn,
+    ReconciliationIn,
     SearchIn,
 )
 from .provider import Problem, asset_path
@@ -120,6 +121,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"search": True, "item_detail": True, "existing_chats": True, "message_history": True,
                 "send_with_approval": True, "publish_with_approval": True, "delete_with_explicit_approval": True,
                 "local_drafts": True, "search_monitors": True, "mcp": True,
+                "manual_reconciliation": True, "automatic_receipt_verification": False,
+                "reconciliation_policy": {"write_role": "admin", "agent_read": "outcome_time_only",
+                                          "eligible_states": ["unconfirmed", "submitted", "blocked"],
+                                          "outcomes": ["observed", "not_observed", "unresolved"],
+                                          "immutable": True, "retries_operation": False},
                 "first_contact": False, "platform_edit_price": False, "platform_relist": False,
                 "full_inventory_sync": False, "order_sync": False, "autonomous_reply": False,
                 "payment": False, "refund": False, "confirm_receipt": False,
@@ -215,14 +221,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/actions")
     def actions(current=Depends(role)):
-        return service.list_actions()
+        return service.list_actions(current)
 
     @app.get("/api/actions/{action_id}")
     def action(action_id: str, current=Depends(role)):
         row = service.db.one("SELECT * FROM actions WHERE id=?", (action_id,))
         if not row:
             raise Problem("not_found", "操作不存在", 404)
-        return service.action_view(row)
+        return service.action_view(row, current)
+
+    @app.post("/api/actions/{action_id}/reconciliation")
+    def reconcile(action_id: str, body: ReconciliationIn, current=Depends(admin)):
+        return service.reconcile(action_id, body, current)
 
     @app.post("/api/actions/{action_id}/approve")
     def approve(action_id: str, body: ApprovalIn, current=Depends(admin)):

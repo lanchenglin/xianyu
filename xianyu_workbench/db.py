@@ -4,7 +4,7 @@ import os
 import sqlite3
 import time
 import uuid
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -66,7 +66,16 @@ def initial_schema(conn):
             conn.execute(statement)
 
 
-MIGRATIONS = (initial_schema,)
+def reconciliation_schema(conn):
+    conn.execute("""CREATE TABLE reconciliations (
+        action_id TEXT PRIMARY KEY REFERENCES actions(id),
+        account_id TEXT NOT NULL REFERENCES accounts(id),
+        outcome TEXT NOT NULL, evidence TEXT NOT NULL, recorded_at REAL NOT NULL,
+        idem TEXT NOT NULL, UNIQUE(account_id, idem)
+    )""")
+
+
+MIGRATIONS = (initial_schema, reconciliation_schema)
 
 
 class DB:
@@ -79,7 +88,7 @@ class DB:
         self.path.chmod(0o600)
 
     def migrate(self, vault: Vault | None):
-        with sqlite3.connect(self.path) as probe:
+        with closing(sqlite3.connect(self.path)) as probe:
             if probe.execute("PRAGMA user_version").fetchone()[0] > len(MIGRATIONS):
                 raise ValueError("数据库为未知未来版本，拒绝启动；请使用匹配版本程序")
             if vault:
@@ -99,7 +108,8 @@ class DB:
     def validate_key(conn, vault: Vault):
         tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         encrypted = {"accounts": ("secret",), "actions": ("payload", "result"),
-                     "drafts": ("content",), "settings": ("value",)}
+                     "drafts": ("content",), "settings": ("value",),
+                     "reconciliations": ("evidence",)}
         try:
             for table, columns in encrypted.items():
                 if table not in tables:
@@ -119,7 +129,7 @@ class DB:
         os.close(fd)
         try:
             # A separate reader sees committed WAL data while the migration holds the writer lock.
-            with sqlite3.connect(self.path) as source, sqlite3.connect(path) as target:
+            with closing(sqlite3.connect(self.path)) as source, closing(sqlite3.connect(path)) as target:
                 source.backup(target)
                 if target.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                     raise ValueError("迁移前备份校验失败，停止升级")

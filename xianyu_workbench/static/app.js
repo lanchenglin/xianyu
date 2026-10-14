@@ -3,6 +3,8 @@ const $ = (id) => document.getElementById(id);
 let token = "", userRole = "", accounts = [], activeAccount = "", currentPage = "overview";
 let currentChat = null, chatHistory = [], imageIds = [], lastDraft = null, lastPurpose = "";
 const intentKeys = new Map(), imageURLs = new Map();
+let reconciliationTarget = null;
+const reconciliationNames = {observed:"观察到相关平台记录",not_observed:"未观察到相关记录（不证明未发生）",unresolved:"仍无法判断"};
 const pageTitles = {overview:"工作总览",accounts:"账号管理",search:"商品搜索",inbox:"消息与询价",listings:"商品与草稿",queue:"操作审批",monitors:"搜索监控",assistant:"AI 内容助理",settings:"设置与日志"};
 const stateNames = {pending:"待你审批",approved:"已批准 · 等待执行",running:"执行中",simulated:"演示完成 · 未访问闲鱼",submitted:"上游已接受 · 待平台核对",unconfirmed:"结果待核实 · 不自动重试",blocked:"已停止 · 需人工处理",failed:"未完成",rejected:"已拒绝",expired:"已过期"};
 const kindNames = {"message.send":"发送消息","item.publish":"发布商品","item.delete":"删除商品（可能不可恢复）"};
@@ -63,6 +65,8 @@ async function loadQueue(){const list=await api("/actions");const root=clear("qu
   for(const a of list){const card=node("article","","record");const head=node("div","","section-title");head.append(node("h4",`${kindNames[a.kind]||a.kind} · ${accountName(a.account_id)}`),tag(stateNames[a.state]||a.state,["unconfirmed","blocked","failed"].includes(a.state)?"alert":a.mode));card.append(head,node("p",`${a.mode==="demo"?"演示操作 · 不访问闲鱼":"真实操作"} · 创建 ${formatTime(a.created)} · 截止 ${formatTime(a.expires)}`),node("pre",JSON.stringify(a.payload,null,2)));
     if(a.payload.images){const imgs=node("div","","previews");for(const id of a.payload.images){const img=node("img");img.alt="审批商品图片";try{img.src=await assetURL(id);}catch{img.alt="图片缺失，禁止批准";}imgs.append(img);}card.append(imgs);}
     if(a.error)card.append(node("p",a.error,"error"));if(a.result)card.append(node("pre",JSON.stringify(a.result,null,2)));const controls=node("div","","actions");
+    if(a.reconciliation){const r=a.reconciliation;card.append(node("p",`人工记录：${reconciliationNames[r.outcome]||r.outcome} · ${formatTime(r.recorded_at)}`),node("p","仅人工观察，不证明送达或已读；原执行状态保持不变，不会重试。","hint"));if(userRole==="admin"&&r.evidence)card.append(node("pre",r.evidence));}
+    if(userRole==="admin"&&!a.reconciliation&&["unconfirmed","submitted","blocked"].includes(a.state))controls.append(button("记录人工核对",()=>{reconciliationTarget={id:a.id,account_id:a.account_id};$("reconcile-form").reset();$("reconcile-context").textContent=`账号：${accountName(a.account_id)} · 操作 ID：${a.id} · ${a.mode==="demo"?"演示操作":"真实操作"} · 原状态：${stateNames[a.state]}`;$("reconcile-dialog").showModal();}));
     if(userRole==="admin"&&a.state==="pending")controls.append(button("批准这份内容",async()=>{const value=prompt(`账号：${accountName(a.account_id)}\n模式：${a.mode==="demo"?"演示":"真实"}\n操作：${kindNames[a.kind]}\n请先核对完整文字、金额、图片和收件人。\n输入“确认执行”批准，15 分钟内可执行。`);if(value!=="确认执行")return;await api(`/actions/${a.id}/approve`,"POST",{digest:a.digest,confirm:value});note("已批准，等待工作台队列执行。");await loadQueue();},"primary"));
     if(userRole==="admin"&&["pending","approved"].includes(a.state))controls.append(button("拒绝 / 撤回",async()=>{await api(`/actions/${a.id}/reject`,"POST");await loadQueue();},"danger"));card.append(controls);root.append(card);}
 }
@@ -87,6 +91,8 @@ on("listing-form","submit",async()=>{await propose("item.publish",listingPayload
 on("save-draft","click",async()=>{await api("/drafts","POST",{account_id:requireAccount(),...listingPayload()});note("已保存本地草稿，未发布。");await loadListings();});
 on("clear-listing","click",()=>{$("listing-form").reset();imageIds=[];clear("image-previews");});
 on("refresh-queue","click",loadQueue);
+on("close-reconcile","click",()=>{$("reconcile-dialog").close();reconciliationTarget=null;});
+on("reconcile-form","submit",async()=>{if(userRole!=="admin"||!reconciliationTarget)throw Error("仅管理员可记录人工核对");const target={...reconciliationTarget},f=new FormData($("reconcile-form"));const body={account_id:target.account_id,outcome:String(f.get("outcome")),evidence:String(f.get("evidence")||"").trim()};body.idempotency_key=proposalKey({reconciliation:target.id,...body});await api(`/actions/${target.id}/reconciliation`,"POST",body);$("reconcile-dialog").close();reconciliationTarget=null;note("人工核对已记录；原状态不变，不会重新执行。");await loadQueue();});
 on("assist-form","submit",async()=>{const f=new FormData($("assist-form"));lastPurpose=String(f.get("purpose"));const r=await api("/assist","POST",{purpose:lastPurpose,facts:String(f.get("facts")),instruction:String(f.get("instruction"))});lastDraft=r.draft;$("assist-output").textContent=JSON.stringify(lastDraft,null,2);$("apply-assist").disabled=lastPurpose==="compare";});
 on("apply-assist","click",async()=>{if(!lastDraft)return;if(lastPurpose==="listing"){$("listing-form").elements.title.value=lastDraft.title||"";$("listing-form").elements.desc.value=lastDraft.desc||lastDraft.text||"";await showPage("listings");}else{$("message-text").value=lastDraft.text||"";await showPage("inbox");note("已填入草稿；首次联系卖家仍须人工建立会话。");}});
 on("llm-form","submit",async()=>{const f=new FormData($("llm-form"));await api("/llm/config","POST",{base_url:String(f.get("base_url")),model:String(f.get("model")),api_key:String(f.get("api_key"))});$("llm-form").elements.api_key.value="";note("模型配置已加密保存。");});

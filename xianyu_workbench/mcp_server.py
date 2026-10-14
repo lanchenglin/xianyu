@@ -102,7 +102,7 @@ def save_listing_draft(account_id: str, title: str, desc: str, price: str = "0",
 
 @mcp.tool()
 def list_actions() -> list[dict]:
-    """读取审批/执行状态。submitted 只表示上游接受，unconfirmed 需人工核对，不能重发。"""
+    """读取原审批/执行状态和人工核对结论/时间（不含证据正文）。核对不是送达/已读回执，不改变原状态，不授权重发。MCP 不能核对或审批。"""
     return api("GET", "/api/actions")
 
 

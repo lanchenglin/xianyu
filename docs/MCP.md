@@ -54,7 +54,7 @@
 
 可用工具：list_accounts、capabilities、search_items、item_detail、list_chats、chat_history、propose_message、propose_listing、save_listing_draft、list_actions、list_catalog、create_search_monitor、notifications。
 
-不存在 approve、read_cookie、shell、refund、pay、confirm_receipt 工具。删除只在工作台由人工发起明确申请；MCP 不暴露删除工具。API schema 可由持有有效令牌的调用方读取 `/api/schema`。
+不存在 approve、reconcile、reconciliation、read_cookie、shell、refund、pay、confirm_receipt 工具。删除只在工作台由人工发起明确申请；MCP 不暴露删除工具。API schema 可由持有有效令牌的调用方读取 `/api/schema`。
 
 MCP 上传图片没有通用“读取服务器本地任意路径”能力。先由用户在工作台上传，AI 再使用返回的图片 ID；避免 Agent 任意读取服务器文件上传到闲鱼。
 
@@ -76,6 +76,27 @@ MCP 上传图片没有通用“读取服务器本地任意路径”能力。先�
 ```
 
 返回 pending 只是提出申请，不代表发送。需本人登录工作台审批。批准必须提交当前内容的 SHA-256 digest 与确认文字；Agent 令牌调用审批端点会得到 403。
+
+## 人工核对与 Agent 只读范围
+
+`list_actions` / GET `/api/actions` / GET `/api/actions/{id}` 保留原执行 `state/result/error`，新增独立 `reconciliation`（无记录为 null）。Agent 只能读其 `action_id/account_id/outcome/recorded_at/source`，不能读证据正文、核对幂等键或审计；管理员 GET 可读解密后的 `evidence`。POST 提案的幂等响应同样不带核对证据。
+
+`source=manual` 永远表示人工陈述，不是自动平台验证：`observed`=人工观察到相关记录，`not_observed`=人工未观察到（不证明没有发生），`unresolved`=仍无法判断。任何结论均不等于送达、对方已读或允许重试。
+
+仅管理员可 POST `/api/actions/{id}/reconciliation`：
+
+```json
+{
+  "account_id": "原操作账号ID",
+  "outcome": "observed",
+  "evidence": "人工核对时间、途径与所观察内容的必要摘要；不要粘贴完整聊天或密钥",
+  "idempotency_key": "此核对请求固定复用的键"
+}
+```
+
+仅 `unconfirmed/submitted/blocked` 可核对；`running` 必须等结束或重启恢复后再核对。原操作 ID 在路径中、账号严格绑定；不存在 404、跨账号/状态/冲突 409、Agent 403、非法参数 422。每操作仅一条不可覆盖记录；同账号核对键唯一。同键同操作同内容重复返回原记录/原时间，不重复审计；不同内容、其他操作复用键或试图换键覆盖一律 409。并发事务仅一方落库，其他相同请求复用或冲突。核对与审计原子提交，不改变队列、不调用上游、不重新审批或执行。
+
+请先在闲鱼人工检查再记录结论；没有可靠自动回执，本轮没有新增平台只读核验请求。MCP 只读概要，不新增核对/审批工具。
 
 ## 真正的权限隔离
 

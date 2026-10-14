@@ -4,11 +4,15 @@ Install test browsers in a PRIVATE test directory first:
   PLAYWRIGHT_BROWSERS_PATH=/tmp/xy-test-browsers python -m playwright install chromium
   PLAYWRIGHT_BROWSERS_PATH=/tmp/xy-test-browsers python scripts/smoke_ui.py
 On PowerShell set $env:PLAYWRIGHT_BROWSERS_PATH instead. Do not use the shared cache.
+If download is blocked, XY_TEST_CHROMIUM may point to a locally installed executable;
+Playwright still creates a fresh temporary profile, never a user's existing profile.
+XY_TEST_SCREENSHOT optionally saves the final demo-only Agent mobile view.
 """
 from __future__ import annotations
 
 import os
 import socket
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -51,7 +55,7 @@ def main():
                     time.sleep(0.15)
                 assert ready, "Temporary workbench did not start"
                 with sync_playwright() as pw:
-                    browser = pw.chromium.launch(headless=True)
+                    browser = pw.chromium.launch(headless=True, executable_path=os.getenv("XY_TEST_CHROMIUM") or None)
                     page = browser.new_page(viewport={"width": 1440, "height": 1000})
                     errors = []
                     page.on("pageerror", lambda exc: errors.append(str(exc)))
@@ -88,6 +92,34 @@ def main():
                     assert actions[0]["state"] == "simulated"
                     page.locator("#refresh-queue").click()
                     expect(page.locator("#queue-list")).to_contain_text("演示完成")
+                    # Inject an uncertain result into this disposable demo DB only; never enable live.
+                    action_id = actions[0]["id"]
+                    with sqlite3.connect(directory / "data" / "workbench.db") as db:
+                        db.execute("UPDATE actions SET state='unconfirmed' WHERE id=?", (action_id,))
+                    original = client.get(f"/api/actions/{action_id}").json()
+                    page.locator("#refresh-queue").click()
+                    page.set_viewport_size({"width": 390, "height": 844})
+                    page.get_by_role("button", name="记录人工核对", exact=True).click()
+                    expect(page.locator("#reconcile-dialog")).to_be_visible()
+                    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), "Reconciliation mobile overflow"
+                    expect(page.locator("#reconcile-context")).to_contain_text(action_id)
+                    page.locator('#reconcile-form select[name="outcome"]').select_option("observed")
+                    evidence = "本地演示人工证据 <img src=x onerror=alert(1)>"
+                    page.locator('#reconcile-form textarea[name="evidence"]').fill(evidence)
+                    page.locator('#reconcile-form button[type="submit"]').click()
+                    expect(page.locator("#reconcile-dialog")).not_to_be_visible()
+                    expect(page.locator("#queue-list")).to_contain_text("人工记录：观察到相关平台记录")
+                    expect(page.locator("#queue-list")).to_contain_text("结果待核实")
+                    expect(page.locator("#queue-list")).to_contain_text(evidence)
+                    expect(page.locator("#queue-list img")).to_have_count(0)
+                    recorded = client.get(f"/api/actions/{action_id}").json()
+                    assert recorded["state"] == original["state"]
+                    assert recorded["result"] == original["result"]
+                    assert recorded["reconciliation"]["source"] == "manual"
+                    assert client.post(f"/api/actions/{action_id}/reconciliation",
+                                       headers={"Authorization": "Bearer " + env["XY_AGENT_TOKEN"]},
+                                       json={"account_id": original["account_id"], "outcome": "observed",
+                                             "evidence": evidence, "idempotency_key": "agent-reconcile-test"}).status_code == 403
                     page.locator('[data-page="listings"]').click()
                     page.locator('#listing-form input[name="title"]').fill("UI 演示商品")
                     page.locator('#listing-form textarea[name="desc"]').fill("仅用于本地演示，不发布到闲鱼")
@@ -115,8 +147,20 @@ def main():
                     assert not errors, errors
                     page.locator("#logout").click()
                     expect(page.locator("#login")).to_be_visible()
+                    page.locator("#login-token").fill(env["XY_AGENT_TOKEN"])
+                    page.locator("#login-form button").click()
+                    expect(page.locator("#shell")).to_be_visible()
+                    page.locator('[data-page="queue"]').click()
+                    expect(page.locator("#queue-list")).to_contain_text("人工记录：观察到相关平台记录")
+                    expect(page.locator("#queue-list")).not_to_contain_text(evidence)
+                    expect(page.get_by_role("button", name="记录人工核对", exact=True)).to_have_count(0)
+                    expect(page.get_by_role("button", name="批准这份内容", exact=True)).to_have_count(0)
+                    assert not errors, errors
+                    screenshot = os.getenv("XY_TEST_SCREENSHOT")
+                    if screenshot:
+                        page.screenshot(path=screenshot, full_page=True)
                     browser.close()
-            print("UI smoke passed: login, account, search, monitor, chat, approvals, image upload, publish, mobile, logout")
+            print("UI smoke passed: login, account, search, monitor, chat, approvals, manual reconciliation, evidence XSS safety, agent isolation, image upload, publish, mobile, logout")
         finally:
             process.terminate()
             try:

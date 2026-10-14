@@ -14,7 +14,7 @@ from pydantic import ValidationError
 
 from .config import Settings
 from .db import DB
-from .models import ACTION_MODELS, ActionIn, AssistIn, SearchIn
+from .models import ACTION_MODELS, ActionIn, AssistIn, ReconciliationIn, SearchIn
 from .provider import Problem, Provider, asset_path
 from .security import Vault, canonical, digest
 
@@ -59,15 +59,52 @@ class Service:
                 # Do not log exception strings, which might contain third-party sensitive data.
                 self.db.audit("worker", "worker.exception", detail={"type": type(exc).__name__})
 
-    def action_view(self, row: dict) -> dict:
+    def action_view(self, row: dict, actor: str = "agent") -> dict:
         result = dict(row)
         result["payload"] = self.vault.open(row["payload"])
         result["result"] = self.vault.open(row["result"]) if row.get("result") else None
         result.pop("idem", None)
+        record = self.db.one("SELECT * FROM reconciliations WHERE action_id=?", (row["id"],))
+        result["reconciliation"] = self.reconciliation_view(record, actor) if record else None
         return result
 
-    def list_actions(self) -> list[dict]:
-        return [self.action_view(row) for row in self.db.all("SELECT * FROM actions ORDER BY created DESC LIMIT 200")]
+    def list_actions(self, actor: str = "agent") -> list[dict]:
+        return [self.action_view(row, actor) for row in self.db.all("SELECT * FROM actions ORDER BY created DESC LIMIT 200")]
+
+    def reconciliation_view(self, row: dict, actor: str) -> dict:
+        result = {key: row[key] for key in ("action_id", "account_id", "outcome", "recorded_at")}
+        result["source"] = "manual"
+        if actor == "admin":
+            result["evidence"] = self.vault.open(row["evidence"])
+        return result
+
+    def reconcile(self, action_id: str, body: ReconciliationIn, actor: str) -> dict:
+        if actor != "admin":
+            raise Problem("forbidden", "只有管理员可以记录人工核对", 403)
+        with self.db.connect() as c:
+            c.execute("BEGIN IMMEDIATE")
+            action = c.execute("SELECT * FROM actions WHERE id=?", (action_id,)).fetchone()
+            if not action:
+                raise Problem("not_found", "操作不存在", 404)
+            if action["account_id"] != body.account_id:
+                raise Problem("account_mismatch", "核对账号与原操作不一致", 409)
+            if action["state"] not in ("unconfirmed", "submitted", "blocked"):
+                raise Problem("state_conflict", "仅结果待核实、上游已接受或已停止的操作允许人工核对", 409)
+            old = c.execute("SELECT * FROM reconciliations WHERE action_id=? OR (account_id=? AND idem=?)",
+                            (action_id, body.account_id, body.idempotency_key)).fetchone()
+            if old:
+                if (old["action_id"] == action_id and old["idem"] == body.idempotency_key
+                        and old["outcome"] == body.outcome and self.vault.open(old["evidence"]) == body.evidence):
+                    return self.reconciliation_view(dict(old), actor)
+                raise Problem("reconciliation_conflict", "该操作已有不可覆盖的核对记录，或幂等键已用于其他操作", 409)
+            now = time.time()
+            c.execute("INSERT INTO reconciliations(action_id,account_id,outcome,evidence,recorded_at,idem) VALUES(?,?,?,?,?,?)",
+                      (action_id, body.account_id, body.outcome, self.vault.seal(body.evidence), now, body.idempotency_key))
+            c.execute("INSERT INTO audit(created,actor,event,target,detail) VALUES(?,?,?,?,?)",
+                      (now, actor, "action.reconciled", action_id,
+                       canonical({"account_id": body.account_id, "outcome": body.outcome, "source": "manual"})))
+            row = dict(c.execute("SELECT * FROM reconciliations WHERE action_id=?", (action_id,)).fetchone())
+        return self.reconciliation_view(row, actor)
 
     def validate_assets(self, account_id: str, ids: list[str]) -> list[str]:
         paths = []
