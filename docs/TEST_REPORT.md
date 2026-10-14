@@ -75,6 +75,36 @@
 
 此轮没有重新运行真实平台操作或本地浏览器页面测试，也没有修复/重新验收 Python 3.11 依赖。CI 分环境结论仍以绑定具体提交的记录为准。
 
+## P0-ENV 本轮本地修复验收（2026-10-14）
+
+原始 HEAD `2ea8d3b`，分支 `feat/local-next`，WSL/Linux。原始 3.12 基线：`59 passed, 1 skipped, 1 warning`；跳过的是未安装 live 的契约模块。3.11 原锁真实安装退出 1：`No matching distribution found for pyee==14.0.0`。
+
+修复：Playwright 1.64 条件依赖，由明确 3.11 下限的 uv universal 解析生成；3.11 为 pyee 13.0.1，3.12 为 14.0.0。运行锁同步生成（包版本未变）。固定上游提交未变。
+
+实际命令：
+
+```bash
+uv pip compile pyproject.toml --extra mcp --extra dev --universal --python-version 3.11 --output-file requirements-dev.lock
+uv pip compile pyproject.toml --extra mcp --universal --python-version 3.11 --output-file requirements.lock
+# 各独立环境中执行
+python -m pip install -r requirements-dev.lock
+python -m pip install --no-deps -e .
+python -m pip check
+ruff check .
+pytest -q
+python -m pip install -e '.[live]'
+python -m pip check
+pytest -q
+```
+
+| 本轮环境 | 实际结果 |
+|---|---|
+| Python 3.12.14 `.venv` | pip check: No broken requirements found；ruff: All checks passed；含 live：69 passed, 1 warning in 9.48s |
+| Python 3.11.16 scratch 独立环境 | pip check/ruff 通过；基础 59 passed, 1 skipped；含 live：69 passed, 1 warning in 9.71s |
+| Windows | 未执行新 CI，不声称修复后 Windows 已通过 |
+
+警告为已有 Starlette TestClient 弃用警告。安装 RED/GREEN 日志保存在 `/home/lan/.hermes/cache/scratch/xianyu-next-evidence/`。没有登录或请求闲鱼；契约仅子进程导入与函数检查。
+
 ## 真实账号上线前步骤
 
 由主人先在 Windows 本机运行演示，确认界面；安装系统 Chrome / Node 与 live 依赖；导入本人登录态；启用真实模式后仅验证一次搜索和一次详情；再验证既有会话；最后审批单条低风险咨询，亲自在闲鱼核实。

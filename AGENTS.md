@@ -6,7 +6,7 @@
 
 续开发先阅读 [docs/DEVELOPMENT_HANDOFF.md](docs/DEVELOPMENT_HANDOFF.md)，里面有 P0/P1/P2 待办、代码入口、验收条件与本地命令。部署见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)，客户端接入见 [docs/MCP.md](docs/MCP.md)。
 
-代码基线的首轮 GitHub CI 中，Python 3.12 基础测试、上游契约与演示页面测试已通过；Python 3.11 在安装开发锁文件时被 `pyee==14.0.0` 的 >=3.12 要求阻塞。完整开发先用 3.12，不把远端作业失败忽略，也不把 CI 通过写成真实账号已验收。详情以 [测试报告](docs/TEST_REPORT.md) 的分环境记录为准。
+首轮 CI 的 Python 3.11 pyee 安装阻塞已通过条件锁修复；Linux 3.11/3.12 安装及固定 live 契约通过，修改后的 Windows CI 待远端执行。重新生成两份锁时必须使用 `--universal --python-version 3.11`，不能只按开发机 Python 版本解析。不要把 CI 通过写成真实账号已验收，详情见 [测试报告](docs/TEST_REPORT.md)。
 
 一次实现一个可验收任务，并同步本清单、README、能力声明与测试报告。缺少上游可靠能力时保留未支持状态；不要为让能力表全为 true 伪造返回值。任务涉及新增数据字段时先设计显式迁移；涉及放宽逐条审批时必须单独完成管理员授权策略设计与相应安全测试，不能直接删除现有审批检查。
 
@@ -25,7 +25,7 @@
 
 ## 开发验证
 
-以下在 Python 3.12 虚拟环境执行；不要使用当前开发锁文件直接验收 3.11。
+以下在独立 Python 3.11 或 3.12 虚拟环境执行，并运行 `python -m pip check`。
 
 ```bash
 python -m pip install -r requirements-dev.lock

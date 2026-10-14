@@ -41,7 +41,9 @@ FastAPI + SQLite 单实例工作台；中文响应式页面；管理员/Agent �
 
 ## 3. 已知阻塞与验收状态
 
-### P0-ENV：Python 3.11 开发依赖安装失败（已复现于 CI，未修复）
+### P0-ENV：Python 3.11 开发依赖（本地修复完成，Windows 新 CI 待验证）
+
+2026-10-14 续开发：保留 3.11；显式以 `--python-version 3.11 --universal` 解析两个锁文件，Playwright 1.64 条件选择 pyee 13.0.1/14.0.0。Linux 3.11.16 与 3.12.14 干净安装、pip check、ruff 以及含固定 live 的基线均通过（各 69 passed）。CI 保留 Windows/Ubuntu 3.11/3.12，增加 pip check，并将 live 契约扩展为两版本。以下 CI 失败是历史记录，不代表当前锁；新 Windows CI 尚未运行。
 
 首轮 [GitHub CI #1](https://github.com/lanchenglin/xianyu/actions/runs/38535793804) 对应上述代码基线：
 
@@ -60,8 +62,8 @@ Windows 3.11 作业日志明确显示 `pyee==14.0.0` 要求 `Python >=3.12`，�
 
 待办与验收：
 
-- [ ] 决定并明确项目是否继续完整支持 3.11；需要支持时，重新解析兼容的 Playwright / pyee 组合和条件依赖，而不是只随手降低一个包版本。
-- [ ] 同步 `pyproject.toml`、运行/开发锁文件、CI 矩阵与文档；需要排除 3.11 时明确记录支持范围变更，不能只删除失败测试来伪装修复。
+- [x] 保留 3.11，重新解析兼容的 Playwright / pyee 条件依赖，并真实安装验证。
+- [x] 同步 `pyproject.toml`、运行/开发锁文件、CI 矩阵与文档，未删除失败矩阵。
 - [ ] 在干净 Ubuntu/Windows 虚拟环境验证安装、`pip check`、基础测试及适用的 live 契约测试；记录每个版本的结果。
 
 代码入口：[pyproject.toml](../pyproject.toml)、[开发锁文件](../requirements-dev.lock)、[运行锁文件](../requirements.lock)、[CI](../.github/workflows/ci.yml)、[上游契约测试](../tests/test_upstream_contract.py)。
@@ -370,7 +372,7 @@ Linux 可能还需要 Playwright 提示的系统依赖，由本机管理员安�
 docs/DEPLOYMENT.md、docs/MCP.md、docs/SECURITY.md、docs/TEST_REPORT.md。
 
 先核对当前代码和 Git 状态，不覆盖我的未提交改动。
-本地完整开发先用 Python 3.12；P0-ENV 的 3.11 依赖问题尚未修复。
+本地使用独立 Python 3.11/3.12；P0-ENV 已本地修复，Windows 新 CI 待验证。
 按 P0-ENV / P0-LIVE → P1-01～P1-07 → P2 的优先级逐项完成，
 库存同步、迁移和消息回执等依赖应先于相应写操作闭环。
 先跑演示及测试，真实登录和写操作仅在我明确授权并人工审批后验证。
