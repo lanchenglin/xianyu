@@ -432,6 +432,21 @@ def test_provider_write_flag_cannot_be_bypassed(workbench):
         service.provider.call(account(client), "message.send", {}, write=False)
 
 
+def test_wrong_vault_key_rejects_startup_without_changing_data(tmp_path):
+    from dataclasses import replace
+
+    settings = Settings(tmp_path / "data", ADMIN, AGENT, Fernet.generate_key().decode(), worker_enabled=False)
+    app = create_app(settings)
+    with TestClient(app, headers={"Authorization": "Bearer " + ADMIN}) as client:
+        message(client, account(client), text="保留的加密正文")
+    db = app.state.service.db
+    before = db.one("SELECT * FROM actions")
+    with pytest.raises(ValueError, match="密钥不匹配|加密数据损坏"):
+        create_app(replace(settings, vault_key=Fernet.generate_key().decode()))
+    assert db.one("SELECT * FROM actions") == before
+    assert create_app(settings).state.service.action_view(before)["payload"]["text"] == "保留的加密正文"
+
+
 def test_demo_provider_never_generates_real_product_links():
     result = Provider.demo("search", {"query": "3080", "limit": 3})
     assert result["demo"] is True

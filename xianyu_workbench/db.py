@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import os
 import sqlite3
 import time
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from .security import canonical, redact
+from cryptography.fernet import InvalidToken
+from filelock import FileLock
+
+from .security import Vault, canonical, redact
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS accounts (
@@ -55,14 +60,73 @@ CREATE INDEX IF NOT EXISTS monitor_due ON monitors(enabled,next_run);
 """
 
 
+def initial_schema(conn):
+    for statement in SCHEMA.split(";"):
+        if statement.strip():
+            conn.execute(statement)
+
+
+MIGRATIONS = (initial_schema,)
+
+
 class DB:
-    def __init__(self, directory: Path):
+    def __init__(self, directory: Path, vault: Vault | None = None):
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         directory.chmod(0o700)
         self.path = directory / "workbench.db"
-        with self.connect() as conn:
-            conn.executescript(SCHEMA)
+        with FileLock(str(directory / "server.lock"), timeout=0):
+            self.migrate(vault)
         self.path.chmod(0o600)
+
+    def migrate(self, vault: Vault | None):
+        with sqlite3.connect(self.path) as probe:
+            if probe.execute("PRAGMA user_version").fetchone()[0] > len(MIGRATIONS):
+                raise ValueError("数据库为未知未来版本，拒绝启动；请使用匹配版本程序")
+            if vault:
+                self.validate_key(probe, vault)
+        with self.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            version = conn.execute("PRAGMA user_version").fetchone()[0]
+            existing = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchone()
+            if existing and version < len(MIGRATIONS):
+                self.backup(version)
+            for index in range(version, len(MIGRATIONS)):
+                MIGRATIONS[index](conn)
+                conn.execute(f"PRAGMA user_version={index + 1}")
+        self.path.chmod(0o600)
+
+    @staticmethod
+    def validate_key(conn, vault: Vault):
+        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        encrypted = {"accounts": ("secret",), "actions": ("payload", "result"),
+                     "drafts": ("content",), "settings": ("value",)}
+        try:
+            for table, columns in encrypted.items():
+                if table not in tables:
+                    continue
+                for column in columns:
+                    for row in conn.execute(f"SELECT {column} FROM {table} WHERE {column} IS NOT NULL"):
+                        vault.open(row[0])
+        except (InvalidToken, ValueError, TypeError):
+            raise ValueError("密钥不匹配或加密数据损坏，拒绝启动；原数据未修改") from None
+
+    def backup(self, version: int) -> Path:
+        directory = self.path.parent / "backups"
+        directory.mkdir(exist_ok=True, mode=0o700)
+        directory.chmod(0o700)
+        path = directory / f"before-v{version}-{uuid.uuid4().hex}.db"
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        os.close(fd)
+        try:
+            # A separate reader sees committed WAL data while the migration holds the writer lock.
+            with sqlite3.connect(self.path) as source, sqlite3.connect(path) as target:
+                source.backup(target)
+                if target.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+                    raise ValueError("迁移前备份校验失败，停止升级")
+        except BaseException:
+            path.unlink(missing_ok=True)
+            raise
+        return path
 
     @contextmanager
     def connect(self):

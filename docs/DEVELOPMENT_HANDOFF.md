@@ -236,7 +236,7 @@ Windows 3.11 作业日志明确显示 `pyee==14.0.0` 要求 `Python >=3.12`，�
 
 ### P2-04 数据迁移、备份恢复与长期运行
 
-**现状：** SQLite 建表使用 `CREATE TABLE IF NOT EXISTS`；有人工停机备份说明，无数据库版本迁移、自动备份/恢复演练、数据保留与清理策略。只支持单实例。
+**本轮必要基础已完成：** 显式 `user_version`、v0→v1 无损升级、整笔事务回滚、未来版本拒绝、升级前含 WAL 的一致性快照、迁移持有单实例锁、错误密钥启动前校验。测试使用独立旧库与注入失败。**仍未实现：** 恢复 CLI、自动定时备份、保留/清理策略、完整恢复演练；这些不因迁移基础完成而勾选。只支持单实例。
 
 **代码入口：** [db.py](../xianyu_workbench/db.py)、[config.py](../xianyu_workbench/config.py)、[cli.py](../xianyu_workbench/cli.py)、[Dockerfile](../Dockerfile)、[compose.yaml](../compose.yaml)。
 

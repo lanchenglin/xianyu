@@ -22,8 +22,8 @@ from .security import Vault, canonical, digest
 class Service:
     def __init__(self, settings: Settings):
         self.s = settings
-        self.db = DB(settings.data_dir)
         self.vault = Vault(settings.vault_key)
+        self.db = DB(settings.data_dir, self.vault)
         self.provider = Provider(settings, self.db, self.vault)
         self.stop = threading.Event()
         self.thread: threading.Thread | None = None
