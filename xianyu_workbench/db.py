@@ -80,7 +80,20 @@ def draft_revision_schema(conn):
     conn.execute('ALTER TABLE drafts ADD COLUMN archived INTEGER NOT NULL DEFAULT 0')
 
 
-MIGRATIONS = (initial_schema, reconciliation_schema, draft_revision_schema)
+def notification_state_schema(conn):
+    conn.execute('ALTER TABLE notifications ADD COLUMN archived INTEGER NOT NULL DEFAULT 0')
+
+
+def notification_delivery_schema(conn):
+    conn.execute('''CREATE TABLE notification_deliveries (
+        id TEXT PRIMARY KEY, notification_id INTEGER NOT NULL UNIQUE REFERENCES notifications(id),
+        state TEXT NOT NULL, attempts INTEGER NOT NULL, next_attempt REAL NOT NULL,
+        updated REAL NOT NULL, error TEXT
+    )''')
+
+
+MIGRATIONS = (initial_schema, reconciliation_schema, draft_revision_schema,
+              notification_state_schema, notification_delivery_schema)
 
 
 class DB:

@@ -192,6 +192,13 @@ def restore_backup(directory: Path, archive_path: Path, vault: Vault) -> Path:
             with db.connect() as c:
                 c.execute("UPDATE accounts SET paused=1,pause_reason='备份恢复后需人工核实'")
                 c.execute('UPDATE monitors SET enabled=0')
+                notification_config = c.execute("SELECT value FROM settings WHERE key='notifications'").fetchone()
+                if notification_config:
+                    value = vault.open(notification_config['value'])
+                    value['enabled'] = False
+                    c.execute("UPDATE settings SET value=? WHERE key='notifications'", (vault.seal(value),))
+                c.execute("UPDATE notification_deliveries SET state='cancelled' WHERE state IN ('pending','retry')")
+                c.execute("UPDATE notification_deliveries SET state='unknown',error='interrupted' WHERE state='sending'")
                 c.execute("UPDATE actions SET state='expired',error='恢复后旧申请失效；禁止直接重放' WHERE state IN ('pending','approved')")
                 c.execute("UPDATE actions SET state='unconfirmed',error='恢复时执行结果不确定；禁止重试' WHERE state='running'")
                 c.execute('INSERT INTO audit(created,actor,event,target,detail) VALUES(?,?,?,?,?)',

@@ -10,6 +10,16 @@
 | P1-05 | `commands/item/delete.py` 是删除；无非删除上下架入口。 | platform_relist 保持 false，不以删除冒充下架 |
 | P1-07 | `commands/item/publish.py:27 publish(title, desc, images, price, original_price, delivery, post_price, can_self_pickup)` 内部先上传，再 recommend（46），再默认地点（49）；不接受冻结类目/地点。私有 `_build_publish_data` 接受字段，但不是具备预览/校验/持久快照的发布接口。 | 不足以安全完整适配；新增 live_publish=false、publish_complete_snapshot=false，Provider 在任何真实发布子进程之前拒绝。演示/本地发布申请仍可用，不表示真实发布可用。 |
 
+## 121f3c8 后的底层复核（2026-10-15）
+
+本轮重新读取固定源码，不以缺少公开命令作为最终不可行结论：
+
+- publish.py:84–174 的 `_build_publish_data` 明确接收 cat_info/location/image_infos，可在本项目 adapter 复用构造，且能用 Decimal；但 39–49 的类目推荐以已上传图片为前提，预览必须处理“上传本身是外部写”而不能偷跑。136–148 从 location.all[0] 构造 GPS/POI 完整地点，不能直接暴露给模型。170 的固定 uniqueCode 不构成幂等保证。可靠预览/执行需要独立冻结、默认地点比较和真实响应取证；本轮未打开 live_publish。
+- ws.py:200–217 可复用 create 请求构造；327–386 可复用 listUserMessages 请求、mid 响应匹配、hasMore/nextCursor。368–372 只是高层输出丢失 ID，并不证明底层永无 ID。需要脱敏原始消息模型证明稳定 ID 与 sender/content 同记录后，项目适配器有界读取，不另启第二自动回复后台。
+- 固定 commands 目录没有本人库存/订单分页/价格修改/状态转移来源；不能猜 endpoint。浏览器可作为项目内可维护适配器，但先要具体页面、账号 uid、分页末页、状态语义及字段证据；复用现有 task_page 生命周期与 cancellation，不提供任意 URL/JS。
+
+完整矩阵、依赖与 Hermes 只读字段清单见 [OPERATIONS_NEXT](OPERATIONS_NEXT.md)。本轮没有请求真实页面或公开网络源码，证据均为固定安装包静态阅读。暂不需要依赖变更；若后续确需 fork/升级，须另报具体提交/license/风险/验收再决策。
+
 没有升级上游、引入第二后台、远程 browser 或猜测私有 API。A 的阻塞不影响继续 B/C。本次补上真实发布 fail-closed 安全保护，避免审批后默认地点/类目变化。
 
 ## D / P1-06 第一阶段来源核实

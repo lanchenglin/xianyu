@@ -4,7 +4,19 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
-## 2026-10-15 Windows 浏览器测试夹具修复（最新）
+## 2026-10-15 运营增量第一批（最新）
+
+起点 121f3c8；实现站内通知状态、管理员显式授权的外部固定摘要通知和 MCP stdio 真协议测试。schema v4/v5 增量迁移；备份恢复关闭外部通知并取消待发任务。完整需求尚未完成，矩阵与下一断点见 [OPERATIONS_NEXT](OPERATIONS_NEXT.md)。
+
+- RED 证据：notices-red（4 个缺路由失败）、notices-ui-red（缺已读按钮）、external-red（缺模块/配置路由）、transport-red（缺 send）、worker-red（重启状态/worker 未接通）、disable-red、external-ui-red、restore-red、mcp-red（缺新工具；既有管理员令牌拒绝首次通过）、dns-red、deadline-red、detached-deadline-red、capabilities-red。
+- GREEN 与集成：本批新增 23 项；真实本地 TLS 接收端完成 API 配置→持久通知→真实 HTTPS/证书/SNI/签名→已投递→不重复；仅网络边界将验证地址映射随机 loopback，生产无放宽开关。此集成首次通过，未冒称其单独有 RED。钉钉/真实外部 webhook 未发送、未验收。
+- 首次完整回归 221 passed / 1 failed：旧 v2 备份夹具仍携带新增通知表；修夹具以真实重建旧结构，未放宽生产迁移。DNS/连接/响应上限、退避三次、配置取消、恢复关闭、Agent 拒绝配置、凭据隐藏均有测试；HTTP 2xx 不是人已读，超时重试可能重复通知。
+- MCP 使用真实 SDK ClientSession + stdio 子进程 + 随机端口临时 Uvicorn，initialize/list_tools/call_tool、通知归档、固定目标参数边界、管理员令牌拒绝通过；不等于实际 Hermes connector 已安装联调。
+- 最终 Linux Python 3.12：**231 passed, 1 warning in 41.73s**；Python 3.11：**231 passed, 1 warning in 43.32s**。双版本 pip check / ruff 均通过，固定 live 契约及隔离浏览器测试包含在全量中。
+- 系统 Chromium 临时 profile UI smoke 通过，新增关闭状态通知配置（未启用）、密钥输入清空、已读/归档控件；原审批/草稿/移动端回归保持。node --check / git diff --check 通过。警告仍是既有 Starlette/httpx 弃用提示。
+- 证据目录 `scratch/xianyu-operations-evidence/`，不入 Git。未读取真实 .env/data/profile、未连接 8099/9235、未执行平台操作/真实通知、未部署/push。Windows 新 CI、真实账号/钉钉/Hermes 均未验收。
+
+## 2026-10-15 Windows 浏览器测试夹具修复（历史）
 
 基线 `161968e` 已由 Hermes push。[CI run 38708963492](https://github.com/lanchenglin/xianyu/actions/runs/38708963492) 的 Windows Python 3.11/3.12 失败，其余 5 作业通过（用户提供的运行状态）。已核对本地 `scratch/xianyu-browser-ci/311.log`：3.11 为 2 failed、191 passed、3 skipped；两条失败如下，保留失败记录，不宣称原 CI 全绿。
 

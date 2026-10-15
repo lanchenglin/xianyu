@@ -121,9 +121,21 @@ def create_search_monitor(account_id: str, query: str, interval_s: int = 900,
 
 
 @mcp.tool()
-def notifications() -> list[dict]:
-    """读取搜索监控发现的新结果。"""
-    return api("GET", "/api/notifications")
+def notifications(include_archived: bool = False) -> list[dict]:
+    """读取站内通知；可包含归档。归档不是删除商品。"""
+    return api("GET", "/api/notifications?include_archived=" + str(include_archived).lower())
+
+
+@mcp.tool()
+def notification_state(notification_id: int, read: bool, archived: bool) -> dict:
+    """仅修改站内通知已读/归档状态，不触发外部发送或平台操作。"""
+    return api('POST', f'/api/notifications/{notification_id}/state', {'read': read, 'archived': archived})
+
+
+@mcp.tool()
+def notification_deliveries() -> list[dict]:
+    """读取脱敏通知投递状态；无目的地、密钥或重试业务的能力。"""
+    return api('GET', '/api/notifications/deliveries')
 
 
 def main():

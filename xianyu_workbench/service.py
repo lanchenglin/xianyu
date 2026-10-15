@@ -25,10 +25,13 @@ class Service:
         self.vault = Vault(settings.vault_key)
         self.db = DB(settings.data_dir, self.vault)
         self.provider = Provider(settings, self.db, self.vault)
+        from .notifications import Delivery
+        self.notifications = Delivery(self.db, self.vault)
         self.stop = threading.Event()
         self.thread: threading.Thread | None = None
 
     def recover(self):
+        self.db.execute("UPDATE notification_deliveries SET state='unknown',error='interrupted' WHERE state='sending'")
         self.db.execute("UPDATE actions SET state='unconfirmed',error=? WHERE state='running'",
                         ("上次服务在执行过程中退出；请到闲鱼核实，不会自动重试",))
         runtime = self.s.data_dir / "runtime"
@@ -57,6 +60,8 @@ class Service:
                 self.run_once()
                 if not self.stop.is_set():
                     self.monitor_once()
+                if not self.stop.is_set():
+                    self.notifications.run_once()
             except Exception as exc:
                 # Do not log exception strings, which might contain third-party sensitive data.
                 self.db.audit("worker", "worker.exception", detail={"type": type(exc).__name__})

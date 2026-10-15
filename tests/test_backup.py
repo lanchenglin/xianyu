@@ -54,6 +54,9 @@ def test_restore_destroyed_copy_pauses_and_never_replays(tmp_path):
                    'VALUES(?,?,?,?,?,?,?,?,?,?)',
                    (state, 'a', 'message.send', vault.seal({}), 'hash', 'demo', state, state, 1, 9999999999))
     db.execute("INSERT INTO monitors(id,account_id,query,filters,interval_s) VALUES('m','a','fake','{}',300)")
+    db.execute("INSERT INTO settings VALUES('notifications',?)", (vault.seal({'enabled': True}),))
+    db.execute("INSERT INTO notifications(monitor_id,content,created) VALUES('m','{}',1)")
+    db.execute("INSERT INTO notification_deliveries VALUES('d',1,'retry',1,0,1,NULL)")
     output = tmp_path / 'private.zip'
     backup.create_backup(root, output, vault)
     db.execute("DELETE FROM actions")
@@ -67,6 +70,8 @@ def test_restore_destroyed_copy_pauses_and_never_replays(tmp_path):
                       'unconfirmed': 'unconfirmed', 'submitted': 'submitted', 'simulated': 'simulated'}
     assert restored.one('SELECT paused FROM accounts')['paused'] == 1
     assert restored.one('SELECT enabled FROM monitors')['enabled'] == 0
+    assert vault.open(restored.one("SELECT value FROM settings WHERE key='notifications'")['value'])['enabled'] is False
+    assert restored.one('SELECT state FROM notification_deliveries')['state'] == 'cancelled'
     import base64
 
     from xianyu_workbench.config import Settings
@@ -178,6 +183,8 @@ def test_restore_v2_archive_migrates_drafts_before_install(tmp_path):
     old_db = tmp_path / 'old.db'
     old_db.write_bytes(files['workbench.db'])
     with closing(sqlite3.connect(old_db)) as c:
+        c.execute('DROP TABLE notification_deliveries')
+        c.execute('ALTER TABLE notifications DROP COLUMN archived')
         c.execute('ALTER TABLE drafts DROP COLUMN revision')
         c.execute('ALTER TABLE drafts DROP COLUMN archived')
         c.execute('PRAGMA user_version=2')

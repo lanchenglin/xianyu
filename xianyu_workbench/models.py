@@ -110,6 +110,18 @@ class MonitorIn(SearchIn):
     interval_s: int = Field(default=900, ge=300, le=86400)
 
 
+class NotificationConfigIn(Model):
+    kind: Literal['webhook', 'dingtalk']
+    url: str = Field(min_length=1, max_length=1000)
+    secret: str = Field(min_length=32, max_length=256)
+    enabled: bool = False
+
+
+class NotificationStateIn(Model):
+    read: bool
+    archived: bool
+
+
 class LLMConfigIn(Model):
     base_url: str = Field(max_length=400)
     model: str = Field(min_length=1, max_length=120)

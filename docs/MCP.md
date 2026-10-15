@@ -56,7 +56,7 @@ Chrome/Chromium 发现和 CDP 属于工作台管理员部署配置，不是 MCP 
 
 ## 工具范围
 
-可用工具：list_accounts、capabilities、search_items、item_detail、list_chats、chat_history、propose_message、propose_listing、save_listing_draft、list_actions、list_catalog、create_search_monitor、notifications。
+可用工具：list_accounts、capabilities、search_items、item_detail、list_chats、chat_history、propose_message、propose_listing、save_listing_draft、list_actions、list_catalog、create_search_monitor、notifications、notification_state、notification_deliveries。notifications 可传 include_archived；notification_state 只改本地已读/归档；投递日志不含凭据。外部目标配置与关闭仅工作台管理员可操作，不是 MCP 工具，详见 [通知契约](NOTIFICATIONS.md)。
 
 不存在 approve、reconcile、reconciliation、read_cookie、shell、refund、pay、confirm_receipt 工具。删除只在工作台由人工发起明确申请；MCP 不暴露删除工具。API schema 可由持有有效令牌的调用方读取 `/api/schema`。
 

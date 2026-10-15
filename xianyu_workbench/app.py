@@ -31,6 +31,8 @@ from .models import (
     DraftIn,
     LLMConfigIn,
     MonitorIn,
+    NotificationConfigIn,
+    NotificationStateIn,
     ReconciliationIn,
     SearchIn,
 )
@@ -128,6 +130,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                                    "admin_configuration_only": True, "failure_fallback": False},
                 "local_drafts": True, "local_draft_edit": True, "local_draft_archive": True,
                 "offline_backup_restore_cli": True, "search_monitors": True, "mcp": True,
+                "notification_state": True, "external_notifications": True,
+                "notification_policy": {"default_enabled": False, "configuration_role": "admin",
+                                        "channels": ["webhook", "dingtalk"], "content": "fixed_summary_only",
+                                        "business_retry": False, "max_attempts": 3},
                 "manual_reconciliation": True, "automatic_receipt_verification": False,
                 "reconciliation_policy": {"write_role": "admin", "agent_read": "outcome_time_only",
                                           "eligible_states": ["unconfirmed", "submitted", "blocked"],
@@ -345,9 +351,40 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         service.db.audit(current, "monitor.toggled", monitor_id)
         return {"ok": True}
 
+    @app.get('/api/notifications/config')
+    def notification_config(current=Depends(admin)):
+        return service.notifications.status()
+
+    @app.put('/api/notifications/config')
+    def configure_notifications(body: NotificationConfigIn, current=Depends(admin)):
+        try:
+            service.notifications.configure(body)
+        except ValueError:
+            raise Problem('invalid_destination', '通知目标无效：仅允许受限 HTTPS 公网 webhook', 422) from None
+        return service.notifications.status()
+
+    @app.post('/api/notifications/disable')
+    def disable_notifications(current=Depends(admin)):
+        service.notifications.disable()
+        return service.notifications.status()
+
+    @app.get('/api/notifications/deliveries')
+    def notification_deliveries(current=Depends(role)):
+        return service.db.all('SELECT * FROM notification_deliveries ORDER BY updated DESC LIMIT 100')
+
     @app.get("/api/notifications")
-    def notifications(current=Depends(role)):
-        return [{**row, "content": json.loads(row["content"])} for row in service.db.all("SELECT * FROM notifications ORDER BY id DESC LIMIT 100")]
+    def notifications(include_archived: bool = False, current=Depends(role)):
+        return [{**row, "content": json.loads(row["content"])} for row in service.db.all(
+            "SELECT * FROM notifications WHERE (? OR archived=0) ORDER BY id DESC LIMIT 100", (include_archived,))]
+
+    @app.post('/api/notifications/{notification_id}/state')
+    def notification_state(notification_id: int, body: NotificationStateIn, current=Depends(role)):
+        with service.db.connect() as c:
+            changed = c.execute('UPDATE notifications SET read=?,archived=? WHERE id=?',
+                                (body.read, body.archived, notification_id)).rowcount
+            if not changed:
+                raise Problem('not_found', '通知不存在', 404)
+        return {'id': notification_id, **body.model_dump()}
 
     @app.get("/api/audit")
     def audit(current=Depends(admin)):
