@@ -59,6 +59,38 @@ def test_failure_keeps_old_records_and_audits_safe_error(workbench, monkeypatch)
     assert 'PRIVATE' not in json.dumps(service.db.all('SELECT * FROM operation_syncs'))
 
 
+@pytest.mark.parametrize('kind', ['messages', 'orders', 'inventory'])
+@pytest.mark.parametrize('code,expected', [
+    ('response_limit', 'response_limit'), ('page_redirected', 'page_redirected'),
+    ('cid_mismatch', 'cid_mismatch'), ('response_timeout', 'response_timeout'),
+    ('secret-token=fictional-private', 'collection_failed'),
+])
+def test_sync_failure_exposes_only_allowlisted_codes(workbench, monkeypatch, kind, code, expected):
+    client, service = workbench
+    ident = account(client)
+    path = f'/api/accounts/{ident}/{kind}'
+    assert client.post(path + '/sync').status_code == 200
+    before = client.get(path).json()['items']
+    stored = service.db.all('SELECT * FROM operation_records')
+
+    def fail(*args, **kwargs):
+        raise Problem(code, 'secret-token=fictional-private phone=13800138000 address=private', 502)
+
+    monkeypatch.setattr(service.provider, 'call', fail)
+    response = client.post(path + '/sync')
+    assert response.status_code == 502
+    result = client.get(path).json()
+    assert result['items'] == before
+    assert service.db.all('SELECT * FROM operation_records') == stored
+    assert result['last_sync']['state'] == 'failed'
+    assert result['last_sync']['error'] == expected
+    assert response.json()['code'] == expected
+    evidence = response.text + json.dumps(result) + json.dumps(service.db.all('SELECT * FROM operation_syncs'))
+    assert 'secret-token' not in evidence
+    assert '13800138000' not in evidence
+    assert 'address=private' not in evidence
+
+
 def test_read_sync_auth_schema_capabilities_and_no_transactions(workbench):
     client, service = workbench
     ident = account(client)

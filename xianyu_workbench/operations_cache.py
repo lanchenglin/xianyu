@@ -34,12 +34,13 @@ class OperationsCache:
             # Codes only, never remote messages or raw response bodies.
             safe = exc.code if exc.code in {'response_timeout', 'response_invalid', 'field_invalid',
                 'response_failed', 'response_too_large', 'items_invalid', 'duplicate_conflict',
+                'response_limit', 'page_redirected', 'cid_mismatch',
                 'cdp_identity_mismatch', 'cdp_binding_mismatch', 'cdp_context_ambiguous',
                 'account_paused', 'rate_limited', 'busy', 'timeout', 'live_disabled', 'cdp_required'} else 'collection_failed'
             self.db.execute('INSERT INTO operation_syncs(account_id,kind,source,fetched_at,state,partial,'
                             'completion,error,item_count) VALUES(?,?,?,?,?,1,?,?,0)',
                             (account_id, kind, source, time.time(), 'failed', 'failed', safe))
-            raise
+            raise Problem(safe, '只读采集失败；旧缓存保留，不代表本次成功。请根据安全错误码检查。', exc.status) from None
         fetched = time.time()
         with self.db.connect() as conn:
             for item in result['items']:

@@ -1,5 +1,11 @@
 # 会话末条消息只读样本
 
+## 审查状态与安全失败码
+
+精确快照 da3e2ad 独立审查 FAIL，不能上线；433a1be 的 ID/text 增量及后续修复仍待独立复审。本地测试不代替上线审批。
+
+同步失败仅允许明确列出的稳定错误码持久化与返回。response_limit、page_redirected、cid_mismatch 保留原码；未知码统一 collection_failed。HTTP 使用固定失败提示，不传播异常 message，旧密文记录和 fetched_at 保持不变；last_sync 标 failed，不以旧缓存冒充成功。
+
 ## 编码证据增量（2026-10-15，优先于下方历史契约）
 
 父助手新增 message-id-observation / message-encoding-observation 脱敏证据：messageId 为 17 字符 `DDDDDDDDDDDDD.AAA`，旧纯数字约束不兼容，已修复。ID 原样保留，不拆点、不剥后缀；允许 ASCII 字母/数字/点，首字符字母或数字，最多 128，拒绝控制/空白/路径字符。该白名单只是已观察字符集，不声称所有平台格式已知。

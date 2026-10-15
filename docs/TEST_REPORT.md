@@ -4,7 +4,17 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
-## 2026-10-15 编码与草稿增量（最新）
+## 2026-10-15 独立审查反馈修复（最新，仍待独立复审）
+
+用户报告精确快照 da3e2ad 独立审查 FAIL，不可上线。问题一（数字 messageId）已于 433a1be 修复并保留原始 opaque ID 回归；该 ID/text 增量不因本地测试通过而视为独立审查通过。
+
+问题二在 433a1be 仍存在：operations_cache 未保留 response_limit/page_redirected/cid_mismatch。新增明确白名单，同时将 HTTP 错误改为相同安全 code + 固定提示，禁止裸 raise 转出任意 Problem.message。未知 code 仍统一 collection_failed，不存储/返回异常原文。
+
+参数化 3 类样本 × 5 类错误（含未知秘密字符串）共 15 项 RED→GREEN，断言 HTTP 失败、旧记录/密文不变、last_sync 准确安全码，以及 HTTP/缓存/同步记录无假 secret/电话/地址。另复跑 opaque ID 原样保留测试。
+
+最终 Python 3.12：**344 passed, 1 warning, 67.05s**；Python 3.11：**344 passed, 1 warning, 67.35s**，启用独立 Chromium、包含 MCP stdio/UI/本地 WS，无跳过；双 pip check/ruff 通过。唯一警告为既有 Starlette/httpx 弃用。证据 safe-code-red/green、review-final311/312.log 在 `/home/lan/.hermes/cache/scratch/xianyu-messages-evidence`，TMPDIR 保持 scratch 根目录。无真实访问、部署或 push；本修复及 433a1be 均需父助手独立复审，未宣称可上线。
+
+## 2026-10-15 编码与草稿增量（历史）
 
 基线 da3e2ad。父助手新增脱敏证据只读读取，未连接真实平台。opaque ID RED：`1234567890123.AbC` 被纯数字拒绝→原样通过；路径/控制/超长拒绝。普通文本/peer RED→GREEN；未知/恶意编码保持 unavailable。选定样本草稿缺 sample_id/路由 RED→GREEN；MCP 缺工具 RED→GREEN；UI 正文不可见 RED→GREEN；失败采集旧缓存草稿 RED→409。未将既有保护首次即通过写成 RED。
 
