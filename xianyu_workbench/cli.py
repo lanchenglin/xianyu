@@ -6,6 +6,7 @@ import json
 import os
 import secrets
 import shutil
+import sys
 from pathlib import Path
 
 from cryptography.fernet import Fernet
@@ -51,6 +52,11 @@ def main():
             parser.exit(1, ".env 已存在，未覆盖。请先备份原配置；切勿丢失加密密钥。\n")
         print(f"配置已写入 {path}；请自行查看管理员令牌登录，Agent 只使用 XY_AGENT_TOKEN。")
     elif args.command in ('backup', 'restore'):
+        # Redirected Windows streams may use cp1252: escape unsupported characters
+        # without changing the caller's encoding or misreporting a completed restore.
+        for stream in (sys.stdout, sys.stderr):
+            if hasattr(stream, 'reconfigure'):
+                stream.reconfigure(errors='backslashreplace')
         from .backup import create_backup, restore_backup
         from .security import Vault
         try:

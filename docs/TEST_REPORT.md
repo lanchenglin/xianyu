@@ -243,3 +243,25 @@ C 阶段：全量 127 passed / 1 既有弃用警告；c1/c2-red.log 为编辑和
 | 系统 Chromium 全新临时 profile UI 冒烟 | 通过，独立缓存设置不变 |
 
 最终证据：原证据目录下 `review2-final312.log`、`review2-final311.log`、`review2-final-ui.log`。警告仍为既有 Starlette/httpx 弃用提示。全程临时虚构数据，未读取真实配置/账号、未启用 live；真实账号未验收，新提交 CI 未运行。
+
+## Windows CI 重定向输出编码修复（2026-10-15）
+
+基线 `6893442` 已推送 PR #1；[run 38679746659](https://github.com/lanchenglin/xianyu/actions/runs/38679746659) **失败**：Windows 3.11/3.12 的 `test_admin_cli_backup_restore_without_env_file` 在备份子进程返回 1；Ubuntu 基础、双版本契约与 UI 共 5 作业成功（用户提供的 CI 状态）。实际读取的 Windows 3.12 日志为 `/home/lan/.hermes/cache/scratch/xianyu-ci-failure/8_Run pytest -q.txt`，结果 1 failed, 127 passed, 1 skipped, 1 warning。
+
+根因与实验：在 Linux 临时假数据上，只改变子进程 `PYTHONIOENCODING`，UTF-8 返回 0，cp1252 返回 1，但两者生成的包均通过 validate_archive。备份成功后的中文 print 无法编码，被既有 except Exception 当成备份失败；stderr 的转义错误与 CI 日志一致。恢复同样会在数据已安装后因成功提示编码失败而误报。本次未发现需要修改 SQLite URI/路径逻辑的证据。
+
+最小修复：仅 backup/restore CLI 将 stdout/stderr 的 errors 设置为 backslashreplace，保留调用方编码；UTF-8 正常中文，cp1252/ASCII 不支持的字符转义输出。未移除备份异常捕获，错误 key 仍返回 1、仅输出脱敏固定提示，不输出密钥或原始异常。未改 Windows CI 矩阵或用测试环境强制 UTF-8 绕过问题。
+
+TDD：`ci-encoding-red.log` 实际 4 failed / 5 passed：cp1252/ASCII 下 backup 和 restore 预期失败，UTF-8 与失败保密路径通过。新增回归均使用真实子进程，含中文临时数据目录、成功归档完整校验、破坏后恢复与暂停检查，以及错误 key 不修改数据/不泄密。修复后编码+全部备份安全测试 35 passed，见 `ci-encoding-green.log`；原 marker/限额/外键测试均保留。
+
+| 最终本地验证 | 结果 |
+|---|---|
+| Python 3.12.14 pip check / ruff / pytest | 全通过；147 passed, 1 warning in 19.43s |
+| Python 3.11.16 pip check / ruff / pytest | 全通过；147 passed, 1 warning in 20.43s |
+| 固定 live 契约 | 两版本全量均含 10 项，无跳过 |
+| node --check / git diff --check | 通过 |
+| 系统 Chromium 隔离临时 profile UI | 通过 |
+
+证据仍在 `/home/lan/.hermes/cache/scratch/xianyu-next2-evidence`：`ci-encoding-final312.log`、`ci-encoding-final311.log`、`ci-encoding-final-ui.log`。既有 Starlette/httpx 弃用警告各 1 条。浏览器使用项目独立缓存、SKIP_BROWSER_GC=1 与 `/snap/bin/chromium`，未读取已有 profile。
+
+**本地编码复现及修复验证通过，不代表 Windows 新 CI 已绿。** 本轮不 push，待 Hermes 复核推送后核验 Windows 两作业。未访问真实账号、未读取真实 .env、未启用 live、未部署；真实账号仍未验收。
