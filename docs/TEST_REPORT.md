@@ -224,3 +224,22 @@ C 阶段：全量 127 passed / 1 既有弃用警告；c1/c2-red.log 为编辑和
 实际完成 4 个本地功能/修复提交后继续安全审查与最终验证，没有停止在 A。没有真实登录/平台请求，没有启用 live，没有部署/推送/合并。真实账号未验收。基线已有 CI 成功不外推到新增提交；新增 CI 等 Hermes 审查推送。
 
 最终另以 review-start-red.log 复现并修复“Service 已构造但 lifespan 尚未启动时恢复中断”的竞态；Service.start 在锁内再次检查恢复标记。备份恢复专项现 19 项，最终双版本全量已重新运行至 131 passed（上表），UI 亦重新通过。
+
+## 独立审查 FAIL 后的修复验证（2026-10-15）
+
+审查对象 `4d2aadc..ad524eb` 的 FAIL 结论保留；此前自审仅补最终限额检查，仍未解决读取前资源拒绝和外键校验。本轮在 `5c463cd` 上修复，不新增功能，不 push，等待 Hermes 复核。
+
+- 资源 RED：`review2-resource-red.log` 实际 6 failed，触发禁止整文件读取断言。新增 DB/素材/合计/manifest/MAX_FILES 小常量测试；最终测试还禁止超限时复制 SQLite 快照。
+- GREEN：创建/恢复共用限制；stat 和 WAL 逻辑页大小预检，manifest 精确大小计入总量，全部早于复制和读取内容；数据库与素材使用有界流式哈希，写包再次核验大小/哈希。成功生成包实际通过 validate_archive。
+- 外键 RED：`review2-fk-red.log` 实际 1 failed（DID NOT RAISE）。测试以 foreign_keys=OFF 插入孤立草稿，integrity_check 仍为 ok。补 foreign_key_check 后拒绝且无输出，源库字节与孤立记录保持不变。
+- 原中断 marker 失败重试保留测试未删除；备份专项合计 26 项通过，日志 `review2-green.log`。
+
+| 最终检查 | 结果 |
+|---|---|
+| Python 3.12.14 pip check / ruff / 全量 pytest | 全通过；138 passed, 1 warning in 17.46s |
+| Python 3.11.16 pip check / ruff / 全量 pytest | 全通过；138 passed, 1 warning in 17.92s |
+| 固定上游契约 | 两版本全量均含 10 项，无跳过 |
+| node --check / git diff --check | 通过 |
+| 系统 Chromium 全新临时 profile UI 冒烟 | 通过，独立缓存设置不变 |
+
+最终证据：原证据目录下 `review2-final312.log`、`review2-final311.log`、`review2-final-ui.log`。警告仍为既有 Starlette/httpx 弃用提示。全程临时虚构数据，未读取真实配置/账号、未启用 live；真实账号未验收，新提交 CI 未运行。

@@ -13,6 +13,12 @@ python -m xianyu_workbench.cli restore --data-dir /absolute/private/data --archi
 
 目标 data 目录必须已经存在（新机器可创建空私有目录）。输出文件必须不存在；不覆盖已有备份。两个命令取得同一 `server.lock`，活动服务会被拒绝；不支持在线热备份。SQLite backup API 包括已提交 WAL；只纳入数据库所登记且哈希匹配的素材，未登记孤立图片、runtime、旧迁移快照不是必需数据，不打包。配置与密钥须管理员另行保护，丢失密钥不能恢复。
 
+## 创建时的资源与关系校验
+
+创建和恢复共用 512 MiB 总量、10000 项限制（包括数据库与 manifest）；单个文件也不能超过总量上限。创建先 stat 数据库/素材，并用 SQLite page_count × page_size 计入已提交 WAL 的逻辑数据库大小；预计算含固定长度 SHA-256 的 manifest 精确大小，计入总量，manifest 自身限制 2 MiB。超限在快照复制、密文扫描、素材读取和哈希前拒绝，不产生输出文件。
+
+数据库和素材哈希均按最多 1 MiB 块流式读取，不整文件 read_bytes；写包同样有界流式读取并再次核对大小/哈希，防止预检后文件变化生成坏包。创建在写包前同时做 integrity_check 与 foreign_key_check，孤立关联记录会拒绝，源库不修改。仍只支持遵守单实例锁的离线操作，不支持外部进程绕过锁修改数据。
+
 ## 校验与回滚
 
 恢复先在同盘临时目录检查 manifest 格式、允许的 schema、文件清单、SHA-256、大小、SQLite integrity/foreign keys、所有加密列、素材关系及密钥证明。拒绝重复项、额外文件、目录/符号链接、绝对路径/路径穿越、反斜杠/驱动器路径；限制解压后总量 512 MiB、10000 项、manifest 2 MiB。不用 extractall。源数据路径不接受符号链接。当前支持 schema 1 到当前版本，旧 schema 在临时目录按正常迁移升级，不修改原库。散列防损坏，不替代来源认证；只恢复本人可信来源的备份。

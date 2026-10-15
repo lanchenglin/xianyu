@@ -26,8 +26,8 @@ MAX_FILES = 10000
 def validate_archive(archive, stage, vault):
     entries = archive.infolist()
     names = [entry.filename for entry in entries]
-    if (len(entries) > MAX_FILES or len(set(names)) != len(names)
-            or sum(entry.file_size for entry in entries) > MAX_TOTAL_BYTES):
+    check_limits([entry.file_size for entry in entries])
+    if len(set(names)) != len(names):
         raise ValueError('备份超过大小/数量限制或包含重复项')
     for entry in entries:
         name = entry.filename
@@ -90,46 +90,95 @@ def check_local_paths(directory):
             raise ValueError('数据文件不可为符号链接')
 
 
+def check_limits(sizes):
+    if (len(sizes) > MAX_FILES or any(size < 0 or size > MAX_TOTAL_BYTES for size in sizes)
+            or sum(sizes) > MAX_TOTAL_BYTES):
+        raise ValueError('备份超过恢复支持的大小/数量限制')
+
+
+def hash_file(path, expected_size):
+    digest = hashlib.sha256()
+    remaining = expected_size
+    with path.open('rb') as stream:
+        while remaining:
+            chunk = stream.read(min(1024 * 1024, remaining))
+            if not chunk:
+                raise ValueError('备份文件大小变化')
+            digest.update(chunk)
+            remaining -= len(chunk)
+        if stream.read(1):
+            raise ValueError('备份文件大小变化')
+    return digest.hexdigest()
+
+
 def create_backup(directory: Path, output: Path, vault: Vault) -> None:
     check_local_paths(directory)
     with FileLock(str(directory / 'server.lock'), timeout=0):
-        with tempfile.TemporaryDirectory(prefix='xy-backup-') as temporary:
-            stage = Path(temporary)
-            snapshot = stage / 'workbench.db'
-            with closing(sqlite3.connect(f'{(directory / "workbench.db").as_uri()}?mode=ro', uri=True)) as source:
-                DB.validate_key(source, vault)
+        database = directory / 'workbench.db'
+        check_limits([database.stat().st_size, 0])  # Reserve the manifest entry before copying.
+        with closing(sqlite3.connect(f'{database.as_uri()}?mode=ro', uri=True)) as source:
+            version = source.execute('PRAGMA user_version').fetchone()[0]
+            if version != len(MIGRATIONS):
+                raise ValueError('备份数据库版本无效')
+            # page_count includes committed WAL pages not yet reflected in the DB file's stat.
+            db_size = source.execute('PRAGMA page_count').fetchone()[0] * source.execute('PRAGMA page_size').fetchone()[0]
+            check_limits([db_size, 0])
+            files = {'workbench.db': database}
+            metadata = {'workbench.db': {'size': db_size, 'sha256': '0' * 64}}
+            expected_hashes = {}
+            for filename, expected in source.execute('SELECT filename,sha256 FROM assets'):
+                path = directory / 'assets' / filename
+                if (Path(filename).name != filename or '\\' in filename or ':' in filename
+                        or path.is_symlink() or not path.is_file()):
+                    raise ValueError('素材路径无效')
+                name = 'assets/' + filename
+                files[name] = path
+                metadata[name] = {'size': path.stat().st_size, 'sha256': '0' * 64}
+                expected_hashes[name] = expected
+                check_limits([0, *(entry['size'] for entry in metadata.values())])
+            manifest = {'format': 1, 'schema': version,
+                        'key_check': vault.seal({'purpose': 'xianyu-backup-v1'}), 'files': metadata}
+            manifest_size = len(canonical(manifest).encode('utf-8'))
+            if manifest_size > 2 * 1024 * 1024:
+                raise ValueError('备份 manifest 超过大小限制')
+            check_limits([manifest_size, *(entry['size'] for entry in metadata.values())])
+            # All size/count checks precede validation scans, hashing and snapshot allocation.
+            if (source.execute('PRAGMA integrity_check').fetchone()[0] != 'ok'
+                    or source.execute('PRAGMA foreign_key_check').fetchone()):
+                raise ValueError('备份数据库完整性无效')
+            DB.validate_key(source, vault)
+            with tempfile.TemporaryDirectory(prefix='xy-backup-') as temporary:
+                snapshot = Path(temporary) / 'workbench.db'
                 with closing(sqlite3.connect(snapshot)) as target:
                     source.backup(target)
-            files = {'workbench.db': snapshot}
-            with closing(sqlite3.connect(snapshot)) as c:
-                version = c.execute('PRAGMA user_version').fetchone()[0]
-                if version != len(MIGRATIONS) or c.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
-                    raise ValueError('备份数据库版本或完整性无效')
-                for filename, expected in c.execute('SELECT filename,sha256 FROM assets'):
-                    path = directory / 'assets' / filename
-                    if Path(filename).name != filename or path.is_symlink() or not path.is_file():
-                        raise ValueError('素材路径无效')
-                    if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+                if snapshot.stat().st_size != db_size:
+                    raise ValueError('备份数据库大小变化')
+                files['workbench.db'] = snapshot
+                for name, path in files.items():
+                    actual = hash_file(path, metadata[name]['size'])
+                    if name in expected_hashes and actual != expected_hashes[name]:
                         raise ValueError('素材校验失败')
-                    files['assets/' + filename] = path
-            manifest = {'format': 1, 'schema': version,
-                        'key_check': vault.seal({'purpose': 'xianyu-backup-v1'}),
-                        'files': {name: {'size': path.stat().st_size,
-                                         'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
-                                  for name, path in files.items()}}
-            manifest_data = canonical(manifest).encode('utf-8')
-            if (len(files) + 1 > MAX_FILES or len(manifest_data) > 2 * 1024 * 1024
-                    or sum(path.stat().st_size for path in files.values()) + len(manifest_data) > MAX_TOTAL_BYTES):
-                raise ValueError('备份超过恢复支持的大小/数量限制')
-            fd = os.open(output, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-            try:
-                with os.fdopen(fd, 'wb') as stream, zipfile.ZipFile(stream, 'w', compression=zipfile.ZIP_STORED) as archive:
-                    archive.writestr('manifest.json', canonical(manifest))
-                    for name, path in files.items():
-                        archive.write(path, name)
-            except BaseException:
-                output.unlink(missing_ok=True)
-                raise
+                    metadata[name]['sha256'] = actual
+                fd = os.open(output, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+                try:
+                    with os.fdopen(fd, 'wb') as stream, zipfile.ZipFile(stream, 'w', compression=zipfile.ZIP_STORED) as archive:
+                        archive.writestr('manifest.json', canonical(manifest))
+                        for name, path in files.items():
+                            remaining = metadata[name]['size']
+                            digest = hashlib.sha256()
+                            with path.open('rb') as src, archive.open(name, 'w') as dest:
+                                while remaining:
+                                    chunk = src.read(min(1024 * 1024, remaining))
+                                    if not chunk:
+                                        raise ValueError('备份文件大小变化')
+                                    dest.write(chunk)
+                                    digest.update(chunk)
+                                    remaining -= len(chunk)
+                                if src.read(1) or digest.hexdigest() != metadata[name]['sha256']:
+                                    raise ValueError('备份文件内容变化')
+                except BaseException:
+                    output.unlink(missing_ok=True)
+                    raise
 
 
 def restore_backup(directory: Path, archive_path: Path, vault: Vault) -> Path:
