@@ -19,8 +19,8 @@ def test_real_cdp_network_listener_identity_and_cleanup(tmp_path, monkeypatch):
     profile = tmp_path / 'fresh-profile'
     profile.mkdir()
     from message_ws_fixture import message_server
-    from test_messages import frame
-    server = message_server(tmp_path, json.dumps(frame()))
+    from test_message_text import text_frame
+    server = message_server(tmp_path, json.dumps(text_frame()))
     ws_port, received = server.__enter__()
     process = subprocess.Popen([os.environ['XY_TEST_CHROMIUM'], '--headless=new', '--no-sandbox',
         '--ignore-certificate-errors', '--no-proxy-server',
@@ -98,8 +98,9 @@ def test_real_cdp_network_listener_identity_and_cleanup(tmp_path, monkeypatch):
                 from dataclasses import replace
                 provider.s = replace(settings, operation_timeout=20)
                 value = await asyncio.to_thread(provider._live, account, 'messages', {}, write=False)
-                assert value['items'][0]['message_id'] == '987654'
-                assert value['items'][0]['body'] is None
+                assert value['items'][0]['message_id'] == '1234567890123.Abc'
+                assert value['items'][0]['body'] == '还有吗？'
+                assert value['items'][0]['recipient_verified'] is False  # fixture UID 12345 is not in pair
                 assert received == []  # No IM commands, ACK, heartbeat or writes from collector.
                 assert len(context.pages) == 1 and not original.is_closed()
                 provider.s = settings

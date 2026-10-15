@@ -77,9 +77,16 @@ def chat_history(account_id: str, cid: str):
 
 @mcp.tool()
 def sync_message_sample(account_id: str) -> dict:
-    """按需只读会话末条元数据样本；不是历史/实时消息。正文不可用，不得据此回复或提案。"""
+    """按需只读会话末条样本；不是历史/实时消息。仅白名单普通文本可读；未知正文不可回复，CDP 不可提案/发送。"""
     from urllib.parse import quote
     return api('POST', f'/api/accounts/{quote(account_id, safe="")}/messages/sync')
+
+
+@mcp.tool()
+def message_reply_draft(account_id: str, sample_id: str) -> dict:
+    """用户选定 incoming 普通文本后生成本地模板草稿；不调用模型、不提案、不发送，交易/隐私交人工。"""
+    from urllib.parse import quote
+    return api('POST', f'/api/accounts/{quote(account_id, safe="")}/messages/{quote(sample_id, safe="")}/reply-draft')
 
 
 @mcp.tool()

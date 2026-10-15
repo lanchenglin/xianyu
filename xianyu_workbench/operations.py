@@ -1,6 +1,10 @@
 """Pure, minimal projections of observed MTOP structures. No cursor guesses."""
 from __future__ import annotations
 
+import re
+
+from .message_text import decode_text
+
 SOURCES = {'orders': 'mtop.idle.web.trade.bought.list', 'inventory': 'mtop.idle.web.xyh.item.list'}
 MAX_ITEMS = 100
 MAX_BODY = 1_000_000
@@ -12,6 +16,13 @@ def platform_id(value):
     if value.endswith('@goofish'):
         value = value[:-8]
     return text(value, maximum=64, identifier=True)
+
+
+def message_id(value):
+    # Observed alphabet only, not a claim that all platform ID formats are known.
+    if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9.]{0,127}', value):
+        raise ValueError('field_invalid')
+    return value
 
 
 def normalize_messages(value, uid):
@@ -34,12 +45,21 @@ def normalize_messages(value, uid):
                 raise ValueError('cid_mismatch')
             sender = platform_id(message['sender']['uid'])
             timestamp = message['createAt']
-            if type(timestamp) is not int or not 1 <= timestamp <= 253402300799999:
+            if type(timestamp) is not int or not 1_000_000_000_000 <= timestamp <= 9_999_999_999_999:
                 raise ValueError('field_invalid')
-            item = {'message_id': text(message['messageId'], maximum=64, identifier=True),
+            item = {'message_id': message_id(message['messageId']),
                     'cid': cid, 'sender_uid': sender, 'created_at': timestamp,
                     'direction': 'outgoing' if sender == uid else 'incoming',
                     'body': None, 'body_status': 'unavailable', 'recipient_verified': False}
+            body = decode_text(message.get('content'))
+            item.update(body=body, body_status='available' if body is not None else 'unavailable')
+            pair = conv['singleChatConversation']
+            try:
+                members = {platform_id(pair['pairFirst']), platform_id(pair['pairSecond'])}
+            except (KeyError, ValueError, TypeError):
+                members = set()
+            if len(members) == 2 and uid in members and sender in members:
+                item.update(recipient_verified=True, peer_uid=next(iter(members - {uid})))
             key = (cid, item['message_id'])
             if key in items and items[key] != item:
                 raise ValueError('duplicate_conflict')

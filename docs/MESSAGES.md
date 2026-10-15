@@ -1,5 +1,23 @@
 # 会话末条消息只读样本
 
+## 编码证据增量（2026-10-15，优先于下方历史契约）
+
+父助手新增 message-id-observation / message-encoding-observation 脱敏证据：messageId 为 17 字符 `DDDDDDDDDDDDD.AAA`，旧纯数字约束不兼容，已修复。ID 原样保留，不拆点、不剥后缀；允许 ASCII 字母/数字/点，首字符字母或数字，最多 128，拒绝控制/空白/路径字符。该白名单只是已观察字符集，不声称所有平台格式已知。
+
+普通文本唯一解码路径：外层整数 contentType=101、custom.type=1；严格 base64→UTF-8→JSON，内层整数 contentType=1，text.text 非空字符串最多 4000 字符。编码最多 24000 字符、解码最多 18000 bytes、深度 12、节点 2000；拒重复 JSON 键、控制字符、类型不一致。未知或无效正文保留元数据但 body unavailable。type14/tip、summary/degrade/reminder 绝不当正文，不解压，不持久化原始 custom。可读正文仍在 Fernet 私有 payload，不写日志/审计。
+
+createAt 仅接受已观察的 13 位整数毫秒，秒值不猜单位转换。同记录 cid 校验不变；pairFirst/pairSecond 必须为两个不同成员，当前 UID 和 sender 都在其中才能 recipient_verified=true，peer_uid 为另一方。缺失或不匹配不认证收件人。该结论不是发送授权。
+
+### 按需本地回复草稿（不是自动客服）
+
+用户从缓存明确选择 sample_id（账号 HMAC）后，POST `/api/accounts/{account_id}/messages/{sample_id}/reply-draft` 或 MCP `message_reply_draft(account_id,sample_id)`。仅 incoming、可读普通文本、已核验 peer=sender、账号未暂停、最近成功样本且一小时内；失败采集/旧缓存拒绝。
+
+本版生成 **local_template** 保守确认草稿，不调用外部模型，不外传聊天，既不复制聊天指令也不承诺商品事实。交易/投诉/隐私/指令关键词与长数字等保守拦截交人工（不是完备分类器）。API/UI 明示 draft、requires_approval=true、sent=false；同账号同样本幂等保存，v7→v8 新建加密 message_reply_drafts 表。恢复只恢复本地草稿，不创建/重放 actions。UI 用 textContent 显示正文与建议；自己的消息和不可读正文无生成按钮。
+
+**CDP 写操作与发送提案仍拒绝，草稿未进入发送队列，不声称已审批或发送。** message_bodies/message_reply_drafts=true 仅代表该受限实现；message_sample_propose=false，自动监听/FAQ 未启用。真实账号验证仍由父助手执行，本轮仅隔离假数据。下方“正文全部不可用”为旧批次状态，现由本增量替代。
+
+## 首批历史契约
+
 2026-10-15，基线 b0e84fe。`partial_messages=true`，不是历史消息同步、分页或实时监听。
 
 ## 采集契约

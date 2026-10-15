@@ -114,8 +114,16 @@ def message_samples_schema(conn):
     conn.execute('CREATE INDEX operation_record_recent ON operation_records(account_id,kind,fetched_at DESC)')
 
 
+def message_reply_schema(conn):
+    conn.execute('''CREATE TABLE message_reply_drafts (
+        id TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES accounts(id),
+        sample_id TEXT NOT NULL, payload TEXT NOT NULL, created REAL NOT NULL,
+        UNIQUE(account_id, sample_id)
+    )''')
+
+
 MIGRATIONS = (initial_schema, reconciliation_schema, draft_revision_schema,
-              notification_state_schema, notification_delivery_schema, operations_schema, message_samples_schema)
+              notification_state_schema, notification_delivery_schema, operations_schema, message_samples_schema, message_reply_schema)
 
 
 class DB:
@@ -151,7 +159,8 @@ class DB:
         tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         encrypted = {"accounts": ("secret",), "actions": ("payload", "result"),
                      "drafts": ("content",), "settings": ("value",),
-                     "reconciliations": ("evidence",), "operation_records": ("payload",)}
+                     "reconciliations": ("evidence",), "operation_records": ("payload",),
+                     "message_reply_drafts": ("payload",)}
         try:
             for table, columns in encrypted.items():
                 if table not in tables:

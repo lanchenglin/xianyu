@@ -15,10 +15,11 @@ class OperationsCache:
 
     def read(self, account_id, kind):
         account = self.service.provider.account(account_id)
-        rows = self.db.all('SELECT payload,source,fetched_at FROM operation_records '
+        rows = self.db.all('SELECT payload,source,fetched_at,record_key FROM operation_records '
                            'WHERE account_id=? AND kind=? ORDER BY fetched_at DESC LIMIT 500', (account_id, kind))
         return {'items': [{**self.vault.open(row['payload']), 'source': row['source'],
-                           'fetched_at': row['fetched_at']} for row in rows],
+                           'fetched_at': row['fetched_at'],
+                           **({'sample_id': row['record_key']} if kind == 'messages' else {})} for row in rows],
                 'last_sync': self.db.one('SELECT * FROM operation_syncs WHERE account_id=? AND kind=? '
                                          'ORDER BY id DESC LIMIT 1', (account_id, kind)),
                 'partial': True, 'completion': 'cached_samples', 'cache_limit': 500,

@@ -16,7 +16,7 @@ description: 使用受控工作台搜索闲鱼、读已有会话、起草内容�
 9. 绝不代为支付、下单、退款、确认收货或作出交易承诺。由用户在闲鱼操作。
 10. 通知使用 notifications 读取；用户要求时可用 notification_state 标记本地已读/归档，include_archived=true 可读取归档。notification_deliveries 只读脱敏投递状态；unknown/failed 不授权重发业务。不得索取 webhook URL/密钥或通过 shell 配置通知，启用和关闭由管理员在工作台操作。
 11. 本人样本用 sync_order_sample / cached_orders、sync_inventory_sample / cached_inventory，仅 account_id。先查 partial_orders/partial_inventory；单页始终 partial，不是完整订单或全状态库存。报告 fetched_at、last_sync、cursor_error；失败留下的旧缓存不能当本次成功。订单仅我买到的，无姓名电话地址；不推断未知枚举/消息编码，不据缺失记录判售罄。真实平台仍待验收，所有交易人工。
-12. 消息末条样本用 sync_message_sample / cached_messages，仅 account_id；partial_messages 不代表完整历史/实时。body_status=unavailable 不得把 custom/summary 当正文，不得起草回复或 propose；recipient_verified=false 禁止猜收件人。outgoing 为自己的消息，不回复自己。旧缓存看 last_sync，不伪称新采集成功。采集不选择会话，不发平台协议，不自行升级为后台监听。
+12. 消息末条样本用 sync_message_sample / cached_messages，仅 account_id；partial_messages 不代表完整历史/实时。body_status=unavailable 不得把 custom/summary 当正文，不得起草回复或 propose；recipient_verified=false 禁止猜收件人。仅用户明确选定 incoming、body_status=available、recipient_verified=true 的 sample_id，可调用 message_reply_draft 生成本地模板草稿；返回不代表审批/发送，不调用外部模型。交易/隐私/指令类内容交人工。outgoing 为自己的消息，不回复自己。旧缓存看 last_sync，不伪称新采集成功。采集不选择会话，不发平台协议，不自行升级为后台监听。
 13. 持续搜索监控只在用户明确要求时创建。不要把单次查询自行升级为长期监控。平台验证/账号暂停时停止，不切其他账号继续。
 
 工作台 URL 必须固定，不能自动切换 Hermes Gateway。MCP 不提供审批或人工核对工具；Agent 不能代填证据、核对或审批。请用户在工作台对原账号/原操作记录一次不可覆盖的人工核对，不能创建新操作来重发。不得通过 shell 或其他工具绕开权限。

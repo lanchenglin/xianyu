@@ -4,7 +4,18 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
-## 2026-10-15 第三批：末条消息元数据样本（最新）
+## 2026-10-15 编码与草稿增量（最新）
+
+基线 da3e2ad。父助手新增脱敏证据只读读取，未连接真实平台。opaque ID RED：`1234567890123.AbC` 被纯数字拒绝→原样通过；路径/控制/超长拒绝。普通文本/peer RED→GREEN；未知/恶意编码保持 unavailable。选定样本草稿缺 sample_id/路由 RED→GREEN；MCP 缺工具 RED→GREEN；UI 正文不可见 RED→GREEN；失败采集旧缓存草稿 RED→409。未将既有保护首次即通过写成 RED。
+
+- Python 3.12 **329 passed, 1 warning, 64.09s**；3.11 **329 passed, 1 warning, 65.41s**（含追加毫秒 13 位校验 RED/GREEN）。均启用独立 `/snap/bin/chromium`、无跳过；唯一既有 Starlette/httpx 弃用警告。
+- 双环境 pip check/ruff、node check、diff check、完整 smoke_ui 通过。真实 MCP stdio 的本地草稿调用与无 actions 副作用通过；Agent UI 可读正文 textContent/XSS、按需生成、账号切换通过。
+- 隔离 TLS WebSocket→真实 Chromium→bridge 子进程使用新 opaque ID 与 base64 普通文本 fixture，通过；不发送 IM 协议，真实平台未验收。
+- v8 加密草稿表、错误密钥验证、备份恢复不重放回归通过。中途 3.12 全量 2 failed/320 passed：旧 v2 fixture 未删除新增表、UI 并发刷新导致草稿输出被覆盖；修复 fixture 表降级和等待按钮异步完成后双版本全绿。
+- TMPDIR 始终 `/home/lan/.hermes/cache/scratch`；日志在其 `xianyu-messages-evidence` 子目录，不入库。无部署/push、无 8099/9235 或真实 .env/data/profile 读取。
+- 仅 local_template 本地建议，不调用模型、不创建发送提案；CDP 写仍拒绝。自动监听/FAQ/分页/真实发送、首次聊天、发布改价上下架及 Hermes 实际接入未完成。详细契约见 MESSAGES。
+
+## 2026-10-15 第三批：末条消息元数据样本（历史）
 
 基线 b0e84fe；实现范围和证据需求见 [MESSAGES](MESSAGES.md)。本批只交付 partial_messages 元数据，不把正文未知伪装成可回复；无后台监听/自动回复，无部署/push，无真实账号访问。用户提供前批真实订单/商品 10/20 条与 CI 38744034233 五作业成功，本批未重新连接验证。
 

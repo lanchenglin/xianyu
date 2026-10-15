@@ -59,6 +59,21 @@ def test_real_ui_sample_sync_account_switch_and_xss(api_server):
         expect(page.locator('#messages-samples')).to_contain_text('987654')
         expect(page.locator('#messages-samples')).to_contain_text('body unavailable')
         expect(page.locator('#messages-samples button')).to_have_count(0)
+        expect(page.locator('#sync-messages')).to_be_enabled()
+        expect(page.locator('#sync-orders')).to_be_enabled()
+        from test_message_text import text_frame
+
+        from xianyu_workbench.operations import normalize_messages
+        item = normalize_messages(text_frame('<b>还有吗</b>'), '11')['items'][0]
+        service.db.execute("UPDATE operation_records SET payload=? WHERE kind='messages' AND account_id=?",
+                           (service.vault.seal(item), first))
+        page.locator('#refresh-samples').click()
+        expect(page.locator('#messages-samples')).to_contain_text('<b>还有吗</b>')
+        expect(page.locator('#messages-samples b')).to_have_count(0)
+        expect(page.locator('#refresh-samples')).to_be_enabled()
+        page.get_by_role('button', name='生成本地回复草稿', exact=True).click()
+        expect(page.locator('#messages-samples')).to_contain_text('我先核实商品情况')
+        assert service.db.all('SELECT * FROM actions') == []
         page.locator('#sync-inventory').click()
         expect(page.locator('#inventory-samples')).to_contain_text('100001')
         row = service.db.one("SELECT * FROM operation_records WHERE kind='inventory'")

@@ -53,6 +53,8 @@ def test_restore_destroyed_copy_pauses_and_never_replays(tmp_path):
         db.execute('INSERT INTO actions(id,account_id,kind,payload,digest,mode,idem,state,created,expires) '
                    'VALUES(?,?,?,?,?,?,?,?,?,?)',
                    (state, 'a', 'message.send', vault.seal({}), 'hash', 'demo', state, state, 1, 9999999999))
+    db.execute("INSERT INTO message_reply_drafts VALUES('draft','a','hmac',?,1)",
+               (vault.seal({'text': 'private draft', 'state': 'draft', 'sent': False}),))
     db.execute("INSERT INTO operation_records VALUES('a','messages','hmac',?,'fixture',1)",
                (vault.seal({'message_id': '987654', 'body_status': 'unavailable'}),))
     db.execute("INSERT INTO monitors(id,account_id,query,filters,interval_s) VALUES('m','a','fake','{}',300)")
@@ -72,6 +74,7 @@ def test_restore_destroyed_copy_pauses_and_never_replays(tmp_path):
                       'unconfirmed': 'unconfirmed', 'submitted': 'submitted', 'simulated': 'simulated'}
     assert vault.open(restored.one("SELECT payload FROM operation_records WHERE kind='messages'")['payload']) == {
         'message_id': '987654', 'body_status': 'unavailable'}
+    assert vault.open(restored.one('SELECT payload FROM message_reply_drafts')['payload'])['sent'] is False
     assert restored.one('SELECT paused FROM accounts')['paused'] == 1
     assert restored.one('SELECT enabled FROM monitors')['enabled'] == 0
     assert vault.open(restored.one("SELECT value FROM settings WHERE key='notifications'")['value'])['enabled'] is False
@@ -187,6 +190,7 @@ def test_restore_v2_archive_migrates_drafts_before_install(tmp_path):
     old_db = tmp_path / 'old.db'
     old_db.write_bytes(files['workbench.db'])
     with closing(sqlite3.connect(old_db)) as c:
+        c.execute('DROP TABLE message_reply_drafts')
         c.execute('DROP TABLE operation_records')
         c.execute('DROP TABLE operation_syncs')
         c.execute('DROP TABLE notification_deliveries')

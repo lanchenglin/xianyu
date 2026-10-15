@@ -59,6 +59,16 @@ def test_stdio_discovery_call_and_local_notice_state(api_server, tmp_path):
             result = await session.call_tool('cached_messages', {'account_id': 'messages'})
             assert not result.isError
             assert 'unavailable' in str(result) and 'last_message_samples' in str(result)
+            assert 'message_reply_draft' in tools
+            from test_message_text import text_frame
+
+            from xianyu_workbench.operations import normalize_messages
+            item = normalize_messages(text_frame(), '11')['items'][0]
+            service.db.execute("UPDATE operation_records SET payload=? WHERE kind='messages'", (service.vault.seal(item),))
+            sample = service.db.one("SELECT record_key FROM operation_records WHERE kind='messages'")['record_key']
+            result = await session.call_tool('message_reply_draft', {'account_id': 'messages', 'sample_id': sample})
+            assert not result.isError and 'local_template' in str(result)
+            assert service.db.all('SELECT * FROM actions') == []
             assert not tools & {'approve', 'shell', 'read_cookie', 'configure_notifications', 'pay', 'refund'}
             result = await session.call_tool('notification_state', {'notification_id': 1, 'read': True, 'archived': True})
             assert not result.isError

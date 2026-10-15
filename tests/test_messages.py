@@ -21,16 +21,30 @@ def parse(value):
     return operations.normalize_messages(value, '11')
 
 
+def test_observed_opaque_id_preserved_exactly():
+    data = frame()
+    data['body']['userConvs'][0]['singleChatUserConversation']['lastMessage']['message']['messageId'] = '1234567890123.AbC'
+    assert parse(data)['items'][0]['message_id'] == '1234567890123.AbC'
+
+
+@pytest.mark.parametrize('value', ['a/b', '../a', 'a\\b', 'x\n', 'x\x00', 'a' * 129, '中文', 'a b'])
+def test_unsafe_opaque_id_rejected(value):
+    data = frame()
+    data['body']['userConvs'][0]['singleChatUserConversation']['lastMessage']['message']['messageId'] = value
+    with pytest.raises(ValueError):
+        parse(data)
+
+
 def test_last_message_metadata_never_guesses_body():
     result = parse(frame())
     assert result['partial'] and result['completion'] == 'last_message_samples'
     assert result['items'] == [{'message_id': '987654', 'cid': '123', 'sender_uid': '22',
         'created_at': 1780000000000, 'direction': 'incoming', 'body': None,
-        'body_status': 'unavailable', 'recipient_verified': False}]
+        'body_status': 'unavailable', 'recipient_verified': True, 'peer_uid': '22'}]
 
 
 @pytest.mark.parametrize('field,value', [('messageId', ''), ('messageId', True),
-    ('createAt', True), ('createAt', -1), ('createAt', '1780000000000'),
+    ('createAt', True), ('createAt', -1), ('createAt', 1780000000), ('createAt', '1780000000000'),
     ('cid', '456@goofish'), ('sender', {}), ('sender', {'uid': 'bad uid'})])
 def test_invalid_metadata_is_not_cached(field, value):
     data = frame()

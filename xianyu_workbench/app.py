@@ -142,7 +142,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "first_contact": False, "platform_edit_price": False, "platform_relist": False,
                 "full_inventory_sync": False, "order_sync": False, "autonomous_reply": False,
                 "partial_orders": True, "partial_inventory": True, "partial_messages": True,
-                "message_bodies": False, "message_sample_propose": False,
+                "message_bodies": True, "message_reply_drafts": True, "message_sample_propose": False,
                 "sample_policy": {"pages": 1, "pagination": False, "all_statuses": False,
                                   "private_cache_encrypted": True, "platform_verified": False},
                 "payment": False, "refund": False, "confirm_receipt": False,
@@ -234,6 +234,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     from .operations_cache import OperationsCache
     samples = OperationsCache(service)
+
+    from .message_replies import MessageReplies
+    replies = MessageReplies(service)
+
+    @app.post('/api/accounts/{account_id}/messages/{sample_id}/reply-draft')
+    def message_reply_draft(account_id: str, sample_id: str, current=Depends(role)):
+        return replies.generate(account_id, sample_id)
 
     @app.get('/api/accounts/{account_id}/messages')
     def messages_cache(account_id: str, current=Depends(role)):
