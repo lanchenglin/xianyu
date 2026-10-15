@@ -117,6 +117,10 @@ def create_backup(directory: Path, output: Path, vault: Vault) -> None:
                         'files': {name: {'size': path.stat().st_size,
                                          'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
                                   for name, path in files.items()}}
+            manifest_data = canonical(manifest).encode('utf-8')
+            if (len(files) + 1 > MAX_FILES or len(manifest_data) > 2 * 1024 * 1024
+                    or sum(path.stat().st_size for path in files.values()) + len(manifest_data) > MAX_TOTAL_BYTES):
+                raise ValueError('备份超过恢复支持的大小/数量限制')
             fd = os.open(output, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
             try:
                 with os.fdopen(fd, 'wb') as stream, zipfile.ZipFile(stream, 'w', compression=zipfile.ZIP_STORED) as archive:
@@ -146,6 +150,7 @@ def restore_backup(directory: Path, archive_path: Path, vault: Vault) -> Path:
             rollback = directory.parent / ('restore-rollback-' + uuid.uuid4().hex)
             rollback.mkdir(mode=0o700)
             marker = directory / 'restore-in-progress'
+            previous_marker = marker.read_bytes() if marker.exists() else None
             with marker.open('w', encoding='utf-8') as stream:
                 stream.write(str(rollback))
                 stream.flush()
@@ -172,7 +177,10 @@ def restore_backup(directory: Path, archive_path: Path, vault: Vault) -> Path:
                         path.unlink()
                 for name in moved:
                     os.replace(rollback / name, directory / name)
-                marker.unlink()
+                if previous_marker is not None:
+                    marker.write_bytes(previous_marker)
+                else:
+                    marker.unlink()
                 raise
             marker.unlink()
             return rollback

@@ -67,12 +67,17 @@ def test_restore_destroyed_copy_pauses_and_never_replays(tmp_path):
                       'unconfirmed': 'unconfirmed', 'submitted': 'submitted', 'simulated': 'simulated'}
     assert restored.one('SELECT paused FROM accounts')['paused'] == 1
     assert restored.one('SELECT enabled FROM monitors')['enabled'] == 0
+    import base64
+
+    from xianyu_workbench.config import Settings
     from xianyu_workbench.service import Service
-    service = object.__new__(Service)
-    service.db = restored
+    key = base64.urlsafe_b64encode(vault.fernet._signing_key + vault.fernet._encryption_key).decode()
+    service = Service(Settings(root, 'a' * 40, 'b' * 40, key, worker_enabled=False))
+    service.start()
     assert not service.run_once()
     restored.execute('UPDATE accounts SET paused=0')
     assert not service.run_once()
+    service.close()
 
 
 @pytest.mark.parametrize('damage', ['hash', 'traversal', 'schema', 'extra', 'symlink', 'bomb'])
@@ -151,6 +156,66 @@ def test_restore_install_failure_rolls_back(tmp_path, monkeypatch):
         backup.restore_backup(root, output, vault)
     assert db.one('SELECT label FROM accounts')['label'] == 'current data'
     assert (root / 'assets/photo.jpg').read_bytes() == b'fake-image'
+
+
+def test_backup_refuses_package_that_exceeds_restore_limit(tmp_path, monkeypatch):
+    from xianyu_workbench import backup
+    root, vault, _ = seed(tmp_path)
+    monkeypatch.setattr(backup, 'MAX_TOTAL_BYTES', 10)
+    output = tmp_path / 'too-big.zip'
+    with pytest.raises(ValueError):
+        backup.create_backup(root, output, vault)
+    assert not output.exists()
+
+
+def test_restore_v2_archive_migrates_drafts_before_install(tmp_path):
+    from xianyu_workbench import backup
+    root, vault, db = seed(tmp_path)
+    output = tmp_path / 'new.zip'
+    backup.create_backup(root, output, vault)
+    with zipfile.ZipFile(output) as z:
+        files = {name: z.read(name) for name in z.namelist()}
+    old_db = tmp_path / 'old.db'
+    old_db.write_bytes(files['workbench.db'])
+    with closing(sqlite3.connect(old_db)) as c:
+        c.execute('ALTER TABLE drafts DROP COLUMN revision')
+        c.execute('ALTER TABLE drafts DROP COLUMN archived')
+        c.execute('PRAGMA user_version=2')
+        c.execute("INSERT INTO drafts VALUES('d','a',?,123)", (vault.seal({'title': 'old draft'}),))
+        c.commit()
+    files['workbench.db'] = old_db.read_bytes()
+    manifest = json.loads(files['manifest.json'])
+    manifest['schema'] = 2
+    manifest['files']['workbench.db'] = {'size': len(files['workbench.db']),
+                                        'sha256': hashlib.sha256(files['workbench.db']).hexdigest()}
+    files['manifest.json'] = json.dumps(manifest).encode()
+    old_archive = tmp_path / 'old.zip'
+    with zipfile.ZipFile(old_archive, 'w') as z:
+        for name, data in files.items():
+            z.writestr(name, data)
+    backup.restore_backup(root, old_archive, vault)
+    assert db.one('SELECT revision,archived FROM drafts') == {'revision': 1, 'archived': 0}
+    assert vault.open(db.one('SELECT content FROM drafts')['content']) == {'title': 'old draft'}
+
+
+def test_failed_retry_keeps_previous_interruption_guard(tmp_path, monkeypatch):
+    from xianyu_workbench import backup
+    root, vault, _ = seed(tmp_path)
+    output = tmp_path / 'good.zip'
+    backup.create_backup(root, output, vault)
+    marker = root / 'restore-in-progress'
+    marker.write_text('previous-rollback')
+    replace = backup.os.replace
+    def fail(source, target):
+        if source.parent.name.startswith('.restore-') and source.name == 'assets':
+            raise OSError('injected')
+        return replace(source, target)
+    monkeypatch.setattr(backup.os, 'replace', fail)
+    with pytest.raises(OSError):
+        backup.restore_backup(root, output, vault)
+    assert marker.read_text() == 'previous-rollback'
+    with pytest.raises(ValueError):
+        DB(root, vault)
 
 
 def test_interrupted_restore_marker_refuses_startup(tmp_path):

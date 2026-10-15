@@ -202,3 +202,7 @@ B 阶段：15 项备份恢复测试通过；全量 123 passed / 1 既有弃用�
 已实现单条原位编辑、revision 乐观并发保护和归档 UI；显式 v2→v3 迁移增加 revision=1 / archived=0，保留原内容。PUT `/api/drafts/{id}` 接受原 account_id、revision 和完整草稿字段；POST `/api/drafts/{id}/archive` 接受 account_id、revision。账号/旧版本/已归档冲突返回 409，不另建副本；归档非平台删除，修改不会改变已冻结审批。管理员和 Agent 均可操作安全本地草稿，无新增管理员权限或任意文件操作。未增加 MCP 编辑工具（HTTP/UI 可用），既有 MCP 保存工具保持新建语义。没有素材删除接口，所有引用图片保留。批量发布、素材回收、取消归档尚未实现。
 
 C 阶段：全量 127 passed / 1 既有弃用警告；c1/c2-red.log 为编辑和归档缺失 RED，c-ui-red.log 实际浏览器因缺少归档按钮失败，c-ui-green.log 真实系统 Chromium 临时 profile 冒烟通过。覆盖跨账号/素材、旧 revision 并发、加密、审批原文冻结、归档非平台删除与图片保留；v2 旧草稿迁移保留测试通过。
+
+### 安全自审增量
+
+发现并以 RED/GREEN 修复：备份创建允许超过恢复上限的大包；中断后的恢复重试若安装失败会丢失此前启动阻断标记。现创建/恢复限制一致，失败重试保留原标记。review-limit-red.log / review-marker-red.log 实际失败，18 项备份恢复回归通过（含 v2 备份→v3 迁移与服务重新启动不重放）。review-ui.log 通过：额外验证另一窗口更新后的旧 revision 保存被拒绝且用户编辑文本保留。

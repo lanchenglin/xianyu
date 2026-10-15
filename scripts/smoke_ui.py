@@ -134,7 +134,22 @@ def main():
                     page.locator('#listing-form input[name="title"]').fill('UI 原位编辑商品')
                     page.locator('#save-draft').click()
                     expect(page.locator('#draft-list .record')).to_have_count(1)
+                    expect(page.locator('#toast')).to_contain_text('已保存本地草稿')
                     expect(page.locator('#draft-list')).to_contain_text('UI 原位编辑商品')
+                    drafts = client.get('/api/drafts').json()
+                    assert len(drafts) == 1 and drafts[0]['revision'] == 2
+                    # A stale editor must keep the user's text rather than silently overwrite.
+                    external = {**drafts[0]['content'], 'title': '另一窗口更新', 'revision': 2}
+                    assert client.put('/api/drafts/' + drafts[0]['id'], json=external).status_code == 200
+                    page.locator('#save-draft').click()
+                    expect(page.locator('#toast')).to_contain_text('草稿已变化')
+                    expect(page.locator('#listing-form input[name="title"]')).to_have_value('UI 原位编辑商品')
+                    page.locator('[data-page="overview"]').click()
+                    page.locator('[data-page="listings"]').click()
+                    page.get_by_role('button', name='载入编辑区', exact=True).click()
+                    page.locator('#listing-form input[name="title"]').fill('UI 原位编辑商品')
+                    page.locator('#save-draft').click()
+                    expect(page.locator('#draft-list')).to_contain_text('版本 4')
                     page.locator("#listing-form .primary").click()
                     expect(page.locator("#toast")).to_contain_text("待你审批")
                     page.once('dialog', lambda dialog: dialog.accept())
