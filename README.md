@@ -16,7 +16,7 @@
 | 查看实际测试与 CI 状态 | [测试报告](docs/TEST_REPORT.md) |
 | 让 AI 修改代码前了解约束 | [AGENTS.md](AGENTS.md) 与 [安全边界](docs/SECURITY.md) |
 
-**支持 Python 3.11 / 3.12，本地示例使用 3.12。** 已修复首轮 CI 的 pyee 兼容阻塞：锁文件明确以 3.11 为解析下限，Playwright 1.64 按 Python 版本选择 pyee。基线 4d2aadc 的 CI run 38566392741 全部 7 作业通过（Ubuntu/Windows 双版本、双版本固定 live 契约、UI）；新增本地提交尚待 Hermes 推送后验证，历史失败记录保留。
+**默认支持 Linux / WSL，Python 3.11 / 3.12，本地示例使用 3.12；Windows 原生支持暂停。** `53400f8` 的 [CI run 38727928186](https://github.com/lanchenglin/xianyu/actions/runs/38727928186) 中 Linux 双版本、双版本 upstream-contract 和 browser-smoke 通过，Windows 3.11/3.12 失败。Windows 快照保存在独立分支 `work/windows-support-53400f8`（`53400f82f1ce4f1b1322f184b4b15e2e2c949e97`）；当前分支仅保留 Linux CI 门槛，不删除跨平台源码或回归。后续 Linux 全绿不代表 Windows 支持恢复；历史成功与失败见[测试报告](docs/TEST_REPORT.md)。
 
 ## 能力与边界
 
@@ -46,7 +46,9 @@
 
 代码声明 Python 3.11+；本轮验证 3.11 和 3.12，以下安装示例统一使用 Python 3.12。使用独立虚拟环境，不覆盖其他项目的 Python 环境。
 
-### Windows PowerShell
+### Windows PowerShell（历史参考，支持暂停）
+
+以下命令仅保留作独立 Windows 分支的参考，不是当前推荐部署路径；新安装请使用下方 Linux / WSL 步骤。
 
 ```powershell
 git clone https://github.com/lanchenglin/xianyu.git
@@ -80,17 +82,17 @@ python3.12 -m venv .venv
 
 先阅读 [部署说明](docs/DEPLOYMENT.md) 和 [安全边界](docs/SECURITY.md)。真实搜索支持**系统 Google Chrome 或 Chromium 和可显示窗口的会话**，由项目 bridge 适配自动发现或管理员显式指定；可选固定账号 loopback CDP 仅支持 search（item/消息/写操作拒绝），详见 [浏览器设计与配置](docs/BROWSER.md)。真实接口中的签名逻辑需要 Node.js。
 
-```powershell
-# Windows：与工作台使用同一个虚拟环境
-.\.venv\Scripts\python.exe -m pip install -e ".[live,mcp]"
-.\.venv\Scripts\python.exe -m xianyu_workbench.cli doctor
+```bash
+# Linux / WSL：与工作台使用同一个虚拟环境
+.venv/bin/python -m pip install -e '.[live,mcp]'
+.venv/bin/python -m xianyu_workbench.cli doctor
 ```
 
 由你安装系统 Google Chrome 或 Chromium、Node.js，完成闲鱼网页登录，导出自己账号的 Cookie JSON，再通过工作台“账号管理”导入。工作台不会扫描你所有浏览器的 Cookie，不会自动换号或尝试绕过验证码。
 
 在 `.env` 中将 `XY_LIVE_ENABLED=false` 改为 `true`，重启服务，新增真实账号并导入。首先只验证一次搜索与商品详情，再验证已有会话，最后通过人工审批测试**单条**写操作。遇到验证或风控会暂停账号，需本人处理后恢复。
 
-**推荐初次真实联调在 Windows 本机运行工作台、Chrome 和上游依赖。** WSL 可以运行工作台，但实际浏览器也必须位于同一 WSL 环境并有可用图形显示；不能假设 WSL 能直接使用 Windows 的浏览器登录态。首版 Docker 镜像只提供演示/管理/MCP，不承诺无头服务器真实搜索可用。
+**推荐在 Linux / WSL 同一环境运行工作台、Chrome/Chromium 和上游依赖；Windows 原生联调暂停。** WSL 的实际浏览器也必须位于同一 WSL 环境并有可用图形显示；不能假设 WSL 能直接使用 Windows 的浏览器登录态。首版 Docker 镜像只提供演示/管理/MCP，不承诺无头服务器真实搜索可用。
 
 ## 接入 Hermes / Claude / Codex
 
@@ -100,7 +102,7 @@ python3.12 -m venv .venv
 {
   "mcpServers": {
     "xianyu-workbench": {
-      "command": "C:\\你的路径\\xianyu\\.venv\\Scripts\\xianyu-mcp.exe",
+      "command": "/你的路径/xianyu/.venv/bin/xianyu-mcp",
       "env": {
         "XY_API_URL": "http://127.0.0.1:8099",
         "XY_AGENT_TOKEN": "只填本地生成的 Agent 令牌，不是管理员令牌"
@@ -160,7 +162,7 @@ skills/               给 AI 使用的操作规范
 
 ## 2026-10-15 续开发状态更新
 
-基线 `4d2aadc` 的 [CI run 38566392741](https://github.com/lanchenglin/xianyu/actions/runs/38566392741) 全部 7 作业成功：Ubuntu/Windows 3.11/3.12、双版本固定 live 契约及 UI。上文“新 CI 待验证”为此前历史状态，现已解决；不代表真实账号验收。本轮新增提交尚未 push，CI 待 Hermes 审查后验证。
+基线 `4d2aadc` 的 [CI run 38566392741](https://github.com/lanchenglin/xianyu/actions/runs/38566392741) 全部 7 作业成功：Ubuntu/Windows 3.11/3.12、双版本固定 live 契约及 UI。这是历史基线结果，不代表当前 Windows 支持或真实账号验收；最新 `53400f8` 的 Windows 双版本失败及暂停决定以上文支持声明和测试报告为准。
 
 固定上游五项核实见 [静态可行性报告](docs/UPSTREAM_FEASIBILITY.md)。真实发布因不能冻结类目/地点暂时禁用（live_publish=false）；本地草稿、演示发布和审批申请保留。禁止用默认值变化后的上游发布代替完整审批。
 

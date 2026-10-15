@@ -4,7 +4,28 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
-## 2026-10-15 运营增量第一批（最新）
+## 2026-10-15 Linux / WSL 优先收尾（最新）
+
+默认支持 Linux / WSL（Python 3.11/3.12），**Windows 原生支持暂停**。用户提供的 [CI run 38727928186](https://github.com/lanchenglin/xianyu/actions/runs/38727928186) 对应 `53400f82f1ce4f1b1322f184b4b15e2e2c949e97`，整体失败，不能记为全绿：
+
+| 作业 | 结果 |
+|---|---|
+| tests：ubuntu-latest，Python 3.11 / 3.12 | 两项通过 |
+| upstream-contract：Ubuntu，Python 3.11 / 3.12 | 两项通过 |
+| browser-smoke：Ubuntu | 通过 |
+| tests：windows-latest，Python 3.11 / 3.12 | 两项失败，未继续修复 |
+
+独立分支 `work/windows-support-53400f8` 已由父助手创建并 push 保存上述快照；本轮本地分支及 origin 追踪引用均核对为该 SHA。本机无 `gh` 命令，本轮未重新获取 CI 日志，不推断 Windows 失败原因。此前 run 38708963492 / 38679746659 等失败及更早基线成功记录仍保留在下文。
+
+当前 `feat/local-next` 仅将 CI tests 的 OS 矩阵改为 `ubuntu-latest`，保留 Python 3.11/3.12、双版本 upstream-contract、browser-smoke 和所有原检查步骤；跨平台源码及回归未删除或跳过。Windows 后续工作留在独立分支，**新的 Linux 全绿不代表 Windows 已修复或恢复支持**，也不代表真实平台验收。本轮不 push，新矩阵尚未远端运行。
+
+本轮配置/文档验证：
+
+- YAML 实际解析并与 HEAD 配置深比较：唯一变化为 tests OS 矩阵移除 windows-latest；Ubuntu Python 3.11/3.12 及其他 Linux 门槛、步骤保持不变。
+- 本机 Python 3.12：`ruff check .`、`pip check`、`git diff --check` 通过；`TMPDIR="$PWD/scratch" PLAYWRIGHT_BROWSERS_PATH="$PWD/.test-browsers" PLAYWRIGHT_SKIP_BROWSER_GC=1 XY_TEST_CHROMIUM=/snap/bin/chromium .venv/bin/python -m pytest -q`：**232 passed, 1 warning in 41.38s**，唯一警告为既有 Starlette/httpx 弃用提示。
+- 本轮未重跑 Python 3.11 或 UI smoke；`53400f8` 双版本 232 passed 及 UI smoke 属此前验证，不冒称本轮结果。没有访问真实平台、修改 .env/data/已有 profile、重启服务或修改 Hermes 配置；scratch 测试临时文件/日志不提交。
+
+## 2026-10-15 运营增量第一批（历史）
 
 起点 121f3c8；实现站内通知状态、管理员显式授权的外部固定摘要通知和 MCP stdio 真协议测试。schema v4/v5 增量迁移；备份恢复关闭外部通知并取消待发任务。完整需求尚未完成，矩阵与下一断点见 [OPERATIONS_NEXT](OPERATIONS_NEXT.md)。
 
@@ -122,7 +143,7 @@ node --check xianyu_workbench/static/app.js
 
 基础测试矩阵不安装 live 可选依赖；其成功不能代替上游契约作业，更不能代替真实平台操作。Windows CI 使用托管 Windows Server 环境，不是主人 Windows 桌面的 Chrome/登录态环境。这里的记录绑定上述历史提交，不表示以后所有提交或文档提交后的 CI 也通过。
 
-## 当前验收状态与仍需本地确认的项目
+## 首次验收状态与仍需本地确认的项目（2026-10-14 历史）
 
 | 项目 | 当前状态 |
 |---|---|
@@ -251,7 +272,7 @@ UI 不确定状态由脚本仅在临时演示数据库注入；没有开启 live
 
 ## 真实账号上线前步骤
 
-由主人先在 Windows 本机运行演示，确认界面；安装系统 Chrome / Node 与 live 依赖；导入本人登录态；启用真实模式后仅验证一次搜索和一次详情；再验证既有会话；最后审批单条低风险咨询，亲自在闲鱼核实。
+由主人先在 Linux / WSL 运行演示，确认界面（Windows 原生支持已暂停）；安装系统 Chrome / Node 与 live 依赖；导入本人登录态；启用真实模式后仅验证一次搜索和一次详情；再验证既有会话；最后审批单条低风险咨询，亲自在闲鱼核实。
 
 发布需真实图片、准确价格与描述，审批后核验商品 ID 和页面。删除不适合作为冒烟测试，避免拿重要商品验证。遇到登录/安全验证/不确定状态立即停止，由主人处理。未支持的改价、重新上架、首次会话或订单功能不能靠假返回代替实现。
 

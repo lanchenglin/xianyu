@@ -4,13 +4,13 @@
 
 ## 1. 推荐落地方式
 
-首次真实联调选 Windows 本机：工作台、Python 3.12 虚拟环境、系统 Chrome、Node.js 在同一个操作系统会话中。无需显卡。保留 >=3.11 支持，Linux 3.11/3.12 完整开发依赖已验证，Windows 新 CI 结果待验证；不要修改其他项目的 Python 环境。不要把 Windows 和 WSL 的浏览器 Cookie 数据库当作可自动互通。
+默认支持 Linux / WSL，使用 Python 3.11/3.12；推荐工作台、虚拟环境、系统 Chrome/Chromium、Node.js 位于同一个操作系统会话中。无需显卡。Windows 原生支持暂停：`53400f8` 的 CI run 38727928186 中 Windows 3.11/3.12 失败，Linux 双版本、双 upstream-contract 和 browser-smoke 通过，详见[测试记录](TEST_REPORT.md)。独立分支 `work/windows-support-53400f8` 保存快照 `53400f82f1ce4f1b1322f184b4b15e2e2c949e97`，当前分支不继续修 Windows。新的 Linux CI 全绿不代表 Windows 支持恢复。不要修改其他项目的 Python 环境，也不要把 Windows 和 WSL 的浏览器 Cookie 数据库当作可自动互通。
 
 仓库 README 给出 Windows / Linux 演示安装命令。`init` 仅首次运行，生成 `.env`；重复运行会拒绝覆盖，避免丢失加密密钥。服务默认绑定 `127.0.0.1:8099`，只启动一个进程。不要使用 `uvicorn --workers 2` 或多副本；单实例文件锁会拒绝第二个实例。
 
 ### Python 3.11 兼容修复
 
-首轮 CI 的 pyee 14 安装失败已本地复现并修复：Playwright 1.64 在 3.11 使用 pyee 13.0.1，在 >=3.12 使用 14.0.0。两份锁均以 `uv pip compile ... --universal --python-version 3.11` 生成；不要省略 Python 下限。Linux 两版本干净安装、`pip check`、完整固定 live 测试通过。Windows 修改后的 CI 尚未执行，保留原兼容矩阵并增加依赖一致性检查。
+首轮 CI 的 pyee 14 安装失败已本地复现并修复：Playwright 1.64 在 3.11 使用 pyee 13.0.1，在 >=3.12 使用 14.0.0。两份锁均以 `uv pip compile ... --universal --python-version 3.11` 生成；不要省略 Python 下限。Linux 两版本干净安装、`pip check`、完整固定 live 测试通过。当前 CI tests 仅运行 Ubuntu 3.11/3.12，保留依赖一致性检查、双版本固定 live 契约和 Linux browser-smoke；跨平台源码与回归不删除。Windows 历史 CI 结果不作为当前支持承诺。
 
 安装示例仍使用 3.12，也可在独立 3.11 环境安装当前锁文件。不要删除 `.env` 或 data 来重建环境。
 
@@ -95,7 +95,7 @@ docker compose down
 
 ## 2026-10-15 续开发状态更新
 
-基线 `4d2aadc` 的 [CI run 38566392741](https://github.com/lanchenglin/xianyu/actions/runs/38566392741) 全部 7 作业成功：Ubuntu/Windows 3.11/3.12、双版本固定 live 契约及 UI。上文“新 CI 待验证”为此前历史状态，现已解决；不代表真实账号验收。本轮新增提交尚未 push，CI 待 Hermes 审查后验证。
+基线 `4d2aadc` 的 [CI run 38566392741](https://github.com/lanchenglin/xianyu/actions/runs/38566392741) 全部 7 作业成功：Ubuntu/Windows 3.11/3.12、双版本固定 live 契约及 UI。这是历史基线结果，不代表当前 Windows 支持或真实账号验收；最新 `53400f8` 的 Windows 双版本失败及暂停决定以上文支持声明和测试报告为准。
 
 固定上游五项核实见 [静态可行性报告](UPSTREAM_FEASIBILITY.md)。真实发布因不能冻结类目/地点暂时禁用（live_publish=false）；本地草稿、演示发布和审批申请保留。禁止用默认值变化后的上游发布代替完整审批。
 
