@@ -8,6 +8,32 @@ from test_workbench import workbench as workbench_fixture
 workbench = pytest.fixture(workbench_fixture.__wrapped__)
 
 
+def test_transport_closes_detached_response_on_rejection(monkeypatch):
+    from xianyu_workbench import notifications
+    closed = []
+    class Response:
+        status = 302
+        def read(self, n):
+            return b''
+        def close(self):
+            closed.append(True)
+    class Connection:
+        sock = None
+        def __init__(self, *args):
+            pass
+        def request(self, *args):
+            pass
+        def getresponse(self):
+            return Response()
+        def close(self):
+            pass
+    monkeypatch.setattr(notifications, 'public_address', lambda host: '93.184.216.34')
+    monkeypatch.setattr(notifications, 'PinnedHTTPS', Connection)
+    with pytest.raises(ValueError):
+        notifications.send({'kind': 'webhook', 'url': 'https://notify.example.com/h', 'secret': 's' * 40}, {}, 'd')
+    assert closed == [True]
+
+
 def test_transport_has_absolute_deadline(monkeypatch):
     import threading
     import time
@@ -22,7 +48,7 @@ def test_transport_has_absolute_deadline(monkeypatch):
             pass
         def getresponse(self):
             self.sock = None  # HTTPConnection detaches the socket for Connection: close responses.
-            return type('Response', (), {'status': 204, 'read': lambda self, n: closed.wait(.5) and b''})()
+            return type('Response', (), {'status': 204, 'read': lambda self, n: closed.wait(.5) and b'', 'close': lambda self: None})()
         def shutdown(self, how):
             closed.set()
         def close(self):
@@ -60,7 +86,7 @@ def test_transport_rejects_redirect_errors_and_oversized_body(monkeypatch, statu
         def request(self, *args):
             pass
         def getresponse(self):
-            return type('Response', (), {'status': status, 'read': lambda self, n: data})()
+            return type('Response', (), {'status': status, 'read': lambda self, n: data, 'close': lambda self: None})()
         def close(self):
             pass
     monkeypatch.setattr('xianyu_workbench.notifications.public_address', lambda host: '93.184.216.34')
@@ -154,7 +180,7 @@ def test_signed_delivery_pins_address_and_checks_response(monkeypatch):
         def request(self, method, path, body, headers):
             calls.append((method, path, body, headers))
         def getresponse(self):
-            return type('Response', (), {'status': 204, 'read': lambda self, n: b''})()
+            return type('Response', (), {'status': 204, 'read': lambda self, n: b'', 'close': lambda self: None})()
         def close(self):
             pass
     monkeypatch.setattr('xianyu_workbench.notifications.public_address', lambda host: '93.184.216.34')

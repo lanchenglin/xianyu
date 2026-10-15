@@ -16,6 +16,10 @@
 - 系统 Chromium 临时 profile UI smoke 通过，新增关闭状态通知配置（未启用）、密钥输入清空、已读/归档控件；原审批/草稿/移动端回归保持。node --check / git diff --check 通过。警告仍是既有 Starlette/httpx 弃用提示。
 - 证据目录 `scratch/xianyu-operations-evidence/`，不入 Git。未读取真实 .env/data/profile、未连接 8099/9235、未执行平台操作/真实通知、未部署/push。Windows 新 CI、真实账号/钉钉/Hermes 均未验收。
 
+### 通知传输自审修复
+
+功能提交 `07fb1a2` 后发现 HTTPConnection 在 Connection: close 响应时可能解除 socket 引用；截止计时已保留传输 socket，但拒绝/超限响应还应显式关闭 HTTPResponse。`response-close-red.log` 实际断言失败（close 未调用），补 finally 关闭后完整双版本重跑：3.12 **232 passed, 1 warning in 42.82s**；3.11 **232 passed, 1 warning in 41.85s**。ruff / node --check / git diff --check 通过。证据 `review-final312.log` / `review-final311.log`。没有新增平台/外部联网验收。
+
 ## 2026-10-15 Windows 浏览器测试夹具修复（历史）
 
 基线 `161968e` 已由 Hermes push。[CI run 38708963492](https://github.com/lanchenglin/xianyu/actions/runs/38708963492) 的 Windows Python 3.11/3.12 失败，其余 5 作业通过（用户提供的运行状态）。已核对本地 `scratch/xianyu-browser-ci/311.log`：3.11 为 2 failed、191 passed、3 skipped；两条失败如下，保留失败记录，不宣称原 CI 全绿。

@@ -112,6 +112,7 @@ def send(config, payload, delivery_id):
     conn = PinnedHTTPS(parsed.hostname, address)
     expired = threading.Event()
     transport_socket = None
+    response = None
 
     def abort():
         expired.set()
@@ -139,6 +140,8 @@ def send(config, payload, delivery_id):
     finally:
         deadline.cancel()
         deadline.join()
+        if response is not None:
+            response.close()
         conn.close()
 
 
