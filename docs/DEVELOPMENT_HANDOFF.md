@@ -4,7 +4,11 @@
 
 本文件交给在本地继续开发的人、Codex、Claude Code 或 Hermes。**下列任务是待办与设计建议，不代表功能已经实现。** 原始交接只更新文档；2026-10-14 续开发在 `feat/local-next` 完成 P0-ENV 本地修复、P2-04 迁移必要基础及 P1-02 人工核对，以下各节标注当前实现与未验收边界，不新增平台动作。
 
-## 2026-10-15 运营续开发第一批（优先于历史清单）
+## 2026-10-15 运营第二批（最新）
+
+基线 465f898，已根据父助手真实只读结构证据实现 orders/inventory 的 CDP 单页样本、v6 加密缓存与按账号 API/UI/MCP。完整字段/限制见 [OPERATIONS_SAMPLES](OPERATIONS_SAMPLES.md)。partial_orders/partial_inventory 可用；order_sync/full_inventory_sync 仍 false。消息稳定 ID 结构已有证据，编码未知，解析与采集留作独立单元；不得再以旧上游 history 裁剪数据断言没有 ID。真实平台、实际 Hermes connector 仍未验收。无 push/部署，Windows 暂停不变。
+
+## 2026-10-15 运营续开发第一批（历史）
 
 起点 121f3c8，仍在 feat/local-next，无 push/部署。已交付站内通知已读/归档、管理员默认关闭的钉钉/受限 webhook 摘要通知（HTTP/schema/capabilities/UI/MCP）、真实 MCP stdio 集成验证；详情 [NOTIFICATIONS](NOTIFICATIONS.md)。v4/v5 迁移保留旧数据，恢复关闭通知防重放。功能提交 `07fb1a2`；随后补 HTTPResponse 清理，最终双 Python 全量各 232 passed，真实隔离 TLS/Chromium 通过；证据范围见 TEST_REPORT，不是实际平台/钉钉/Hermes 验收。
 

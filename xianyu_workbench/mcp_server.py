@@ -76,6 +76,34 @@ def chat_history(account_id: str, cid: str):
 
 
 @mcp.tool()
+def sync_order_sample(account_id: str) -> dict:
+    """按需采集本人买到订单一页概要；部分样本，分页语义未知不代表完整，不执行交易。"""
+    from urllib.parse import quote
+    return api('POST', f'/api/accounts/{quote(account_id, safe="")}/orders/sync')
+
+
+@mcp.tool()
+def cached_orders(account_id: str) -> dict:
+    """读取加密订单概要缓存及最后采集状态；旧缓存不代表本次采集成功。"""
+    from urllib.parse import quote
+    return api('GET', f'/api/accounts/{quote(account_id, safe="")}/orders')
+
+
+@mcp.tool()
+def sync_inventory_sample(account_id: str) -> dict:
+    """按需采集本人商品单页样本；并非所有状态库存，不改价或上下架。"""
+    from urllib.parse import quote
+    return api('POST', f'/api/accounts/{quote(account_id, safe="")}/inventory/sync')
+
+
+@mcp.tool()
+def cached_inventory(account_id: str) -> dict:
+    """读取本人商品部分缓存；未出现商品不代表下架或售罄。"""
+    from urllib.parse import quote
+    return api('GET', f'/api/accounts/{quote(account_id, safe="")}/inventory')
+
+
+@mcp.tool()
 def propose_message(account_id: str, cid: str, toid: str, text: str, idempotency_key: str) -> dict:
     """仅提交消息草稿等待人工审批。重试同一内容必须复用幂等键。不得声称已经送达。"""
     return api("POST", "/api/actions", {"account_id": account_id, "kind": "message.send",

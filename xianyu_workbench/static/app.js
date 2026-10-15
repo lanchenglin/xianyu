@@ -5,7 +5,7 @@ let currentChat = null, chatHistory = [], imageIds = [], lastDraft = null, lastP
 const intentKeys = new Map(), imageURLs = new Map();
 let reconciliationTarget = null, editingDraft = null;
 const reconciliationNames = {observed:"观察到相关平台记录",not_observed:"未观察到相关记录（不证明未发生）",unresolved:"仍无法判断"};
-const pageTitles = {overview:"工作总览",accounts:"账号管理",search:"商品搜索",inbox:"消息与询价",listings:"商品与草稿",queue:"操作审批",monitors:"搜索监控",assistant:"AI 内容助理",settings:"设置与日志"};
+const pageTitles = {operations:"订单与商品样本",overview:"工作总览",accounts:"账号管理",search:"商品搜索",inbox:"消息与询价",listings:"商品与草稿",queue:"操作审批",monitors:"搜索监控",assistant:"AI 内容助理",settings:"设置与日志"};
 const stateNames = {pending:"待你审批",approved:"已批准 · 等待执行",running:"执行中",simulated:"演示完成 · 未访问闲鱼",submitted:"上游已接受 · 待平台核对",unconfirmed:"结果待核实 · 不自动重试",blocked:"已停止 · 需人工处理",failed:"未完成",rejected:"已拒绝",expired:"已过期"};
 const kindNames = {"message.send":"发送消息","item.publish":"发布商品","item.delete":"删除商品（可能不可恢复）"};
 function node(tag, text = "", className = "") { const n = document.createElement(tag); if(text !== "") n.textContent = String(text); if(className) n.className = className; return n; }
@@ -36,9 +36,9 @@ async function loadAccounts() {
   else {if(!accounts.some(a=>a.id===activeAccount))activeAccount=accounts[0].id;accounts.forEach(a=>select.append(new Option(`${a.label} · ${a.mode==="demo"?"演示":"真实"}${a.paused?" · 暂停":""}`,a.id))); select.value=activeAccount;}
   updateBanner(); renderAccounts();
 }
-function resetAccountViews() { editingDraft=null;currentChat=null;chatHistory=[];imageIds=[];$("listing-form").reset();clear("image-previews");blank("chat-list","点击“读取会话”");blank("chat-history","请选择会话");$("chat-title").textContent="选择会话";$("message-text").value="";clear("search-results");clear("search-summary"); }
+function resetAccountViews() { for(const kind of ['orders','inventory']){clear(kind+'-samples');clear(kind+'-status');} editingDraft=null;currentChat=null;chatHistory=[];imageIds=[];$("listing-form").reset();clear("image-previews");blank("chat-list","点击“读取会话”");blank("chat-history","请选择会话");$("chat-title").textContent="选择会话";$("message-text").value="";clear("search-results");clear("search-summary"); }
 async function showPage(page) { if(page==="settings"&&userRole!=="admin")return; currentPage=page; document.querySelectorAll(".page").forEach(n=>n.hidden=n.id!=="page-"+page); document.querySelectorAll("[data-page]").forEach(n=>n.classList.toggle("active",n.dataset.page===page)); $("page-title").textContent=pageTitles[page];
-  if(page==="overview")await loadOverview(); if(page==="accounts")await loadAccounts(); if(page==="queue")await loadQueue(); if(page==="monitors")await loadMonitors(); if(page==="listings")await loadListings(); if(page==="settings")await loadSettings();
+  if(page==="operations")await loadSamples(); if(page==="overview")await loadOverview(); if(page==="accounts")await loadAccounts(); if(page==="queue")await loadQueue(); if(page==="monitors")await loadMonitors(); if(page==="listings")await loadListings(); if(page==="settings")await loadSettings();
 }
 async function loadOverview() { const d=await api("/dashboard"); const root=clear("stats"); [["已连接账号",d.accounts],["待审批操作",d.pending],["启用的监控",d.monitors],["模型调用 / 失败",`${d.llm_calls} / ${d.llm_failed}`]].forEach(([label,value])=>{const card=node("article","","stat");card.append(node("b",value),node("span",label));root.append(card);}); }
 function renderAccounts() { const root=clear("account-list"); if(!accounts.length){root.append(node("div","还没有账号，先添加一个演示账号。","empty"));return;}
@@ -79,11 +79,14 @@ on("login-form","submit",async()=>{token=$("login-token").value.trim();try{const
 on("logout","click",()=>{token="";userRole="";imageURLs.forEach(URL.revokeObjectURL);imageURLs.clear();location.reload();});
 document.querySelectorAll("[data-page]").forEach(n=>on(n,"click",()=>showPage(n.dataset.page)));
 document.querySelectorAll("[data-go]").forEach(n=>on(n,"click",()=>showPage(n.dataset.go)));
-on("account-select","change",async()=>{activeAccount=$("account-select").value;resetAccountViews();updateBanner();if(currentPage==="listings")await loadListings();});
+on("account-select","change",async()=>{activeAccount=$("account-select").value;resetAccountViews();updateBanner();if(currentPage==="listings")await loadListings();if(currentPage==="operations")await loadSamples();});
 on("account-form","submit",async()=>{const f=new FormData($("account-form"));const file=f.get("cookie_file");let cookies="";if(file&&file.size){if(file.size>100000)throw Error("Cookie 文件过大");cookies=await file.text();}const account=await api("/accounts","POST",{label:f.get("label"),mode:f.get("mode"),cookies_json:cookies});$("account-form").reset();activeAccount=account.id;resetAccountViews();await loadAccounts();note("账号已添加。演示账号无需登录即可使用。");});
 on("cookie-form","submit",async()=>{const f=new FormData($("cookie-form")).get("file");if(!f||!f.size||f.size>100000)throw Error("请选择有效的 Cookie JSON 文件");await api(`/accounts/${requireAccount()}/cookies`,"POST",{cookies_json:await f.text()});$("cookie-form").reset();await loadAccounts();note("登录态已加密更新，未自动切换或恢复账号。");});
 on("search-form","submit",async()=>{const body=searchBody();$("search-summary").textContent="正在查询，请勿重复提交…";const result=await api("/search","POST",body);if(activeAccount===body.account_id)renderSearch(result,body.account_id);});
 on("create-monitor","click",async()=>{const body=searchBody();if(!body.query)throw Error("请先填写关键词");await api("/monitors","POST",{...body,interval_s:900});note("监控已创建，在程序运行时每 15 分钟检查一次。");});
+async function loadSamples(){const id=requireAccount();for(const kind of ['orders','inventory']){const result=await api(`/accounts/${id}/${kind}`);if(activeAccount!==id)return;const root=clear(kind+'-samples'),last=result.last_sync;$(kind+'-status').textContent=`${result.demo?'演示数据 · ':''}部分样本 · ${last?`${last.state} · ${formatTime(last.fetched_at)} · ${last.cursor_error||last.error||'仅一页，未遍历分页'}`:'尚未采集'} · 缓存最多显示 500 条`;if(!result.items.length)root.append(node('p','暂无缓存；不代表平台没有记录。'));for(const item of result.items){const card=node('article','','record');card.append(node('h4',item.title||`订单 ${item.order_id}`),node('p',`商品 ${item.item_id} · 状态 ${item.status}`),node('p',item.status_text||item.price||''),node('p',`${item.source} · ${formatTime(item.fetched_at)}`));root.append(card);}}}
+for(const kind of ['orders','inventory'])on('sync-'+kind,'click',async()=>{const id=requireAccount();try{await api(`/accounts/${id}/${kind}/sync`,'POST');}finally{if(activeAccount===id)await loadSamples();}});
+on('refresh-samples','click',loadSamples);
 on("refresh-chats","click",loadChats);
 on("message-form","submit",async()=>{if(!currentChat||currentChat.account_id!==activeAccount)throw Error("请先读取并选择当前账号的已有会话");await propose("message.send",{cid:currentChat.session_id,toid:String(currentChat.peer_user_id),text:$("message-text").value.trim()});});
 on("reply-assist","click",async()=>{if(!currentChat)throw Error("请先选择会话");$("assist-form").elements.purpose.value="reply";$("assist-form").elements.facts.value=JSON.stringify(chatHistory,null,2);await showPage("assistant");});

@@ -26,7 +26,7 @@ def validate_operation(operation: str):
         endpoint(address)
     except ValueError:
         raise BrowserError('cdp_config_invalid') from None
-    if operation != 'search':
+    if operation not in {'search', 'orders', 'inventory'}:
         raise BrowserError('cdp_search_only')
     if (not os.environ.get('XY_BROWSER_CDP_ACCOUNT_ID') or
             os.environ.get('XY_BROWSER_CDP_ACCOUNT_ID') != os.environ.get('XY_OPERATION_ACCOUNT_ID') or

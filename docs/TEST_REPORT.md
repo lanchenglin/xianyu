@@ -4,7 +4,21 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
-## 2026-10-15 Linux / WSL 优先收尾（最新）
+## 2026-10-15 运营第二批：只读单页样本（最新）
+
+基线 465f898，完成 orders/inventory 的受限 CDP 网络监听 → 最小字段 → v6 加密缓存 → API/UI/MCP。契约见 [OPERATIONS_SAMPLES](OPERATIONS_SAMPLES.md)。真实 bought/personal 的结构证据来自已授权父助手；开发测试仅虚构数据，不连接真实平台或 8099/9235，不读取真实 .env/data/profile。未 push/部署，Windows 暂停不变。
+
+- TDD RED/GREEN：parser（17 项缺模块→通过）、listener（8 项缺模块→通过）、cache/API（缺路由/白名单→通过）、surfaces（真实 stdio 缺工具、Chromium 缺页面按钮→通过）、cursor（3 项类型错误未审计→通过）、audit（持久 has_more/reported_total 缺失→通过）。日志在 `/home/lan/.hermes/cache/scratch/xianyu-operations2-evidence/`，不入 Git。
+- 缓存首次 GREEN 尝试发现重启测试错误地同时开启两实例，被既有锁正确拒绝；测试改为顺序关闭/重启，未放宽单实例保护。首次全回归 2 failed / 260 passed / 4 skipped：旧 v2 恢复 fixture 未移除新增表、旧 CDP capability 断言只允许 search；修正历史 fixture/契约，生产迁移不使用 IF NOT EXISTS 掩盖错误。
+- 实际隔离 Chromium：新 profile、随机 CDP 端口、fixture 假 unb、所有页面请求拦截成本地虚构响应；真实 Network.responseReceived/loadingFinished/getResponseBody 链路通过。Provider→真实 bridge 子进程→CDP 正常输出及超时取消通过；self=false、前后 UID 变化拒绝，原页/浏览器存活，自建任务页关闭。这不是闲鱼真实账号验收。
+- 真实 MCP SDK stdio + 随机端口 Uvicorn：新增四工具发现/调用、partial 标记；既有管理员令牌拒绝回归保留。临时 Chromium 新样本页同步、切账号清空、XSS textContent、移动端通过。完整 `scripts/smoke_ui.py` 同时通过原审批/草稿/通知/人工核对回归。
+- 最终 Python **3.12.14：271 passed, 1 warning in 58.26s**；Python **3.11.16：271 passed, 1 warning in 58.64s**。两环境 pip check、ruff 全部通过；全量启用 XY_TEST_CHROMIUM，含固定上游契约，无跳过。唯一警告是既有 Starlette/httpx 弃用提示。node --check / git diff --check 通过。
+- 单页始终 partial；订单字符串 nextPage 语义未知记录错误，不猜值或执行翻页。商品 false 也不等于全状态库存。空页/失败不清库、账号隔离、重启幂等、错误密钥、v5 迁移与权限测试通过。
+- 未完成/未验收：实际平台采集与实际 Hermes connector、分页遍历和全状态集合、消息解析/编码/按需采集/增量监听。消息稳定 ID 结构已有证据，不能再否定其存在；本批没有用 stub 冒充 listener。首次联系、真实发布/改价/上下架和所有交易执行均未新增。
+
+复现环境：`TMPDIR=/home/lan/.hermes/cache/scratch/xianyu-operations2-evidence PLAYWRIGHT_BROWSERS_PATH=/home/lan/projects/xianyu/.test-browsers PLAYWRIGHT_SKIP_BROWSER_GC=1 XY_TEST_CHROMIUM=/snap/bin/chromium`；分别使用 `.venv/bin/python` 和 `/home/lan/.hermes/cache/scratch/xianyu-venv311/bin/python` 执行 `-m pip check`、`-m ruff check .`、`-m pytest -q`。
+
+## 2026-10-15 Linux / WSL 优先收尾（历史）
 
 默认支持 Linux / WSL（Python 3.11/3.12），**Windows 原生支持暂停**。用户提供的 [CI run 38727928186](https://github.com/lanchenglin/xianyu/actions/runs/38727928186) 对应 `53400f82f1ce4f1b1322f184b4b15e2e2c949e97`，整体失败，不能记为全绿：
 

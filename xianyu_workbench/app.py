@@ -126,7 +126,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "send_with_approval": True, "publish_with_approval": True, "delete_with_explicit_approval": True,
                 "live_publish": False, "publish_complete_snapshot": False,
                 "browser_policy": {"isolated_browsers": ["chrome", "chromium"],
-                                   "cdp_operations": ["search"], "cdp_writes": False,
+                                   "cdp_operations": ["search", "orders", "inventory"], "cdp_writes": False,
                                    "admin_configuration_only": True, "failure_fallback": False},
                 "local_drafts": True, "local_draft_edit": True, "local_draft_archive": True,
                 "offline_backup_restore_cli": True, "search_monitors": True, "mcp": True,
@@ -141,6 +141,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                                           "immutable": True, "retries_operation": False},
                 "first_contact": False, "platform_edit_price": False, "platform_relist": False,
                 "full_inventory_sync": False, "order_sync": False, "autonomous_reply": False,
+                "partial_orders": True, "partial_inventory": True,
+                "sample_policy": {"pages": 1, "pagination": False, "all_statuses": False,
+                                  "private_cache_encrypted": True, "platform_verified": False},
                 "payment": False, "refund": False, "confirm_receipt": False,
                 "notice": "False 表示本版本没有开放，不会伪造成功；交易仅在闲鱼人工完成"}
 
@@ -227,6 +230,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if not cid or len(cid) > 150:
             raise Problem("invalid_cid", "会话 ID 无效", 422)
         return service.provider.call(account_id, "history", {"cid": cid, "limit_per_page": 20})
+
+    from .operations_cache import OperationsCache
+    samples = OperationsCache(service)
+
+    @app.get('/api/accounts/{account_id}/orders')
+    def orders_cache(account_id: str, current=Depends(role)):
+        return samples.read(account_id, 'orders')
+
+    @app.post('/api/accounts/{account_id}/orders/sync')
+    def orders_sync(account_id: str, current=Depends(role)):
+        return samples.sync(account_id, 'orders')
+
+    @app.get('/api/accounts/{account_id}/inventory')
+    def inventory_cache(account_id: str, current=Depends(role)):
+        return samples.read(account_id, 'inventory')
+
+    @app.post('/api/accounts/{account_id}/inventory/sync')
+    def inventory_sync(account_id: str, current=Depends(role)):
+        return samples.sync(account_id, 'inventory')
 
     @app.post("/api/actions", status_code=201)
     def propose(body: ActionIn, current=Depends(role)):

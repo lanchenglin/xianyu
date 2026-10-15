@@ -39,8 +39,10 @@ class Provider:
 
     def call(self, account_id: str, operation: str, payload: dict, *, write: bool = False):
         expected_write = operation in {"message.send", "item.publish", "item.delete"}
-        if operation not in {"search", "item", "chats", "history", "message.send", "item.publish", "item.delete"} or write != expected_write:
+        if operation not in {"search", "orders", "inventory", "item", "chats", "history", "message.send", "item.publish", "item.delete"} or write != expected_write:
             raise Problem("unsupported", "该操作没有开放；交易操作必须在闲鱼人工完成", 403)
+        if operation in {'orders', 'inventory'} and payload:
+            raise Problem('invalid_request', '样本同步不接受 URL、脚本或分页参数', 422)
         try:
             with FileLock(self.lock_path, timeout=0.1):
                 account = self.account(account_id)
@@ -67,9 +69,11 @@ class Provider:
             raise Problem("busy", "账号操作队列正在执行其他任务，请稍后再试", 409) from exc
 
     def _live(self, account: dict, operation: str, payload: dict, *, write: bool):
+        if operation in {'orders', 'inventory'} and not self.s.browser_cdp_endpoint:
+            raise Problem('cdp_required', '单页样本同步仅支持管理员绑定的 CDP 账号', 409)
         if self.s.browser_cdp_endpoint:
-            if operation != 'search':
-                raise Problem('cdp_search_only', 'CDP 模式仅支持搜索；详情及写操作未开放', 409)
+            if operation not in {'search', 'orders', 'inventory'}:
+                raise Problem('cdp_search_only', 'CDP 仅支持搜索、订单和本人商品样本；写操作未开放', 409)
             if (account['id'] != self.s.browser_cdp_account_id or account['uid'] != self.s.browser_cdp_uid):
                 raise Problem('cdp_binding_mismatch', 'CDP 固定账号绑定不匹配，拒绝执行', 409)
         home = self.s.data_dir / "runtime" / account["id"]
@@ -157,6 +161,13 @@ class Provider:
 
     @staticmethod
     def demo(operation: str, payload: dict):
+        if operation in {'orders', 'inventory'}:
+            item = ({'order_id': '900001', 'item_id': '100001', 'status': 'DEMO',
+                     'created_at': '演示时间', 'status_text': '演示订单，非真实交易'} if operation == 'orders' else
+                    {'item_id': '100001', 'status': 0, 'price': '12.30', 'title': '[演示] 本人商品样本'})
+            return {'items': [item], 'source': 'demo', 'partial': True, 'completion': 'single_page',
+                    'has_more': None, 'cursor_error': 'pagination_semantics_unknown' if operation == 'orders' else None,
+                    'reported_total': None, 'demo': True}
         if operation == "search":
             seed = int(hashlib.sha256(payload["query"].encode()).hexdigest()[:8], 16)
             items = [{"item_id": str(100000 + seed % 10000 + i), "title": f"[演示] {payload['query']} 样例 {i+1}",

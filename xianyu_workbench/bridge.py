@@ -27,6 +27,11 @@ WRITES = {
 
 
 def dispatch(operation: str, payload: dict):
+    if operation in {'orders', 'inventory'}:
+        if payload:
+            raise ValueError('operation takes no parameters')
+        from .operations_browser import collect
+        return collect(operation)
     if operation not in READS | WRITES:
         raise ValueError("operation not allowed")
     from .browser_adapter import install

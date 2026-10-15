@@ -6,7 +6,7 @@
 
 ## 浏览器部署边界
 
-Chrome/Chromium 发现和 CDP 属于工作台管理员部署配置，不是 MCP 工具参数。Agent 不能指定浏览器路径、profile、CDP 端点或任意 URL。可选 CDP 只读 search 绑定唯一工作台账号 id 与平台 uid；item、消息和所有写操作 fail closed。不能因失败要求换账号/换浏览器重试。Hermes 上线及真实只读验证请先独立审查 [BROWSER.md](BROWSER.md)，不要将离线 doctor/模拟测试当作真实登录验收。
+Chrome/Chromium 发现和 CDP 属于工作台管理员部署配置，不是 MCP 工具参数。Agent 不能指定浏览器路径、profile、CDP 端点或任意 URL。可选 CDP 只读 search、orders/inventory 单页样本绑定唯一工作台账号 id 与平台 uid；item、消息和所有写操作 fail closed。不能因失败要求换账号/换浏览器重试。Hermes 上线及真实只读验证请先独立审查 [BROWSER.md](BROWSER.md)，不要将离线 doctor/模拟测试当作真实登录验收。
 
 ## 先区分两个服务
 
@@ -53,6 +53,10 @@ Chrome/Chromium 发现和 CDP 属于工作台管理员部署配置，不是 MCP 
 这是通用 MCP stdio 配置示例，不臆测某个版本 Hermes Desktop 的配置目录。Hermes 的 MCP 配置应放在实际执行任务的 Gateway 一端，而不是误配到另一个远程 Gateway。
 
 远程工作台用 HTTPS；XY_API_URL 不支持多个备用地址、URL 中的用户名密码或查询参数。不从网页当前登录态自动选择网关，不自动从故障账号切到其他账号。
+
+## 本人只读样本（新增）
+
+`sync_order_sample(account_id)` / `cached_orders(account_id)` 与 `sync_inventory_sample(account_id)` / `cached_inventory(account_id)` 分别按需采集一页和读加密缓存。HTTP 为 POST `/api/accounts/{account_id}/orders/sync`、GET `/api/accounts/{account_id}/orders` 及对应 inventory 路由；均需有效角色，schema 同步可查。没有 URL/JS/游标输入。`partial_orders/partial_inventory=true` 不代表完整；`order_sync/full_inventory_sync=false`。详见 [字段、分页、迁移契约](OPERATIONS_SAMPLES.md)。错误/未知分页要报告，不能将旧缓存称为本次同步成功。真实平台未验收，MCP 不提供任何交易工具。
 
 ## 工具范围
 

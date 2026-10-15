@@ -1,0 +1,56 @@
+"""Account-scoped private sample cache; missing rows never imply deletion."""
+import hashlib
+import hmac
+import time
+
+from .operations import SOURCES
+from .provider import Problem
+from .security import canonical
+
+
+class OperationsCache:
+    def __init__(self, service):
+        self.service = service
+        self.db, self.vault = service.db, service.vault
+
+    def read(self, account_id, kind):
+        account = self.service.provider.account(account_id)
+        rows = self.db.all('SELECT payload,source,fetched_at FROM operation_records '
+                           'WHERE account_id=? AND kind=? ORDER BY fetched_at DESC LIMIT 500', (account_id, kind))
+        return {'items': [{**self.vault.open(row['payload']), 'source': row['source'],
+                           'fetched_at': row['fetched_at']} for row in rows],
+                'last_sync': self.db.one('SELECT * FROM operation_syncs WHERE account_id=? AND kind=? '
+                                         'ORDER BY id DESC LIMIT 1', (account_id, kind)),
+                'partial': True, 'completion': 'cached_samples', 'cache_limit': 500,
+                'demo': account['mode'] == 'demo'}
+
+    def sync(self, account_id, kind):
+        account = self.service.provider.account(account_id)
+        source = 'demo' if account['mode'] == 'demo' else SOURCES[kind]
+        try:
+            result = self.service.provider.call(account_id, kind, {})
+        except Problem as exc:
+            # Codes only, never remote messages or raw response bodies.
+            safe = exc.code if exc.code in {'response_timeout', 'response_invalid', 'field_invalid',
+                'response_failed', 'response_too_large', 'items_invalid', 'duplicate_conflict',
+                'cdp_identity_mismatch', 'cdp_binding_mismatch', 'cdp_context_ambiguous',
+                'account_paused', 'rate_limited', 'busy', 'timeout', 'live_disabled', 'cdp_required'} else 'collection_failed'
+            self.db.execute('INSERT INTO operation_syncs(account_id,kind,source,fetched_at,state,partial,'
+                            'completion,error,item_count) VALUES(?,?,?,?,?,1,?,?,0)',
+                            (account_id, kind, source, time.time(), 'failed', 'failed', safe))
+            raise
+        fetched = time.time()
+        with self.db.connect() as conn:
+            for item in result['items']:
+                identity = item['order_id' if kind == 'orders' else 'item_id']
+                key = hmac.new(self.service.s.vault_key.encode(),
+                               canonical([account_id, kind, identity]).encode(), hashlib.sha256).hexdigest()
+                conn.execute('INSERT INTO operation_records(account_id,kind,record_key,payload,source,fetched_at) '
+                             'VALUES(?,?,?,?,?,?) ON CONFLICT(account_id,kind,record_key) DO UPDATE SET '
+                             'payload=excluded.payload,source=excluded.source,fetched_at=excluded.fetched_at',
+                             (account_id, kind, key, self.vault.seal(item), source, fetched))
+            conn.execute('INSERT INTO operation_syncs(account_id,kind,source,fetched_at,state,partial,'
+                         'completion,cursor_error,item_count,has_more,reported_total) VALUES(?,?,?,?,?,1,?,?,?,?,?)',
+                         (account_id, kind, source, fetched, 'partial', 'single_page',
+                          result['cursor_error'], len(result['items']), result['has_more'], result['reported_total']))
+        return {**result, 'source': source, 'fetched_at': fetched, 'demo': account['mode'] == 'demo'}

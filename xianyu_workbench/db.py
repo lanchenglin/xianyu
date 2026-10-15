@@ -92,8 +92,24 @@ def notification_delivery_schema(conn):
     )''')
 
 
+def operations_schema(conn):
+    conn.execute('''CREATE TABLE operation_records (
+        account_id TEXT NOT NULL REFERENCES accounts(id), kind TEXT NOT NULL,
+        record_key TEXT NOT NULL, payload TEXT NOT NULL, source TEXT NOT NULL,
+        fetched_at REAL NOT NULL, PRIMARY KEY(account_id, kind, record_key)
+    )''')
+    conn.execute('''CREATE TABLE operation_syncs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, account_id TEXT NOT NULL REFERENCES accounts(id),
+        kind TEXT NOT NULL, source TEXT NOT NULL, fetched_at REAL NOT NULL,
+        state TEXT NOT NULL, partial INTEGER NOT NULL, completion TEXT NOT NULL,
+        cursor_error TEXT, error TEXT, item_count INTEGER NOT NULL,
+        has_more INTEGER, reported_total INTEGER
+    )''')
+    conn.execute('CREATE INDEX operation_sync_account ON operation_syncs(account_id,kind,id)')
+
+
 MIGRATIONS = (initial_schema, reconciliation_schema, draft_revision_schema,
-              notification_state_schema, notification_delivery_schema)
+              notification_state_schema, notification_delivery_schema, operations_schema)
 
 
 class DB:
@@ -129,7 +145,7 @@ class DB:
         tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         encrypted = {"accounts": ("secret",), "actions": ("payload", "result"),
                      "drafts": ("content",), "settings": ("value",),
-                     "reconciliations": ("evidence",)}
+                     "reconciliations": ("evidence",), "operation_records": ("payload",)}
         try:
             for table, columns in encrypted.items():
                 if table not in tables:

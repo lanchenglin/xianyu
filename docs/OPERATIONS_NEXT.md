@@ -2,7 +2,15 @@
 
 日期：2026-10-15；起点 feat/local-next / 121f3c8。本轮不接触 .env/data、8099、9235 或真实平台；不升级固定上游，不部署、不 push。500 轮为工作上限而非验收指标；批次完成不等于全部需求完成。
 
-## 任务矩阵与依赖
+## 第二批最新状态（优先于下方历史矩阵）
+
+基线 465f898；父助手已授权取得 bought/personal/im/publish 结构证据，不再以旧上游缺接口结束。订单及本人商品单页纵向实现见 [OPERATIONS_SAMPLES](OPERATIONS_SAMPLES.md)：受限 CDP 网络监听、UID 前后与 head.self、最小字段、v6 加密缓存、按账号 API/UI/MCP；partial_orders/partial_inventory 可用，完整同步仍 false。订单字符串 nextPage 没有值语义，保留可验证样本并记录分页错误，不猜游标。
+
+userConvs 已证明 messageId/createAt/content/sender.uid/cid 与会话 cid 同记录；旧文档“稳定 ID 待取证”仅为历史断点，不能否定新证据。正文编码尚未证明，本批未实现消息解析器/采集/增量 listener。下一独立单元从虚构结构 fixture 的纯解析器开始，再取得编码证据后接只读样本。首次联系、发布冻结、改价/上下架、交易仍未开放；自动回复及外部通知默认关闭。
+
+真实平台验收留给父助手；开发只用临时数据、随机本地端口和隔离 Chromium。日志位于绝对 `/home/lan/.hermes/cache/scratch/xianyu-operations2-evidence`，不写 repo scratch；无 push/部署/运行配置变更。
+
+## 任务矩阵与依赖（第一批历史）
 
 | 能力 | 当前/可实现性 | 下一验收门槛 |
 |---|---|---|
