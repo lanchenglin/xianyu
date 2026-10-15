@@ -206,3 +206,21 @@ C 阶段：全量 127 passed / 1 既有弃用警告；c1/c2-red.log 为编辑和
 ### 安全自审增量
 
 发现并以 RED/GREEN 修复：备份创建允许超过恢复上限的大包；中断后的恢复重试若安装失败会丢失此前启动阻断标记。现创建/恢复限制一致，失败重试保留原标记。review-limit-red.log / review-marker-red.log 实际失败，18 项备份恢复回归通过（含 v2 备份→v3 迁移与服务重新启动不重放）。review-ui.log 通过：额外验证另一窗口更新后的旧 revision 保存被拒绝且用户编辑文本保留。
+
+## 2026-10-15 最终验证
+
+| 检查 | 实际结果 |
+|---|---|
+| Python 3.12.14 pip check / ruff | 均通过 |
+| Python 3.12.14 pytest -q | 131 passed, 1 warning in 17.13s |
+| Python 3.11.16 pip check / ruff | 均通过 |
+| Python 3.11.16 pytest -q | 131 passed, 1 warning in 17.75s |
+| 双版本固定上游契约 | 各 10 项通过，亦包含于全量 |
+| node --check / git diff --check | 通过 |
+| Playwright 系统 Chromium，独立缓存+临时 profile | 通过；新增草稿编辑/旧 revision 拒绝/归档/冻结审批验证 |
+
+证据目录 `/home/lan/.hermes/cache/scratch/xianyu-next2-evidence`，final-py312.log、final-py311.log、final-contract312.log、final-contract311.log、final-ui.log。使用 `PLAYWRIGHT_BROWSERS_PATH=$PWD/.test-browsers PLAYWRIGHT_SKIP_BROWSER_GC=1 XY_TEST_CHROMIUM=/snap/bin/chromium`，未下载新浏览器或读取已有 profile。警告为既有 Starlette TestClient/httpx 弃用提示。
+
+实际完成 4 个本地功能/修复提交后继续安全审查与最终验证，没有停止在 A。没有真实登录/平台请求，没有启用 live，没有部署/推送/合并。真实账号未验收。基线已有 CI 成功不外推到新增提交；新增 CI 等 Hermes 审查推送。
+
+最终另以 review-start-red.log 复现并修复“Service 已构造但 lifespan 尚未启动时恢复中断”的竞态；Service.start 在锁内再次检查恢复标记。备份恢复专项现 19 项，最终双版本全量已重新运行至 131 passed（上表），UI 亦重新通过。

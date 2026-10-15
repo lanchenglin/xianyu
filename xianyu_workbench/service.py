@@ -39,6 +39,8 @@ class Service:
                 shutil.rmtree(path, ignore_errors=True)
 
     def start(self):
+        if (self.s.data_dir / 'restore-in-progress').exists():
+            raise ValueError('上次恢复未完成，拒绝启动；请离线检查回滚副本并重新恢复')
         self.recover()
         if self.s.worker_enabled:
             self.thread = threading.Thread(target=self.loop, name="xianyu-queue", daemon=True)

@@ -41,7 +41,7 @@ FastAPI + SQLite 单实例工作台；中文响应式页面；管理员/Agent �
 
 ## 3. 已知阻塞与验收状态
 
-### P0-ENV：Python 3.11 开发依赖（本地修复完成，Windows 新 CI 待验证）
+### P0-ENV：Python 3.11 开发依赖（已修复，基线双平台 CI 成功）
 
 2026-10-14 续开发：保留 3.11；显式以 `--python-version 3.11 --universal` 解析两个锁文件，Playwright 1.64 条件选择 pyee 13.0.1/14.0.0。Linux 3.11.16 与 3.12.14 干净安装、pip check、ruff 以及含固定 live 的基线均通过（各 69 passed）。CI 保留 Windows/Ubuntu 3.11/3.12，增加 pip check，并将 live 契约扩展为两版本。以下 CI 失败是历史记录，不代表当前锁；新 Windows CI 尚未运行。
 
@@ -64,7 +64,7 @@ Windows 3.11 作业日志明确显示 `pyee==14.0.0` 要求 `Python >=3.12`，�
 
 - [x] 保留 3.11，重新解析兼容的 Playwright / pyee 条件依赖，并真实安装验证。
 - [x] 同步 `pyproject.toml`、运行/开发锁文件、CI 矩阵与文档，未删除失败矩阵。
-- [ ] 在干净 Ubuntu/Windows 虚拟环境验证安装、`pip check`、基础测试及适用的 live 契约测试；记录每个版本的结果。
+- [x] 基线 4d2aadc 的 CI run 38566392741 全部 7 作业成功，含 Ubuntu/Windows 3.11/3.12、双版本 live 契约、UI；本轮新增提交尚待远端 CI。
 
 代码入口：[pyproject.toml](../pyproject.toml)、[开发锁文件](../requirements-dev.lock)、[运行锁文件](../requirements.lock)、[CI](../.github/workflows/ci.yml)、[上游契约测试](../tests/test_upstream_contract.py)。
 
@@ -429,3 +429,13 @@ docs/DEPLOYMENT.md、docs/MCP.md、docs/SECURITY.md、docs/TEST_REPORT.md。
 ### P2-02 单条草稿管理（2026-10-15）
 
 已实现单条原位编辑、revision 乐观并发保护和归档 UI；显式 v2→v3 迁移增加 revision=1 / archived=0，保留原内容。PUT `/api/drafts/{id}` 接受原 account_id、revision 和完整草稿字段；POST `/api/drafts/{id}/archive` 接受 account_id、revision。账号/旧版本/已归档冲突返回 409，不另建副本；归档非平台删除，修改不会改变已冻结审批。管理员和 Agent 均可操作安全本地草稿，无新增管理员权限或任意文件操作。未增加 MCP 编辑工具（HTTP/UI 可用），既有 MCP 保存工具保持新建语义。没有素材删除接口，所有引用图片保留。批量发布、素材回收、取消归档尚未实现。
+
+## 2026-10-15 最终交接（优先于前述历史状态）
+
+- A：固定上游静态核实完成，五项缺少完整可靠契约继续阻塞；真实发布 fail-closed，演示/本地申请仍可用。见 UPSTREAM_FEASIBILITY。
+- B：本地离线备份/恢复 CLI 已实现并测试，schema 1～3 可验证迁移；恢复默认暂停且旧授权失效。定时/保留策略未做。
+- C：单条草稿编辑、并发 revision、归档、UI 已实现并实测；批量发布/素材回收未做，不提供图片删除。
+- D：已继续静态核查，正文与最小消息 ID 没有可靠关联，采集/去重/客服待办尚未实现，详见 UPSTREAM_FEASIBILITY。
+- 提交：801995b（A）、ad524eb（B）、739cb20（C）、11fdee9（安全自审修复）。无 push，无合并。
+- 最终 Python 3.12.14 / 3.11.16：各 pip check、ruff、全量 131 passed，均 1 条既有 Starlette 弃用警告；各含固定上游 10 项。node --check、git diff --check、系统 Chromium 全新临时 profile UI 均通过。
+- 真实账号、主人 Windows 实际部署、Docker、真实模型/客户端仍未验收；本轮新提交远端 CI 待 Hermes 审查后推送验证。

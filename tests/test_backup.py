@@ -218,6 +218,15 @@ def test_failed_retry_keeps_previous_interruption_guard(tmp_path, monkeypatch):
         DB(root, vault)
 
 
+def test_service_constructed_before_restore_still_refuses_interrupted_start(tmp_path):
+    from xianyu_workbench.config import Settings
+    from xianyu_workbench.service import Service
+    service = Service(Settings(tmp_path, 'a' * 40, 'b' * 40, Fernet.generate_key().decode(), worker_enabled=False))
+    (tmp_path / 'restore-in-progress').write_text('interrupted')
+    with pytest.raises(ValueError, match='恢复'):
+        service.start()
+
+
 def test_interrupted_restore_marker_refuses_startup(tmp_path):
     root, vault, _ = seed(tmp_path)
     (root / 'restore-in-progress').write_text('interrupted')
