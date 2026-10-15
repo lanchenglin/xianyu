@@ -28,6 +28,8 @@ WRITES = {
 def dispatch(operation: str, payload: dict):
     if operation not in READS | WRITES:
         raise ValueError("operation not allowed")
+    from .browser_adapter import install
+    install(operation)
     from goofish_cli.core import mtop
     from loguru import logger
 
@@ -56,8 +58,11 @@ def main() -> None:
         output = {"ok": True, "data": data}
     except Exception as exc:
         text = str(exc).lower()
+        from .browser_config import BrowserError
         code = "upstream_error"
-        if any(x in text for x in ("rgv587", "验证码", "安全验证", "异常访问", "风控", "punish", "user_validate")):
+        if isinstance(exc, BrowserError):
+            code = exc.code
+        elif any(x in text for x in ("rgv587", "验证码", "安全验证", "异常访问", "风控", "punish", "user_validate")):
             code = "risk_control"
         elif getattr(exc, "exit_code", 0) == 77:
             code = "auth_required"

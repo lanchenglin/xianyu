@@ -46,6 +46,17 @@ def test_function_contract(module, name, parameters, tmp_path):
     assert parameters.issubset(actual)
 
 
+def test_project_adapter_installed_before_search_import(tmp_path):
+    result = isolated("""
+        import importlib, json
+        from xianyu_workbench.browser_adapter import install, goofish_page
+        install('search')
+        module = importlib.import_module('goofish_cli.commands.search.search')
+        print(json.dumps(module.goofish_page is goofish_page))
+    """, tmp_path)
+    assert result is True
+
+
 def test_installed_commit_is_pinned():
     direct = distribution("goofish-cli").read_text("direct_url.json")
     assert direct, "Install via the pinned .[live] extra, not an unrelated PyPI package"

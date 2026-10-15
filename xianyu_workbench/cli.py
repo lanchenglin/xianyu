@@ -77,11 +77,13 @@ def main():
         from .app import create_app
         uvicorn.run(create_app(), host=args.host, port=args.port, access_log=False)
     else:
-        print(json.dumps({"goofish_installed": importlib.util.find_spec("goofish_cli") is not None,
+        from .browser_config import diagnostic
+        print(json.dumps({"browser": diagnostic(),
+                          "goofish_installed": importlib.util.find_spec("goofish_cli") is not None,
                           "mcp_installed": importlib.util.find_spec("mcp") is not None,
                           "node_found": bool(shutil.which("node")),
                           "chrome_found_in_path": bool(shutil.which("google-chrome") or shutil.which("chrome")),
-                          "notice": "真实搜索需安装系统 Chrome；Windows Chrome 常不在 PATH 中，请自行确认安装"},
+                          "notice": "仅检查已导出的管理员环境配置；不读取 .env、不连接 CDP、不验证登录态。隔离启动支持 Chrome / Chromium"},
                          ensure_ascii=False, indent=2))
 
 

@@ -20,6 +20,11 @@ class Settings:
     read_interval: float = 5.0
     write_interval: float = 30.0
     upstream_python: str = ""
+    browser: str = 'auto'
+    browser_executable: str = ''
+    browser_cdp_endpoint: str = ''
+    browser_cdp_account_id: str = ''
+    browser_cdp_uid: str = ''
 
     def validate(self) -> None:
         if min(len(self.admin_token), len(self.agent_token)) < 32:
@@ -27,6 +32,13 @@ class Settings:
         if self.admin_token == self.agent_token:
             raise ValueError("管理员与 Agent 必须使用不同令牌")
         Fernet(self.vault_key.encode())
+        if self.browser not in ('auto', 'chrome', 'chromium'):
+            raise ValueError('browser_config_invalid')
+        if any((self.browser_cdp_endpoint, self.browser_cdp_account_id, self.browser_cdp_uid)):
+            from .cdp import endpoint
+            endpoint(self.browser_cdp_endpoint)
+            if not self.browser_cdp_account_id or not self.browser_cdp_uid.isdecimal():
+                raise ValueError('cdp_binding_required')
         if self.operation_timeout < 5:
             raise ValueError("operation_timeout 必须 >= 5 秒")
 
@@ -42,6 +54,11 @@ class Settings:
             worker_enabled=os.getenv("XY_WORKER_ENABLED", "true").lower() == "true",
             operation_timeout=int(os.getenv("XY_OPERATION_TIMEOUT", "120")),
             upstream_python=os.getenv("XY_UPSTREAM_PYTHON", ""),
+            browser=os.getenv('XY_BROWSER', 'auto'),
+            browser_executable=os.getenv('XY_BROWSER_EXECUTABLE', ''),
+            browser_cdp_endpoint=os.getenv('XY_BROWSER_CDP_ENDPOINT', ''),
+            browser_cdp_account_id=os.getenv('XY_BROWSER_CDP_ACCOUNT_ID', ''),
+            browser_cdp_uid=os.getenv('XY_BROWSER_CDP_UID', ''),
         )
         obj.validate()
         return obj

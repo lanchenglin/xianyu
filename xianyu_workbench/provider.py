@@ -65,6 +65,11 @@ class Provider:
             raise Problem("busy", "账号操作队列正在执行其他任务，请稍后再试", 409) from exc
 
     def _live(self, account: dict, operation: str, payload: dict, *, write: bool):
+        if self.s.browser_cdp_endpoint:
+            if operation != 'search':
+                raise Problem('cdp_search_only', 'CDP 模式仅支持搜索；详情及写操作未开放', 409)
+            if (account['id'] != self.s.browser_cdp_account_id or account['uid'] != self.s.browser_cdp_uid):
+                raise Problem('cdp_binding_mismatch', 'CDP 固定账号绑定不匹配，拒绝执行', 409)
         home = self.s.data_dir / "runtime" / account["id"]
         private = home / ".goofish-cli"
         private.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -79,11 +84,16 @@ class Provider:
             f.write(canonical(cookies))
         safe_keys = {"PATH", "SYSTEMROOT", "WINDIR", "COMSPEC", "TEMP", "TMP", "DISPLAY",
                      "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR", "XAUTHORITY", "LANG", "LC_ALL",
-                     "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMW6432", "LOCALAPPDATA"}
+                     "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMW6432", "LOCALAPPDATA", "TMPDIR"}
         env = {k: v for k, v in os.environ.items() if k.upper() in safe_keys}
         env.update({"HOME": str(home), "USERPROFILE": str(home), "PYTHONUTF8": "1",
                     "GOOFISH_COOKIES_PATH": str(cookie_file), "GOOFISH_NO_CHROME_BOOTSTRAP": "1",
-                    "GOOFISH_HEADLESS": "0"})
+                    "GOOFISH_HEADLESS": "0",
+                    'XY_BROWSER': self.s.browser, 'XY_BROWSER_EXECUTABLE': self.s.browser_executable,
+                    'XY_BROWSER_CDP_ENDPOINT': self.s.browser_cdp_endpoint,
+                    'XY_BROWSER_CDP_ACCOUNT_ID': self.s.browser_cdp_account_id,
+                    'XY_BROWSER_CDP_UID': self.s.browser_cdp_uid,
+                    'XY_OPERATION_ACCOUNT_ID': account['id'], 'XY_OPERATION_UID': account['uid']})
         command = [self.s.upstream_python or sys.executable, "-u", "-m", "xianyu_workbench.bridge"]
         try:
             process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -111,7 +121,15 @@ class Provider:
                     self.db.execute("UPDATE accounts SET paused=1,pause_reason=? WHERE id=?", (code, account["id"]))
                 messages = {"risk_control": "平台要求安全验证，已暂停账号，请自行验证后人工恢复",
                             "auth_required": "登录态失效，已暂停账号，请重新导入",
-                            "dependency_missing": "缺少真实连接依赖，请安装 .[live] 和系统 Chrome / Node.js"}
+                            'browser_not_found': '未发现所选 Google Chrome / Chromium；请管理员安装或配置 XY_BROWSER_EXECUTABLE，并运行 doctor',
+                            'browser_path_invalid': '指定浏览器路径不可执行；请管理员检查 XY_BROWSER_EXECUTABLE，未回退其他浏览器',
+                            'browser_config_invalid': '浏览器配置无效；XY_BROWSER 仅允许 auto/chrome/chromium',
+                            'cdp_search_only': 'CDP 模式仅开放 search；item、消息及所有写操作均拒绝',
+                            'cdp_binding_mismatch': 'CDP 管理员账号绑定不匹配，已停止',
+                            'cdp_identity_mismatch': 'CDP 登录态缺失或账号不符，请管理员人工核对；不会注入 Cookie',
+                            'cdp_context_ambiguous': 'CDP 有多个或没有 context，无法确认账号，已停止',
+                            'cdp_unavailable': '本机 CDP 连接失败或断开，未切换浏览器；请管理员检查独立浏览器',
+                            'dependency_missing': '缺少真实连接依赖，请安装 .[live] 和系统 Chrome / Chromium / Node.js'}
                 raise Problem(code, messages.get(code, "上游操作异常；写操作可能已发出，请先在闲鱼核实"), 502)
             return redact(output["data"])
         finally:
