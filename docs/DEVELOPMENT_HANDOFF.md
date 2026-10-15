@@ -415,3 +415,9 @@ docs/DEPLOYMENT.md、docs/MCP.md、docs/SECURITY.md、docs/TEST_REPORT.md。
 ```
 
 本文件的基线和 CI 记录是历史事实。后续开发新增记录并更新勾选状态，不要删掉失败结果伪装成全程通过。
+
+## 2026-10-15 续开发状态更新
+
+基线 `4d2aadc` 的 [CI run 38566392741](https://github.com/lanchenglin/xianyu/actions/runs/38566392741) 全部 7 作业成功：Ubuntu/Windows 3.11/3.12、双版本固定 live 契约及 UI。上文“新 CI 待验证”为此前历史状态，现已解决；不代表真实账号验收。本轮新增提交尚未 push，CI 待 Hermes 审查后验证。
+
+固定上游五项核实见 [静态可行性报告](UPSTREAM_FEASIBILITY.md)。真实发布因不能冻结类目/地点暂时禁用（live_publish=false）；本地草稿、演示发布和审批申请保留。禁止用默认值变化后的上游发布代替完整审批。

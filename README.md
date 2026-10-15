@@ -157,3 +157,9 @@ skills/               给 AI 使用的操作规范
 ## 许可
 
 本项目 MIT；上游依赖为 Apache-2.0，详见 [第三方声明](THIRD_PARTY_NOTICES.md)。遵守平台规则和账号授权边界；不保证平台接口长期稳定，也不提供验证绕过、批量骚扰或自动交易能力。
+
+## 2026-10-15 续开发状态更新
+
+基线 `4d2aadc` 的 [CI run 38566392741](https://github.com/lanchenglin/xianyu/actions/runs/38566392741) 全部 7 作业成功：Ubuntu/Windows 3.11/3.12、双版本固定 live 契约及 UI。上文“新 CI 待验证”为此前历史状态，现已解决；不代表真实账号验收。本轮新增提交尚未 push，CI 待 Hermes 审查后验证。
+
+固定上游五项核实见 [静态可行性报告](docs/UPSTREAM_FEASIBILITY.md)。真实发布因不能冻结类目/地点暂时禁用（live_publish=false）；本地草稿、演示发布和审批申请保留。禁止用默认值变化后的上游发布代替完整审批。

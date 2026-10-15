@@ -120,6 +120,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def capabilities(current=Depends(role)):
         return {"search": True, "item_detail": True, "existing_chats": True, "message_history": True,
                 "send_with_approval": True, "publish_with_approval": True, "delete_with_explicit_approval": True,
+                "live_publish": False, "publish_complete_snapshot": False,
                 "local_drafts": True, "search_monitors": True, "mcp": True,
                 "manual_reconciliation": True, "automatic_receipt_verification": False,
                 "reconciliation_policy": {"write_role": "admin", "agent_read": "outcome_time_only",

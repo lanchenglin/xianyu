@@ -48,6 +48,8 @@ class Provider:
                     return self.demo(operation, payload)
                 if not self.s.live_enabled:
                     raise Problem("live_disabled", "真实执行未启用；由部署者设置 XY_LIVE_ENABLED=true", 409)
+                if operation == "item.publish":
+                    raise Problem("publish_snapshot_unavailable", "固定上游无法冻结类目和发布地点；真实发布暂不开放", 409)
                 if not account["secret"]:
                     raise Problem("auth_required", "请管理员导入此账号的登录态", 409)
                 now = time.time()
