@@ -5,7 +5,7 @@
 固定上游仍为 `c2d5a02ad83b18863514389cedf7afbd993b683d`，不修改 site-packages。API/MCP 进程只使用配置与发现代码；bridge 在导入上游命令前显式替换 `core.browser.goofish_page`。所有操作保留既有 live 开关、账号暂停、审批、单实例队列、限流、幂等和不确定结果不重放。真实发布继续禁用。
 
 - **隔离启动（默认）**：系统 Google Chrome 或 Chromium，可用于既有上游路径；不是平台业务已验收声明。
-- **CDP（可选）**：`search`、`orders`、`inventory`；后两项仅本人单页部分样本（见 [只读样本契约](OPERATIONS_SAMPLES.md)），不遍历分页。`item`、chats、history 和所有写操作均 fail closed，不回退 mtop、其他浏览器或其他账号。详情当前走独立 mtop 契约，本版不冒充 CDP item 支持。
+- **CDP（可选）**：新增 `messages` 末条元数据样本，固定自建 `/im` 页被动 server-frame 观察，正文不可用、禁止样本提案，见 [MESSAGES](MESSAGES.md)。保留 `search`、`orders`、`inventory`；后两项仅本人单页部分样本（见 [只读样本契约](OPERATIONS_SAMPLES.md)），不遍历分页。`item`、chats、history 和所有写操作均 fail closed，不回退 mtop、其他浏览器或其他账号。详情当前走独立 mtop 契约，本版不冒充 CDP item 支持。
 - 不提供通用 URL、JS、命令、浏览器路径、端点或 profile 的 HTTP/MCP 参数。只有可信本机部署管理员配置环境。
 
 ## 管理员配置

@@ -18,7 +18,14 @@ def test_real_cdp_network_listener_identity_and_cleanup(tmp_path, monkeypatch):
     from xianyu_workbench.operations_browser import collect
     profile = tmp_path / 'fresh-profile'
     profile.mkdir()
+    from message_ws_fixture import message_server
+    from test_messages import frame
+    server = message_server(tmp_path, json.dumps(frame()))
+    ws_port, received = server.__enter__()
     process = subprocess.Popen([os.environ['XY_TEST_CHROMIUM'], '--headless=new', '--no-sandbox',
+        '--ignore-certificate-errors', '--no-proxy-server',
+        '--disable-features=LocalNetworkAccessChecks',
+        f'--host-resolver-rules=MAP wss-goofish.dingtalk.com 127.0.0.1:{ws_port}',
         '--no-first-run', '--no-default-browser-check', '--disable-background-networking',
         '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0',
         '--user-data-dir=' + str(profile), 'about:blank'], stdout=subprocess.DEVNULL,
@@ -48,7 +55,10 @@ def test_real_cdp_network_listener_identity_and_cleanup(tmp_path, monkeypatch):
                 state = {'self': True, 'switch': False}
                 async def route(request):
                     url = request.request.url
-                    if url in ('https://www.goofish.com/bought', 'https://www.goofish.com/personal'):
+                    if url == 'https://www.goofish.com/im':
+                        await request.fulfill(status=200, content_type='text/html', body=
+                            '<script>new WebSocket("wss://wss-goofish.dingtalk.com/")</script>')
+                    elif url in ('https://www.goofish.com/bought', 'https://www.goofish.com/personal'):
                         apis = ['mtop.idle.web.trade.bought.list'] if url.endswith('bought') else [
                             'mtop.idle.web.user.page.head', 'mtop.idle.web.xyh.item.list']
                         script = ';'.join(f"fetch('https://h5api.m.goofish.com/h5/{api}/1.0/')" for api in apis)
@@ -85,6 +95,14 @@ def test_real_cdp_network_listener_identity_and_cleanup(tmp_path, monkeypatch):
                 value = await asyncio.to_thread(provider._live, account, 'orders', {}, write=False)
                 assert value['items'][0]['order_id'] == '9001'
                 assert len(context.pages) == 1
+                from dataclasses import replace
+                provider.s = replace(settings, operation_timeout=20)
+                value = await asyncio.to_thread(provider._live, account, 'messages', {}, write=False)
+                assert value['items'][0]['message_id'] == '987654'
+                assert value['items'][0]['body'] is None
+                assert received == []  # No IM commands, ACK, heartbeat or writes from collector.
+                assert len(context.pages) == 1 and not original.is_closed()
+                provider.s = settings
                 # No response on task navigation: cooperative cancellation must close only its tab.
                 await context.unroute('**/*', route)
                 async def silence(request):
@@ -113,3 +131,4 @@ def test_real_cdp_network_listener_identity_and_cleanup(tmp_path, monkeypatch):
         except subprocess.TimeoutExpired:
             process.kill()
             process.communicate(timeout=5)
+        server.__exit__(None, None, None)

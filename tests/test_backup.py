@@ -53,6 +53,8 @@ def test_restore_destroyed_copy_pauses_and_never_replays(tmp_path):
         db.execute('INSERT INTO actions(id,account_id,kind,payload,digest,mode,idem,state,created,expires) '
                    'VALUES(?,?,?,?,?,?,?,?,?,?)',
                    (state, 'a', 'message.send', vault.seal({}), 'hash', 'demo', state, state, 1, 9999999999))
+    db.execute("INSERT INTO operation_records VALUES('a','messages','hmac',?,'fixture',1)",
+               (vault.seal({'message_id': '987654', 'body_status': 'unavailable'}),))
     db.execute("INSERT INTO monitors(id,account_id,query,filters,interval_s) VALUES('m','a','fake','{}',300)")
     db.execute("INSERT INTO settings VALUES('notifications',?)", (vault.seal({'enabled': True}),))
     db.execute("INSERT INTO notifications(monitor_id,content,created) VALUES('m','{}',1)")
@@ -68,6 +70,8 @@ def test_restore_destroyed_copy_pauses_and_never_replays(tmp_path):
     states = {r['id']: r['state'] for r in restored.all('SELECT id,state FROM actions')}
     assert states == {'pending': 'expired', 'approved': 'expired', 'running': 'unconfirmed',
                       'unconfirmed': 'unconfirmed', 'submitted': 'submitted', 'simulated': 'simulated'}
+    assert vault.open(restored.one("SELECT payload FROM operation_records WHERE kind='messages'")['payload']) == {
+        'message_id': '987654', 'body_status': 'unavailable'}
     assert restored.one('SELECT paused FROM accounts')['paused'] == 1
     assert restored.one('SELECT enabled FROM monitors')['enabled'] == 0
     assert vault.open(restored.one("SELECT value FROM settings WHERE key='notifications'")['value'])['enabled'] is False

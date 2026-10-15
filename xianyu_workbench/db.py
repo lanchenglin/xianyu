@@ -108,8 +108,14 @@ def operations_schema(conn):
     conn.execute('CREATE INDEX operation_sync_account ON operation_syncs(account_id,kind,id)')
 
 
+def message_samples_schema(conn):
+    # Existing encrypted sample envelope already stores all private message fields.
+    # Version the new kind explicitly; indexed reads stay bounded across accounts.
+    conn.execute('CREATE INDEX operation_record_recent ON operation_records(account_id,kind,fetched_at DESC)')
+
+
 MIGRATIONS = (initial_schema, reconciliation_schema, draft_revision_schema,
-              notification_state_schema, notification_delivery_schema, operations_schema)
+              notification_state_schema, notification_delivery_schema, operations_schema, message_samples_schema)
 
 
 class DB:

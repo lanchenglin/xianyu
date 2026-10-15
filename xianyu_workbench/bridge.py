@@ -27,7 +27,7 @@ WRITES = {
 
 
 def dispatch(operation: str, payload: dict):
-    if operation in {'orders', 'inventory'}:
+    if operation in {'orders', 'inventory', 'messages'}:
         if payload:
             raise ValueError('operation takes no parameters')
         from .operations_browser import collect

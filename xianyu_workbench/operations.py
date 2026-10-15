@@ -4,6 +4,51 @@ from __future__ import annotations
 SOURCES = {'orders': 'mtop.idle.web.trade.bought.list', 'inventory': 'mtop.idle.web.xyh.item.list'}
 MAX_ITEMS = 100
 MAX_BODY = 1_000_000
+MESSAGE_SOURCE = 'ws.userConvs.lastMessage'
+
+
+def platform_id(value):
+    value = text(value, maximum=100)
+    if value.endswith('@goofish'):
+        value = value[:-8]
+    return text(value, maximum=64, identifier=True)
+
+
+def normalize_messages(value, uid):
+    """Project observed last-message metadata, never summaries or opaque custom bodies."""
+    if not isinstance(value, dict) or type(value.get('code')) is not int or value['code'] != 200:
+        raise ValueError('response_failed')
+    uid = platform_id(uid)
+    items = {}
+    try:
+        rows = value['body']['userConvs']
+        if not isinstance(rows, list) or len(rows) > MAX_ITEMS:
+            raise ValueError('items_invalid')
+        for row in rows:
+            conv = row['singleChatUserConversation']
+            if 'lastMessage' not in conv:
+                continue
+            message = conv['lastMessage']['message']
+            cid = platform_id(conv['singleChatConversation']['cid'])
+            if platform_id(message['cid']) != cid:
+                raise ValueError('cid_mismatch')
+            sender = platform_id(message['sender']['uid'])
+            timestamp = message['createAt']
+            if type(timestamp) is not int or not 1 <= timestamp <= 253402300799999:
+                raise ValueError('field_invalid')
+            item = {'message_id': text(message['messageId'], maximum=64, identifier=True),
+                    'cid': cid, 'sender_uid': sender, 'created_at': timestamp,
+                    'direction': 'outgoing' if sender == uid else 'incoming',
+                    'body': None, 'body_status': 'unavailable', 'recipient_verified': False}
+            key = (cid, item['message_id'])
+            if key in items and items[key] != item:
+                raise ValueError('duplicate_conflict')
+            items[key] = item
+    except (KeyError, TypeError):
+        raise ValueError('field_invalid') from None
+    return {'items': list(items.values()), 'source': MESSAGE_SOURCE, 'partial': True,
+            'completion': 'last_message_samples', 'has_more': None,
+            'cursor_error': 'history_not_collected', 'reported_total': None}
 
 
 def success_data(value):

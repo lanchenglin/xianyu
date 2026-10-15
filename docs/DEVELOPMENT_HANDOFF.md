@@ -4,7 +4,11 @@
 
 本文件交给在本地继续开发的人、Codex、Claude Code 或 Hermes。**下列任务是待办与设计建议，不代表功能已经实现。** 原始交接只更新文档；2026-10-14 续开发在 `feat/local-next` 完成 P0-ENV 本地修复、P2-04 迁移必要基础及 P1-02 人工核对，以下各节标注当前实现与未验收边界，不新增平台动作。
 
-## 2026-10-15 运营第二批（最新）
+## 2026-10-15 消息样本增量（最新）
+
+基线 b0e84fe；新增 partial_messages 的末条元数据采集/加密去重/HTTP/UI/MCP，v7 索引迁移，契约和剩余编码/收件人证据见 [MESSAGES](MESSAGES.md)。正文不可用，不开放样本草稿/提案；自动监听/FAQ 未实现。已做隔离本地 WS/Chromium 与真实 MCP stdio 验证，非真实闲鱼验收。不部署、不 push，不访问真实数据或 8099/9235。
+
+## 2026-10-15 运营第二批（历史）
 
 基线 465f898，已根据父助手真实只读结构证据实现 orders/inventory 的 CDP 单页样本、v6 加密缓存与按账号 API/UI/MCP。完整字段/限制见 [OPERATIONS_SAMPLES](OPERATIONS_SAMPLES.md)。partial_orders/partial_inventory 可用；order_sync/full_inventory_sync 仍 false。消息稳定 ID 结构已有证据，编码未知，解析与采集留作独立单元；不得再以旧上游 history 裁剪数据断言没有 ID。真实平台、实际 Hermes connector 仍未验收。无 push/部署，Windows 暂停不变。
 

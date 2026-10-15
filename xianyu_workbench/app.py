@@ -126,7 +126,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "send_with_approval": True, "publish_with_approval": True, "delete_with_explicit_approval": True,
                 "live_publish": False, "publish_complete_snapshot": False,
                 "browser_policy": {"isolated_browsers": ["chrome", "chromium"],
-                                   "cdp_operations": ["search", "orders", "inventory"], "cdp_writes": False,
+                                   "cdp_operations": ["search", "orders", "inventory", "messages"], "cdp_writes": False,
                                    "admin_configuration_only": True, "failure_fallback": False},
                 "local_drafts": True, "local_draft_edit": True, "local_draft_archive": True,
                 "offline_backup_restore_cli": True, "search_monitors": True, "mcp": True,
@@ -141,7 +141,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                                           "immutable": True, "retries_operation": False},
                 "first_contact": False, "platform_edit_price": False, "platform_relist": False,
                 "full_inventory_sync": False, "order_sync": False, "autonomous_reply": False,
-                "partial_orders": True, "partial_inventory": True,
+                "partial_orders": True, "partial_inventory": True, "partial_messages": True,
+                "message_bodies": False, "message_sample_propose": False,
                 "sample_policy": {"pages": 1, "pagination": False, "all_statuses": False,
                                   "private_cache_encrypted": True, "platform_verified": False},
                 "payment": False, "refund": False, "confirm_receipt": False,
@@ -233,6 +234,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     from .operations_cache import OperationsCache
     samples = OperationsCache(service)
+
+    @app.get('/api/accounts/{account_id}/messages')
+    def messages_cache(account_id: str, current=Depends(role)):
+        return samples.read(account_id, 'messages')
+
+    @app.post('/api/accounts/{account_id}/messages/sync')
+    def messages_sync(account_id: str, current=Depends(role)):
+        return samples.sync(account_id, 'messages')
 
     @app.get('/api/accounts/{account_id}/orders')
     def orders_cache(account_id: str, current=Depends(role)):

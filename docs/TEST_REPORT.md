@@ -4,7 +4,19 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
-## 2026-10-15 运营第二批：只读单页样本（最新）
+## 2026-10-15 第三批：末条消息元数据样本（最新）
+
+基线 b0e84fe；实现范围和证据需求见 [MESSAGES](MESSAGES.md)。本批只交付 partial_messages 元数据，不把正文未知伪装成可回复；无后台监听/自动回复，无部署/push，无真实账号访问。用户提供前批真实订单/商品 10/20 条与 CI 38744034233 五作业成功，本批未重新连接验证。
+
+- TDD：parser 12 项缺函数 RED→GREEN；collector 6 项缺函数 RED→GREEN；HTTP/capabilities 缺路由/能力 RED→GREEN；CDP propose 201→409 RED/GREEN；真实 MCP stdio 缺两工具→GREEN；UI 缺按钮→GREEN；深度限制及 collector 安全错误码 RED→GREEN；v7 迁移断言 6→7。迁移/恢复额外验收首跑即通过，不冒称全部为新增 RED。
+- 全量 Python 3.12：**294 passed, 1 warning, 62.45s**；3.11：**294 passed, 1 warning, 63.67s**，均启用 `XY_TEST_CHROMIUM=/snap/bin/chromium`，无跳过。双环境 pip check/ruff、node --check、git diff --check 通过。唯一警告为既有 Starlette/httpx 弃用。
+- 完整 smoke_ui 通过；Agent UI 样本读取/切账号清空/无提案按钮、原 XSS/移动端回归通过。真实 MCP SDK stdio→临时 API 新工具与管理员令牌拒绝通过。
+- 实际 Chromium 全新 profile + 随机 CDP + 本地 TLS WebSocket：provider→真实 bridge→Network.webSocketFrameReceived→元数据输出通过；本地 WS 接收列表为空（未发 IM 协议）。已有页/浏览器保留；原超时取消/UID 切换回归通过。fixture 首用 Playwright WS 拦截未产生真实 CDP 网络帧，改成本地 TLS server；Chromium LocalNetworkAccessChecks 拦截 localhost 映射，测试专用禁用该特性后通过，不修改生产参数。
+- 中途全量曾因 UI 登录异步结束后覆盖导航导致双环境各 1 failed/293 passed；fixture 改为等待登录按钮恢复 enabled（而非默认可见 overview），后双版本全绿。保留失败日志，不把中途结果抹除。
+- v6→v7 一致性备份、密文保留、错误密钥与 0600 权限；离线恢复包含消息缓存但旧任务不重放；多账号 HMAC、重复稳定 ID、失败不清库验证通过。
+- 日志绝对目录 `/home/lan/.hermes/cache/scratch/xianyu-messages-evidence`，不入库。实际闲鱼消息、正文编码、收件人、真实模型与 Hermes connector 未验收。首次聊天、发布冻结、改价上下架、分页/后台消息/无人值守 FAQ 仍未完成。
+
+## 2026-10-15 运营第二批：只读单页样本（历史）
 
 基线 465f898，完成 orders/inventory 的受限 CDP 网络监听 → 最小字段 → v6 加密缓存 → API/UI/MCP。契约见 [OPERATIONS_SAMPLES](OPERATIONS_SAMPLES.md)。真实 bought/personal 的结构证据来自已授权父助手；开发测试仅虚构数据，不连接真实平台或 8099/9235，不读取真实 .env/data/profile。未 push/部署，Windows 暂停不变。
 

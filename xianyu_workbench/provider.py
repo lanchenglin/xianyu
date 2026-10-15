@@ -39,9 +39,9 @@ class Provider:
 
     def call(self, account_id: str, operation: str, payload: dict, *, write: bool = False):
         expected_write = operation in {"message.send", "item.publish", "item.delete"}
-        if operation not in {"search", "orders", "inventory", "item", "chats", "history", "message.send", "item.publish", "item.delete"} or write != expected_write:
+        if operation not in {"search", "orders", "inventory", "messages", "item", "chats", "history", "message.send", "item.publish", "item.delete"} or write != expected_write:
             raise Problem("unsupported", "该操作没有开放；交易操作必须在闲鱼人工完成", 403)
-        if operation in {'orders', 'inventory'} and payload:
+        if operation in {'orders', 'inventory', 'messages'} and payload:
             raise Problem('invalid_request', '样本同步不接受 URL、脚本或分页参数', 422)
         try:
             with FileLock(self.lock_path, timeout=0.1):
@@ -69,11 +69,11 @@ class Provider:
             raise Problem("busy", "账号操作队列正在执行其他任务，请稍后再试", 409) from exc
 
     def _live(self, account: dict, operation: str, payload: dict, *, write: bool):
-        if operation in {'orders', 'inventory'} and not self.s.browser_cdp_endpoint:
+        if operation in {'orders', 'inventory', 'messages'} and not self.s.browser_cdp_endpoint:
             raise Problem('cdp_required', '单页样本同步仅支持管理员绑定的 CDP 账号', 409)
         if self.s.browser_cdp_endpoint:
-            if operation not in {'search', 'orders', 'inventory'}:
-                raise Problem('cdp_search_only', 'CDP 仅支持搜索、订单和本人商品样本；写操作未开放', 409)
+            if operation not in {'search', 'orders', 'inventory', 'messages'}:
+                raise Problem('cdp_search_only', 'CDP 仅支持搜索、订单、本人商品和末条消息样本；写操作未开放', 409)
             if (account['id'] != self.s.browser_cdp_account_id or account['uid'] != self.s.browser_cdp_uid):
                 raise Problem('cdp_binding_mismatch', 'CDP 固定账号绑定不匹配，拒绝执行', 409)
         home = self.s.data_dir / "runtime" / account["id"]
@@ -144,7 +144,7 @@ class Provider:
                             'browser_not_found': '未发现所选 Google Chrome / Chromium；请管理员安装或配置 XY_BROWSER_EXECUTABLE，并运行 doctor',
                             'browser_path_invalid': '指定浏览器路径不可执行；请管理员检查 XY_BROWSER_EXECUTABLE，未回退其他浏览器',
                             'browser_config_invalid': '浏览器配置无效；XY_BROWSER 仅允许 auto/chrome/chromium',
-                            'cdp_search_only': 'CDP 模式仅开放 search；item、消息及所有写操作均拒绝',
+                            'cdp_search_only': 'CDP 仅开放搜索及订单/商品/末条消息样本；item、历史及所有写操作均拒绝',
                             'cdp_binding_mismatch': 'CDP 管理员账号绑定不匹配，已停止',
                             'cdp_identity_mismatch': 'CDP 登录态缺失或账号不符，请管理员人工核对；不会注入 Cookie',
                             'cdp_context_ambiguous': 'CDP 有多个或没有 context，无法确认账号，已停止',
@@ -161,6 +161,12 @@ class Provider:
 
     @staticmethod
     def demo(operation: str, payload: dict):
+        if operation == 'messages':
+            return {'items': [{'message_id': '987654', 'cid': '123', 'sender_uid': '22',
+                    'created_at': 1780000000000, 'direction': 'incoming', 'body': None,
+                    'body_status': 'unavailable', 'recipient_verified': False}],
+                    'source': 'demo', 'partial': True, 'completion': 'last_message_samples',
+                    'has_more': None, 'cursor_error': 'history_not_collected', 'reported_total': None, 'demo': True}
         if operation in {'orders', 'inventory'}:
             item = ({'order_id': '900001', 'item_id': '100001', 'status': 'DEMO',
                      'created_at': '演示时间', 'status_text': '演示订单，非真实交易'} if operation == 'orders' else

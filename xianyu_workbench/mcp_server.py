@@ -76,6 +76,20 @@ def chat_history(account_id: str, cid: str):
 
 
 @mcp.tool()
+def sync_message_sample(account_id: str) -> dict:
+    """按需只读会话末条元数据样本；不是历史/实时消息。正文不可用，不得据此回复或提案。"""
+    from urllib.parse import quote
+    return api('POST', f'/api/accounts/{quote(account_id, safe="")}/messages/sync')
+
+
+@mcp.tool()
+def cached_messages(account_id: str) -> dict:
+    """读取加密末条消息样本与最后采集状态；旧缓存不是本次成功，自己消息标 outgoing。"""
+    from urllib.parse import quote
+    return api('GET', f'/api/accounts/{quote(account_id, safe="")}/messages')
+
+
+@mcp.tool()
 def sync_order_sample(account_id: str) -> dict:
     """按需采集本人买到订单一页概要；部分样本，分页语义未知不代表完整，不执行交易。"""
     from urllib.parse import quote

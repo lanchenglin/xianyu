@@ -3,7 +3,7 @@ import hashlib
 import hmac
 import time
 
-from .operations import SOURCES
+from .operations import MESSAGE_SOURCE, SOURCES
 from .provider import Problem
 from .security import canonical
 
@@ -26,7 +26,7 @@ class OperationsCache:
 
     def sync(self, account_id, kind):
         account = self.service.provider.account(account_id)
-        source = 'demo' if account['mode'] == 'demo' else SOURCES[kind]
+        source = 'demo' if account['mode'] == 'demo' else (MESSAGE_SOURCE if kind == 'messages' else SOURCES[kind])
         try:
             result = self.service.provider.call(account_id, kind, {})
         except Problem as exc:
@@ -42,7 +42,8 @@ class OperationsCache:
         fetched = time.time()
         with self.db.connect() as conn:
             for item in result['items']:
-                identity = item['order_id' if kind == 'orders' else 'item_id']
+                identity = ([item['cid'], item['message_id']] if kind == 'messages'
+                            else item['order_id' if kind == 'orders' else 'item_id'])
                 key = hmac.new(self.service.s.vault_key.encode(),
                                canonical([account_id, kind, identity]).encode(), hashlib.sha256).hexdigest()
                 conn.execute('INSERT INTO operation_records(account_id,kind,record_key,payload,source,fetched_at) '
@@ -51,6 +52,6 @@ class OperationsCache:
                              (account_id, kind, key, self.vault.seal(item), source, fetched))
             conn.execute('INSERT INTO operation_syncs(account_id,kind,source,fetched_at,state,partial,'
                          'completion,cursor_error,item_count,has_more,reported_total) VALUES(?,?,?,?,?,1,?,?,?,?,?)',
-                         (account_id, kind, source, fetched, 'partial', 'single_page',
+                         (account_id, kind, source, fetched, 'partial', result['completion'],
                           result['cursor_error'], len(result['items']), result['has_more'], result['reported_total']))
         return {**result, 'source': source, 'fetched_at': fetched, 'demo': account['mode'] == 'demo'}

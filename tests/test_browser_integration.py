@@ -79,7 +79,7 @@ def test_capabilities_declare_cdp_scope_without_admin_config(tmp_path):
     settings = Settings(tmp_path, 'a'*40, 'b'*40, Fernet.generate_key().decode(), worker_enabled=False)
     with TestClient(create_app(settings), headers={'Authorization': 'Bearer ' + 'b'*40}) as client:
         value = client.get('/api/capabilities').json()
-    assert value['browser_policy']['cdp_operations'] == ['search', 'orders', 'inventory']
+    assert value['browser_policy']['cdp_operations'] == ['search', 'orders', 'inventory', 'messages']
     assert value['browser_policy']['cdp_writes'] is False
     assert 'endpoint' not in value['browser_policy']
 

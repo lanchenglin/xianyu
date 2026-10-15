@@ -67,7 +67,7 @@ def test_read_sync_auth_schema_capabilities_and_no_transactions(workbench):
     caps = client.get('/api/capabilities').json()
     assert caps['partial_orders'] and caps['partial_inventory']
     assert not caps['full_inventory_sync'] and not caps['payment']
-    assert set(caps['browser_policy']['cdp_operations']) == {'search', 'orders', 'inventory'}
+    assert set(caps['browser_policy']['cdp_operations']) == {'search', 'orders', 'inventory', 'messages'}
     schema = client.get('/api/schema').json()
     assert '/api/accounts/{account_id}/orders/sync' in schema['paths']
     for op in ['pay', 'refund', 'orders.write']:
@@ -106,7 +106,7 @@ def test_v5_migration_and_wrong_key_protect_private_cache(tmp_path):
         conn.execute("INSERT INTO accounts(id,label,mode,created) VALUES('old','preserve','demo',1)")
         conn.commit()
     db = DB(tmp_path, vault)
-    assert db.one('PRAGMA user_version')['user_version'] == 6
+    assert db.one('PRAGMA user_version')['user_version'] == len(MIGRATIONS)
     assert db.one('SELECT label FROM accounts')['label'] == 'preserve'
     assert len(list((tmp_path / 'backups').glob('before-v5-*.db'))) == 1
     db.execute('INSERT INTO operation_records VALUES(?,?,?,?,?,?)',

@@ -91,6 +91,92 @@ async def capture(page, kind: str, *, timeout=25) -> dict:
         await session.detach()
 
 
+async def capture_messages(page, uid: str, *, timeout=8) -> dict:
+    """Observe server frames for a bounded window; never issue an IM protocol command."""
+    from .operations import normalize_messages
+
+    session = await page.context.new_cdp_session(page)
+    sockets, frames = set(), asyncio.Queue(maxsize=64)
+    overflow = False
+
+    def created(event):
+        if event.get('url') in ('wss://wss-goofish.dingtalk.com/', 'wss://wss-goofish.dingtalk.com:443/'):
+            if len(sockets) < 8:
+                sockets.add(event.get('requestId'))
+
+    def received(event):
+        nonlocal overflow
+        if event.get('requestId') not in sockets:
+            return
+        response = event.get('response', {})
+        if response.get('opcode') != 1:
+            return
+        raw = response.get('payloadData')
+        if not isinstance(raw, str) or len(raw) > MAX_BODY:
+            overflow = True
+            return
+        try:
+            frames.put_nowait(raw)
+        except asyncio.QueueFull:
+            overflow = True
+
+    session.on('Network.webSocketCreated', created)
+    session.on('Network.webSocketFrameReceived', received)
+    result, items = None, {}
+    try:
+        await session.send('Network.enable', {'maxTotalBufferSize': MAX_BODY * 2,
+                                              'maxResourceBufferSize': MAX_BODY})
+        await page.goto('https://www.goofish.com/im', wait_until='domcontentloaded', timeout=25000)
+        deadline = asyncio.get_running_loop().time() + timeout
+        count = 0
+        while True:
+            if overflow or count > 256:
+                raise ValueError('response_limit')
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                break
+            try:
+                raw = await asyncio.wait_for(frames.get(), remaining)
+            except TimeoutError:
+                break
+            count += 1
+            try:
+                value = json.loads(raw)
+                stack, nodes = [(value, 0)], 0
+                while stack:
+                    node, depth = stack.pop()
+                    nodes += 1
+                    if depth > 20 or nodes > 20000:
+                        raise ValueError('response_invalid')
+                    if isinstance(node, dict):
+                        stack.extend((child, depth + 1) for child in node.values())
+                    elif isinstance(node, list):
+                        stack.extend((child, depth + 1) for child in node)
+            except (ValueError, RecursionError):
+                raise ValueError('response_invalid') from None
+            if not isinstance(value, dict) or not isinstance(value.get('body'), dict):
+                continue
+            if 'userConvs' not in value['body']:
+                continue
+            result = normalize_messages(value, uid)
+            for item in result['items']:
+                key = (item['cid'], item['message_id'])
+                if key in items and items[key] != item:
+                    raise ValueError('duplicate_conflict')
+                items[key] = item
+                if len(items) > 100:
+                    raise ValueError('response_limit')
+        if overflow:
+            raise ValueError('response_limit')
+        if result is None:
+            raise ValueError('response_timeout')
+        if page.url != 'https://www.goofish.com/im':
+            raise ValueError('page_redirected')
+        return {**result, 'items': list(items.values())}
+    finally:
+        await session.detach()
+
+
 def collect(kind: str) -> dict:
     if not os.environ.get('XY_BROWSER_CDP_ENDPOINT'):
         raise BrowserError('cdp_required')
@@ -98,7 +184,13 @@ def collect(kind: str) -> dict:
 
     async def run():
         async with goofish_page() as page:
-            return await capture(page, kind)
+            try:
+                if kind == 'messages':
+                    return await capture_messages(page, os.environ['XY_OPERATION_UID'])
+                return await capture(page, kind)
+            except ValueError as exc:
+                # Preserve collector codes before the browser boundary maps transport errors.
+                raise BrowserError(str(exc)) from None
     try:
         return asyncio.run(run())
     except ValueError as exc:

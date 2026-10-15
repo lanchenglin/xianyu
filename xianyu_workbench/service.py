@@ -128,6 +128,8 @@ class Service:
             payload = ACTION_MODELS[body.kind].model_validate(body.payload).model_dump(mode="json")
         except ValidationError:
             raise Problem("invalid_payload", "操作参数无效，请检查消息、金额、图片 ID 和删除确认文字", 422)
+        if body.kind == 'message.send' and account['mode'] == 'live' and self.s.browser_cdp_endpoint:
+            raise Problem('recipient_unverified', '末条消息样本尚不能证明会话收件人；禁止生成发送提案', 409)
         if body.kind == "item.publish":
             self.validate_assets(account["id"], payload["images"])
         signature = digest({"account_id": account["id"], "kind": body.kind, "payload": payload, "mode": account["mode"]})

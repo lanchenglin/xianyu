@@ -51,7 +51,14 @@ def test_stdio_discovery_call_and_local_notice_state(api_server, tmp_path):
         async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
             await session.initialize()
             tools = {t.name for t in (await session.list_tools()).tools}
-            assert {'notifications', 'notification_state', 'notification_deliveries'} <= tools
+            assert {'notifications', 'notification_state', 'notification_deliveries',
+                    'sync_message_sample', 'cached_messages'} <= tools
+            service.db.execute("INSERT INTO accounts(id,label,mode,created) VALUES('messages','fixture','demo',1)")
+            result = await session.call_tool('sync_message_sample', {'account_id': 'messages'})
+            assert not result.isError
+            result = await session.call_tool('cached_messages', {'account_id': 'messages'})
+            assert not result.isError
+            assert 'unavailable' in str(result) and 'last_message_samples' in str(result)
             assert not tools & {'approve', 'shell', 'read_cookie', 'configure_notifications', 'pay', 'refund'}
             result = await session.call_tool('notification_state', {'notification_id': 1, 'read': True, 'archived': True})
             assert not result.isError
