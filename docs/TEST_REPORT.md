@@ -4,7 +4,18 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
-## 2026-10-15 独立审查反馈修复（最新，仍待独立复审）
+## 2026-10-15 严格 JSON 常量审查修复（最新，仍待独立复审）
+
+用户报告精确快照 `24aa585e9cb18aafb26e3f7d0cfcc645b1c9c796` 独立审查 **FAIL**：`json.loads` 默认接受 `NaN`、`Infinity`、`-Infinity`，即使出现在未使用字段中，正文仍被标为 available。此前本地全绿不代表严格 JSON 契约成立，也不覆盖本次独立审查失败。
+
+- TDD：完整 `normalize_messages` 路径参数化三常量 × 顶层 ignored / 嵌套对象与数组，共 **6 failed**（实际返回 ordinary 而非 None）→最小修复后消息相关 **47 passed**。不是绕过未使用字段，而是在 JSON 解码时通过显式 `parse_constant` 全局拒绝三常量，沿原 ValueError 路径返回 body=None / unavailable。
+- 保留 duplicate key、字节/深度/节点/正文资源限制与 opaque ID 逻辑；pair 独立核验语义不变，正文不可用不伪造收件人核验失败。回归同时检查原始 message_id 与 peer_uid。
+- Python **3.12.14：350 passed, 1 warning, 71.98s**；Python **3.11.16：350 passed, 1 warning, 72.25s**，均无跳过。双环境 `pip check` / `ruff check .` 通过；唯一警告为既有 Starlette/httpx 弃用提示。
+- 全量启用独立 Chromium，含本地随机端口 CDP/WS、MCP stdio 与 UI 回归；另执行完整 `scripts/smoke_ui.py` 通过，`node --check xianyu_workbench/static/app.js` / `git diff --check` 通过。仅临时虚构数据/新 profile，不是平台或真实账号验收。
+- 环境：`TMPDIR=/home/lan/.hermes/cache/scratch`、`PLAYWRIGHT_BROWSERS_PATH=/home/lan/projects/xianyu/.test-browsers`、`PLAYWRIGHT_SKIP_BROWSER_GC=1`、`XY_TEST_CHROMIUM=/snap/bin/chromium`。证据 `red.log` / `green.log` / `full311.log` / `full312.log` / `ui.log` 在 `/home/lan/.hermes/cache/scratch/xianyu-strict-json-evidence/`，不入库。
+- 本次仅提交 `xianyu_workbench/message_text.py`、`tests/test_message_text.py` 和本报告，提交主题 `fix: reject nonstandard JSON constants in message text`。无能力扩展、无迁移，不改真实 .env/data/profile，不连接 8099/9235，不部署、不 push。独立复审尚未执行，不宣称审查 PASS 或可上线；既往 FAIL 历史保留如下。
+
+## 2026-10-15 独立审查反馈修复（历史）
 
 用户报告精确快照 da3e2ad 独立审查 FAIL，不可上线。问题一（数字 messageId）已于 433a1be 修复并保留原始 opaque ID 回归；该 ID/text 增量不因本地测试通过而视为独立审查通过。
 

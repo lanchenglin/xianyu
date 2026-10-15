@@ -12,6 +12,10 @@ def unique_object(pairs):
     return result
 
 
+def reject_constant(value):
+    raise ValueError('nonstandard JSON constant')
+
+
 def decode_text(content):
     try:
         if not isinstance(content, dict) or type(content.get('contentType')) is not int or content['contentType'] != 101:
@@ -25,7 +29,7 @@ def decode_text(content):
         raw = base64.b64decode(encoded, validate=True)
         if len(raw) > 18000:
             return None
-        value = json.loads(raw.decode('utf-8'), object_pairs_hook=unique_object)
+        value = json.loads(raw.decode('utf-8'), object_pairs_hook=unique_object, parse_constant=reject_constant)
         stack, count = [(value, 0)], 0
         while stack:
             node, depth = stack.pop()

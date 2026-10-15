@@ -64,6 +64,20 @@ def test_unknown_or_malformed_body_unavailable(damage):
     assert item['body'] is None and item['body_status'] == 'unavailable'
 
 
+@pytest.mark.parametrize('constant', ['NaN', 'Infinity', '-Infinity'])
+@pytest.mark.parametrize('extra', ['"ignored":%s', '"ignored":{"nested":[%s]}'])
+def test_nonstandard_json_constants_make_body_unavailable(constant, extra):
+    data = text_frame()
+    content = data['body']['userConvs'][0]['singleChatUserConversation']['lastMessage']['message']['content']
+    raw = '{"contentType":1,"text":{"text":"ordinary"},' + extra % constant + '}'
+    content['custom']['data'] = base64.b64encode(raw.encode()).decode()
+    item = parse(data)['items'][0]
+    assert item['body'] is None
+    assert item['body_status'] == 'unavailable'
+    assert item['recipient_verified'] and item['peer_uid'] == '22'
+    assert item['message_id'] == '1234567890123.Abc'
+
+
 @pytest.mark.parametrize('pair', [{}, {'pairFirst': '33', 'pairSecond': '22'},
     {'pairFirst': '11', 'pairSecond': '33'}, {'pairFirst': '11', 'pairSecond': '11'}])
 def test_unproven_pair_never_authenticates_recipient(pair):
