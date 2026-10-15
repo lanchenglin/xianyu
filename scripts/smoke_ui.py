@@ -128,8 +128,19 @@ def main():
                     Image.new("RGB", (100, 80), "white").save(picture)
                     page.locator("#listing-images").set_input_files(picture)
                     expect(page.locator("#image-previews img")).to_have_count(1)
+                    page.locator('#save-draft').click()
+                    expect(page.locator('#draft-list .record')).to_have_count(1)
+                    page.get_by_role('button', name='载入编辑区', exact=True).click()
+                    page.locator('#listing-form input[name="title"]').fill('UI 原位编辑商品')
+                    page.locator('#save-draft').click()
+                    expect(page.locator('#draft-list .record')).to_have_count(1)
+                    expect(page.locator('#draft-list')).to_contain_text('UI 原位编辑商品')
                     page.locator("#listing-form .primary").click()
                     expect(page.locator("#toast")).to_contain_text("待你审批")
+                    page.once('dialog', lambda dialog: dialog.accept())
+                    page.get_by_role('button', name='归档草稿', exact=True).click()
+                    expect(page.locator('#draft-list')).to_contain_text('已归档')
+                    expect(page.get_by_role('button', name='载入编辑区', exact=True)).to_have_count(0)
                     page.locator('[data-page="queue"]').click()
                     expect(page.locator("#queue-list .previews img")).to_have_count(1)
                     page.once("dialog", lambda dialog: dialog.accept("确认执行"))
@@ -139,7 +150,7 @@ def main():
                         if catalog:
                             break
                         time.sleep(0.2)
-                    assert catalog and catalog[0]["data"]["title"] == "UI 演示商品"
+                    assert catalog and catalog[0]["data"]["title"] == "UI 原位编辑商品"
                     page.set_viewport_size({"width": 390, "height": 844})
                     page.locator('[data-page="overview"]').click()
                     expect(page.locator("#page-overview")).to_be_visible()

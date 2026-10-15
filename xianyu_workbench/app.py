@@ -26,6 +26,8 @@ from .models import (
     ApprovalIn,
     AssistIn,
     CookiesIn,
+    DraftArchiveIn,
+    DraftEditIn,
     DraftIn,
     LLMConfigIn,
     MonitorIn,
@@ -121,7 +123,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"search": True, "item_detail": True, "existing_chats": True, "message_history": True,
                 "send_with_approval": True, "publish_with_approval": True, "delete_with_explicit_approval": True,
                 "live_publish": False, "publish_complete_snapshot": False,
-                "local_drafts": True, "search_monitors": True, "mcp": True,
+                "local_drafts": True, "local_draft_edit": True, "local_draft_archive": True,
+                "offline_backup_restore_cli": True, "search_monitors": True, "mcp": True,
                 "manual_reconciliation": True, "automatic_receipt_verification": False,
                 "reconciliation_policy": {"write_role": "admin", "agent_read": "outcome_time_only",
                                           "eligible_states": ["unconfirmed", "submitted", "blocked"],
@@ -287,7 +290,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         draft_id = uuid.uuid4().hex
         service.db.execute("INSERT INTO drafts(id,account_id,content,updated) VALUES(?,?,?,?)",
                            (draft_id, body.account_id, service.vault.seal(body.model_dump(mode="json")), time.time()))
-        return {"id": draft_id, "notice": "仅保存本地草稿，未上架"}
+        return {"id": draft_id, "revision": 1, "archived": False, "notice": "仅保存本地草稿，未上架"}
+
+    @app.put('/api/drafts/{draft_id}')
+    def edit_draft(draft_id: str, body: DraftEditIn, current=Depends(role)):
+        service.validate_assets(body.account_id, body.images)
+        with service.db.connect() as c:
+            changed = c.execute('UPDATE drafts SET content=?,revision=revision+1,updated=? '
+                                'WHERE id=? AND account_id=? AND revision=? AND archived=0',
+                                (service.vault.seal(body.model_dump(mode='json', exclude={'revision'})),
+                                 time.time(), draft_id, body.account_id, body.revision)).rowcount
+            if not changed:
+                raise Problem('draft_conflict', '草稿已变化、归档或账号不符，请重新载入', 409)
+        return {'id': draft_id, 'revision': body.revision + 1, 'archived': False}
+
+    @app.post('/api/drafts/{draft_id}/archive')
+    def archive_draft(draft_id: str, body: DraftArchiveIn, current=Depends(role)):
+        with service.db.connect() as c:
+            changed = c.execute('UPDATE drafts SET archived=1,revision=revision+1,updated=? '
+                                'WHERE id=? AND account_id=? AND revision=? AND archived=0',
+                                (time.time(), draft_id, body.account_id, body.revision)).rowcount
+            if not changed:
+                raise Problem('draft_conflict', '草稿已变化、归档或账号不符，请重新载入', 409)
+        return {'id': draft_id, 'revision': body.revision + 1, 'archived': True}
 
     @app.get("/api/drafts")
     def drafts(current=Depends(role)):

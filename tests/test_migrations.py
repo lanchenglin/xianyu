@@ -32,12 +32,24 @@ def test_v1_upgrades_to_reconciliation_table_without_changing_actions(tmp_path):
         before = conn.execute("SELECT * FROM actions").fetchall()
     DB(path.parent)
     with sqlite3.connect(path) as conn:
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == len(database.MIGRATIONS)
         assert conn.execute("SELECT * FROM actions").fetchall() == before
         assert conn.execute("SELECT * FROM reconciliations").fetchall() == []
     with sqlite3.connect(next((path.parent / "backups").glob("*.db"))) as conn:
         assert conn.execute("PRAGMA user_version").fetchone()[0] == 1
         assert conn.execute("SELECT * FROM actions").fetchall() == before
+
+
+def test_v2_draft_upgrade_preserves_content_and_defaults(tmp_path):
+    path = legacy_database(tmp_path / 'data')
+    with sqlite3.connect(path) as conn:
+        database.reconciliation_schema(conn)
+        conn.execute('PRAGMA user_version=2')
+        conn.execute("INSERT INTO drafts VALUES('d','old','encrypted-content',123)")
+    db = DB(path.parent)
+    row = db.one("SELECT * FROM drafts WHERE id='d'")
+    assert row == {'id': 'd', 'account_id': 'old', 'content': 'encrypted-content',
+                   'updated': 123, 'revision': 1, 'archived': 0}
 
 
 def test_future_version_rejected_without_modification(tmp_path):

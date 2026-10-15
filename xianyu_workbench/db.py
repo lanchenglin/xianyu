@@ -75,7 +75,12 @@ def reconciliation_schema(conn):
     )""")
 
 
-MIGRATIONS = (initial_schema, reconciliation_schema)
+def draft_revision_schema(conn):
+    conn.execute('ALTER TABLE drafts ADD COLUMN revision INTEGER NOT NULL DEFAULT 1')
+    conn.execute('ALTER TABLE drafts ADD COLUMN archived INTEGER NOT NULL DEFAULT 0')
+
+
+MIGRATIONS = (initial_schema, reconciliation_schema, draft_revision_schema)
 
 
 class DB:

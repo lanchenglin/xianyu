@@ -97,6 +97,15 @@ class DraftIn(Model):
     can_self_pickup: bool = True
 
 
+class DraftEditIn(DraftIn):
+    revision: int = Field(ge=1)
+
+
+class DraftArchiveIn(Model):
+    account_id: str
+    revision: int = Field(ge=1)
+
+
 class MonitorIn(SearchIn):
     interval_s: int = Field(default=900, ge=300, le=86400)
 
