@@ -4,7 +4,18 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
-## 2026-10-15 浏览器适配增量（最新）
+## 2026-10-15 独立审查修复（最新）
+
+核对 `19ffe7e` 后确认两条源码问题仍存在，实现修复提交 `4732162`：CDP provider 曾解密并写入导入 Cookie；operation timeout 曾直接强杀，绕过任务页 finally。
+
+- TDD：Cookie 禁止解密、取消通知/有界等待、不把超时当成功、协程清理共 4 项先 RED 后 GREEN；固定上游 Session 回读保护另行 RED/GREEN。
+- 真实 Chromium 超时反证：在独立随机端口/假 uid fixture 中临时移除 cancellation_scope，5 秒 operation timeout 后页数为 2（预期 1），测试确实失败；恢复后通过。测试走真实 provider、bridge.main、适配与 Playwright，只将平台业务替换成本地 HTML + 等待，未访问闲鱼。超时后任务页消失，原页标题、浏览器进程和 Cookie 保留。没有连接 9235。
+- Linux/Windows 强杀兜底分支有模拟测试：先等 8 秒协作清理，再 SIGKILL 进程组 / taskkill，回收最多 5 秒；超时始终 timeout/uncertain，不重放。Windows 未本机实测，不宣称实测。
+- 项目 `.venv` Python 3.12：**207 passed, 1 warning in 32.46s**；独立 Python 3.11：**207 passed, 1 warning in 33.95s**。两者 pip check、ruff 均通过，含 12 项固定上游契约及真实隔离浏览器测试。此前其他审查环境缺包不代表本项目 venv 缺包。
+- 隔离演示 UI smoke、node --check、git diff --check 通过。仅既有 Starlette 弃用警告。
+- 未读真实 .env/data/profile、不重启现有服务、不连接真实 CDP、不 push。强杀/断线/事件循环阻塞仍不能保证关闭自建页，兜底边界见 [BROWSER.md](BROWSER.md)。未扩展 CDP 功能，仍仅 search。
+
+## 2026-10-15 浏览器适配增量（历史）
 
 基线 HEAD `1fc1a7d`，实现提交 `07c930b`，分支 `feat/local-next`。未读取实际 .env/data/profile，未连接现有 8099 或 9235，未重启服务。仅源码、假数据临时目录和随机端口独立进程。未 push/merge。
 
