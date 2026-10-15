@@ -2,6 +2,10 @@
 
 这是账号主人自用的闲鱼工作台，不是无条件全自动交易系统。当前真实能力和未实现事项以 README / `/api/capabilities` 为准，禁止把占位接口或演示数据写成已完成。
 
+## 浏览器适配增量（2026-10-15）
+
+项目管理 Chrome/Chromium 发现及 bridge 页面适配，不改固定上游/site-packages。管理员可选固定账号 loopback CDP，**仅 search**，其余操作 fail closed；不得注入 Cookie、关闭借用浏览器/context、导航已有页或失败后换浏览器。所有权/重定向/隔离设计及配置见 [BROWSER.md](docs/BROWSER.md)。不要将真实 Chromium 本地 HTML 验收写成真实平台或 Chrome 验收；上线和真实只读验证交 Hermes。
+
 ## 先读开发交接
 
 续开发先阅读 [docs/DEVELOPMENT_HANDOFF.md](docs/DEVELOPMENT_HANDOFF.md)，里面有 P0/P1/P2 待办、代码入口、验收条件与本地命令。部署见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)，客户端接入见 [docs/MCP.md](docs/MCP.md)。

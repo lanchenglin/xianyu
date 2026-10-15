@@ -34,7 +34,9 @@
 
 在同一工作台虚拟环境安装 `pip install -e '.[live,mcp]'`。固定 Git 提交来自 pyproject.toml，不需要再次安装一个版本不明的 `goofish-cli` PyPI 包。
 
-安装系统 Chrome 和 Node.js，并确保 Node 可在当前服务进程的 PATH 中运行。系统 Chrome 不是 Playwright 自带的测试 Chromium，两者用途不同。运行 `xianyu-workbench doctor` 只检查依赖，不访问闲鱼。Windows 上 Chrome 可能不在 PATH，doctor 也会明确提醒人工确认。
+安装系统 Google Chrome 或 Chromium 和 Node.js，并确保 Node 可在服务 PATH 中运行。项目管理的适配在 bridge 子进程安装，不修改固定上游。auto 启动前优先 Chrome、否则 Chromium；显式选择/路径失效不回退，运行失败不启动另一个浏览器。doctor 检查 PATH 及标准安装目录，仅读取已导出的环境配置，不读取 .env、不连接 CDP 或登录态。
+
+浏览器管理员变量：`XY_BROWSER=auto|chrome|chromium`、`XY_BROWSER_EXECUTABLE`（可选绝对路径）；可选 `XY_BROWSER_CDP_ENDPOINT` + `XY_BROWSER_CDP_ACCOUNT_ID` + `XY_BROWSER_CDP_UID` 三项绑定唯一账号。CDP 仅 loopback 且仅 search，其余操作拒绝，不注入 Cookie、不关闭用户浏览器。完整配置示例、隔离/清理、WSLg 和 snap 限制、CDP 端口安全见 [浏览器适配约束](BROWSER.md)。这些变量不是 Agent/MCP 参数。
 
 首次登录由账号主人自己在浏览器完成。导入对象应是本人闲鱼登录态的 JSON：可以是 name/value 数组，也可以是键值对象；需要 unb 与 _m_h5_tk。数组包含域名时只接受 goofish.com / taobao.com 的相关域。不要使用来历不明的登录态导出扩展。工作台不会自动扫描本机浏览器。
 
@@ -44,7 +46,7 @@
 
 ## 4. WSL / Linux 图形环境
 
-工作台本身可在 Ubuntu/WSL 无桌面运行演示与管理页面，但上游真实搜索默认需要可见 Chrome。WSL 需有可用 WSLg/显示环境，并在 WSL 内安装 Linux Chrome 和 Node。Linux 无桌面服务器没有显示环境时，本版不承诺真实搜索、详情可运行。
+工作台本身可在 Ubuntu/WSL 无桌面运行演示与管理页面，但真实搜索默认需要可见 Chrome/Chromium。WSL 需有可用 WSLg/显示环境，并在 WSL 内安装 Linux Chrome 或 Chromium 和 Node。Linux 无桌面服务器没有显示环境时，本版不承诺真实搜索、详情可运行。
 
 不建议第一步就自行拼 Windows 浏览器 + WSL 子进程 + 远程网关。先在一个系统中跑通，再考虑增加独立浏览器服务适配。代码没有偷偷回退到另一个账号、另一个浏览器或另一个网关。
 

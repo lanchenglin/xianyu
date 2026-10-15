@@ -78,7 +78,7 @@ python3.12 -m venv .venv
 
 ## 接入真实闲鱼
 
-先阅读 [部署说明](docs/DEPLOYMENT.md) 和 [安全边界](docs/SECURITY.md)。真实搜索依赖**系统 Chrome 和可显示窗口的会话**，真实接口中的签名逻辑需要 Node.js。
+先阅读 [部署说明](docs/DEPLOYMENT.md) 和 [安全边界](docs/SECURITY.md)。真实搜索支持**系统 Google Chrome 或 Chromium 和可显示窗口的会话**，由项目 bridge 适配自动发现或管理员显式指定；可选固定账号 loopback CDP 仅支持 search（item/消息/写操作拒绝），详见 [浏览器设计与配置](docs/BROWSER.md)。真实接口中的签名逻辑需要 Node.js。
 
 ```powershell
 # Windows：与工作台使用同一个虚拟环境
@@ -86,7 +86,7 @@ python3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m xianyu_workbench.cli doctor
 ```
 
-由你安装系统 Chrome、Node.js，完成闲鱼网页登录，导出自己账号的 Cookie JSON，再通过工作台“账号管理”导入。工作台不会扫描你所有浏览器的 Cookie，不会自动换号或尝试绕过验证码。
+由你安装系统 Google Chrome 或 Chromium、Node.js，完成闲鱼网页登录，导出自己账号的 Cookie JSON，再通过工作台“账号管理”导入。工作台不会扫描你所有浏览器的 Cookie，不会自动换号或尝试绕过验证码。
 
 在 `.env` 中将 `XY_LIVE_ENABLED=false` 改为 `true`，重启服务，新增真实账号并导入。首先只验证一次搜索与商品详情，再验证已有会话，最后通过人工审批测试**单条**写操作。遇到验证或风控会暂停账号，需本人处理后恢复。
 

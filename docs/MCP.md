@@ -4,6 +4,10 @@
 
 接入前先按部署说明启动工作台；本地完整开发推荐 Python 3.12。以下示例是当前已提供的通用配置，不代表你的具体客户端或三个远程 Gateway 已联调通过。首次建会话、实时自动客服等待办见交接清单，MCP 不会额外实现后端没有的能力。
 
+## 浏览器部署边界
+
+Chrome/Chromium 发现和 CDP 属于工作台管理员部署配置，不是 MCP 工具参数。Agent 不能指定浏览器路径、profile、CDP 端点或任意 URL。可选 CDP 只读 search 绑定唯一工作台账号 id 与平台 uid；item、消息和所有写操作 fail closed。不能因失败要求换账号/换浏览器重试。Hermes 上线及真实只读验证请先独立审查 [BROWSER.md](BROWSER.md)，不要将离线 doctor/模拟测试当作真实登录验收。
+
 ## 先区分两个服务
 
 `xianyu-workbench serve` 是有状态的 Web/API 服务，负责账号、队列、审批。`xianyu-mcp` 是无审批能力的 stdio 代理，负责把 Agent 工具调用转给固定工作台 API。

@@ -4,6 +4,34 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
+## 2026-10-15 浏览器适配增量（最新）
+
+基线 HEAD `1fc1a7d`，实现提交 `07c930b`，分支 `feat/local-next`。未读取实际 .env/data/profile，未连接现有 8099 或 9235，未重启服务。仅源码、假数据临时目录和随机端口独立进程。未 push/merge。
+
+- 分组 RED/GREEN：发现 6 项、CDP 初始 22 项、页面适配初始 9 项、配置/provider/doctor 初始 7 项均先观察缺功能失败再实现；后续 WebSocket 重定向、可操作错误提示、no_defaults 均记录 RED 后 GREEN。实测生命周期与契约增补是集成验收，不冒称每条均先 RED。
+- 最终 Python 3.12：199 passed, 1 warning in 29.21s；Python 3.11：199 passed, 1 warning in 29.52s。两者均启用 `XY_TEST_CHROMIUM=/snap/bin/chromium`，各 pip check / ruff 通过；包含 11 项固定上游契约及 2 项系统 Chromium 隔离实测。固定 commit 不变、未改 site-packages。
+- doctor 在显式干净环境中实际输出 discovered=[chromium]、selected=chromium、mode=isolated、reason=null、connection_checked=false；没有发现 Chrome，不声称 Chrome 实测。
+- 系统 Chromium 真实隔离测试：全新临时 HOME/profile，headless about:blank/本地 HTML；随机 CDP 端口，假 uid=12345；任务页正常/异常退出后关闭，Cookie 未被适配替换，原页标题/数量及浏览器进程保持，两次 Playwright 断开后再次连接确认存活。snap HOME 隔离在本机 scratch 路径实际成功。
+- 演示 UI smoke 通过：登录、账号、搜索、监控、消息草稿/审批、人工核对、证据 XSS 与 Agent 隔离、图片上传、演示发布、移动端、退出。服务与数据库均临时，未使用现有服务。
+- node --check、git diff --check 通过。测试有 1 条既有 Starlette httpx 弃用警告。
+- **未实测 Google Chrome、Windows GUI、WSLg 用户窗口、真实闲鱼、真实登录 CDP、真实客户端与新远端 CI**。Windows 安装路径和 Chrome 选择仅模拟单测。CDP 实现只支持 search，item/消息/所有写操作明确拒绝。
+
+复现（Python 3.11 用独立 venv 路径替换）：
+
+```bash
+export TMPDIR=/home/lan/.hermes/cache/scratch
+export PLAYWRIGHT_BROWSERS_PATH="$PWD/.test-browsers"
+export PLAYWRIGHT_SKIP_BROWSER_GC=1
+export XY_TEST_CHROMIUM=/snap/bin/chromium
+.venv/bin/python -m pip check
+.venv/bin/python -m ruff check .
+.venv/bin/python -m pytest -q
+.venv/bin/python scripts/smoke_ui.py
+node --check xianyu_workbench/static/app.js
+```
+
+路径为本次测试环境示例，不是生产默认。设计、配置与剩余限制见 [BROWSER.md](BROWSER.md)，由 Hermes 独立审查后负责真实只读验证。
+
 ## 已执行
 
 开发测试环境：Linux，独立 Python 3.12.14 虚拟环境。真实闲鱼登录态未提供，测试没有登录闲鱼，没有实际发送消息、发布商品、删除商品或进行交易。
