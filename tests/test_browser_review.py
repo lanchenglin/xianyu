@@ -83,6 +83,11 @@ def test_unresponsive_bridge_force_kill_is_bounded(tmp_path, monkeypatch, platfo
     process.communicate.side_effect = communicate
     # Replace only the provider's os reference; never change global os.name/Path semantics.
     from types import SimpleNamespace
+    # Simulate the selected platform's signal API independently of the host.
+    # NT deliberately has no SIGKILL; POSIX supplies a token checked below.
+    simulated_sigkill = object()
+    monkeypatch.setattr(module, 'signal', SimpleNamespace(
+        **({'SIGKILL': simulated_sigkill} if platform == 'posix' else {})))
     proxy = SimpleNamespace(**vars(module.os))
     proxy.name = platform
     proxy.killpg = MagicMock()
@@ -99,7 +104,7 @@ def test_unresponsive_bridge_force_kill_is_bounded(tmp_path, monkeypatch, platfo
         taskkill.assert_called_once_with(['taskkill', '/PID', '123456', '/T', '/F'], capture_output=True, timeout=10)
         proxy.killpg.assert_not_called()
     else:
-        proxy.killpg.assert_called_once_with(123456, module.signal.SIGKILL)
+        proxy.killpg.assert_called_once_with(123456, simulated_sigkill)
         taskkill.assert_not_called()
 
 

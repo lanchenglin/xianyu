@@ -14,6 +14,7 @@ def runtime(tmp_path, monkeypatch):
     monkeypatch.setenv('GOOFISH_COOKIES_PATH', str(cookie_file))
     monkeypatch.setenv('XY_OPERATION_UID', '12345')
     monkeypatch.setenv('HOME', str(tmp_path))
+    monkeypatch.setenv('USERPROFILE', str(tmp_path))
     context = MagicMock(add_cookies=AsyncMock(), close=AsyncMock(), new_page=AsyncMock(return_value=object()))
     chromium = MagicMock(launch_persistent_context=AsyncMock(return_value=context))
     @asynccontextmanager
@@ -24,7 +25,15 @@ def runtime(tmp_path, monkeypatch):
     return a, chromium, context
 
 
-def test_launch_parameters_and_cleanup(tmp_path, monkeypatch):
+@pytest.mark.parametrize('home_source', ['HOME', 'USERPROFILE'])
+def test_launch_parameters_and_cleanup(tmp_path, monkeypatch, home_source):
+    import os
+    from pathlib import Path
+
+    # Model Windows home selection without touching the host's actual profile.
+    monkeypatch.setenv('USERPROFILE', str(tmp_path / 'unisolated-home'))
+    if home_source == 'USERPROFILE':
+        monkeypatch.setattr(Path, 'home', classmethod(lambda cls: cls(os.environ['USERPROFILE'])))
     a, chromium, context = runtime(tmp_path, monkeypatch)
     async def run():
         async with a.goofish_page(headless=True, viewport=(800, 600)):
@@ -35,8 +44,7 @@ def test_launch_parameters_and_cleanup(tmp_path, monkeypatch):
     assert 'channel' not in kw
     assert kw['headless'] is True
     assert kw['viewport'] == {'width': 800, 'height': 600}
-    assert str(tmp_path) in kw['user_data_dir']
-    from pathlib import Path
+    assert Path(kw['user_data_dir']).parent == tmp_path / '.goofish-cli' / 'profiles'
     assert not Path(kw['user_data_dir']).exists()
     context.add_cookies.assert_awaited_once()
     context.close.assert_awaited_once()

@@ -15,6 +15,8 @@ def test_provider_explicit_environment(tmp_path, monkeypatch):
                         browser='chromium', browser_executable='/test/chromium')
     vault = Vault(settings.vault_key)
     provider = Provider(settings, MagicMock(), vault)
+    monkeypatch.setenv('HOME', str(tmp_path / 'host-home'))
+    monkeypatch.setenv('USERPROFILE', str(tmp_path / 'host-profile'))
     monkeypatch.setenv('PRIVATE_SECRET', 'never-forward')
     monkeypatch.setenv('WAYLAND_DISPLAY', 'wayland-test')
     process = MagicMock(returncode=0)
@@ -23,6 +25,9 @@ def test_provider_explicit_environment(tmp_path, monkeypatch):
     monkeypatch.setattr('xianyu_workbench.provider.subprocess.Popen', popen)
     provider._live({'id': 'fake-account', 'uid': '12345', 'secret': vault.seal({'unb': '12345'})}, 'search', {}, write=False)
     env = popen.call_args.kwargs['env']
+    expected_home = str(tmp_path / 'runtime' / 'fake-account')
+    assert env['HOME'] == expected_home
+    assert env['USERPROFILE'] == expected_home
     assert env['XY_BROWSER'] == 'chromium'
     assert env['XY_BROWSER_EXECUTABLE'] == '/test/chromium'
     assert env['XY_OPERATION_UID'] == '12345'

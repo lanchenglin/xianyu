@@ -4,7 +4,24 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
-## 2026-10-15 独立审查修复（最新）
+## 2026-10-15 Windows 浏览器测试夹具修复（最新）
+
+基线 `161968e` 已由 Hermes push。[CI run 38708963492](https://github.com/lanchenglin/xianyu/actions/runs/38708963492) 的 Windows Python 3.11/3.12 失败，其余 5 作业通过（用户提供的运行状态）。已核对本地 `scratch/xianyu-browser-ci/311.log`：3.11 为 2 failed、191 passed、3 skipped；两条失败如下，保留失败记录，不宣称原 CI 全绿。
+
+1. 浏览器测试 runtime 只设置 HOME，Windows Path.home 使用 USERPROFILE，测试 profile 落到 runneradmin 目录。核对生产 provider：已经同时将 HOME/USERPROFILE 设置为账号独立 runtime，不存在同一遗漏。本次仅修测试夹具同时设置两者；增加 HOME/USERPROFILE 选择的参数化回归和精确 profile 父目录断言，并在 provider 测试中注入不同的假宿主 home，确认两个子进程变量都被覆盖。
+2. Windows 上模拟 POSIX 的测试仅替换 os.name，仍使用宿主 signal，缺少 SIGKILL。生产 Windows 走 taskkill，不访问 SIGKILL。本次使用测试局部 signal 模拟：POSIX 提供独立 SIGKILL 标记并核对 killpg 的精确参数；NT 刻意没有 SIGKILL，验证 taskkill 且不调用 killpg。不修改全局 signal，不删除/跳过 Windows 测试。
+
+RED/GREEN：在 Linux 临时目录模拟 USERPROFILE home 选择和缺少 SIGKILL，修复前实际得到 2 failed、2 passed，分别为错误 profile 父目录与 AttributeError；最小修复后目标测试通过。未访问真实 profile，失败复现中的所有路径也在临时目录内。
+
+最终本地验证（均设置 TMPDIR、独立 Playwright 缓存和 XY_TEST_CHROMIUM=/snap/bin/chromium）：
+
+- Python 3.12：**208 passed, 1 warning in 34.69s**；pip check / ruff 通过。
+- Python 3.11：**208 passed, 1 warning in 35.67s**；pip check / ruff 通过。
+- 包含固定上游契约、真实隔离 Chromium/about:blank、本地 HTML、随机端口 CDP 和正常 operation timeout 页清理；仅既有 Starlette 弃用警告。
+- 本次仅修改测试与本文档，生产浏览器/取消/凭据行为不变。新 Windows CI 尚未运行，必须由 Hermes 验收后 push 验证，不以 Linux 模拟冒充 Windows 实测。
+- 未读真实 .env/data/profile、未连接 9235、未访问或重启 8099。用户报告 Hermes 已启用绑定账号 CDP search 并真实成功、worker=false；本轮未独立重复该线上验证，保持线上不动。
+
+## 2026-10-15 独立审查修复（历史）
 
 核对 `19ffe7e` 后确认两条源码问题仍存在，实现修复提交 `4732162`：CDP provider 曾解密并写入导入 Cookie；operation timeout 曾直接强杀，绕过任务页 finally。
 
