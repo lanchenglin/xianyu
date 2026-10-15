@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from .browser_config import BrowserError, discover
+from .cancellation import cancellation_scope
 from .cdp import endpoint, guarded_websocket, task_page, websocket_url
 
 
@@ -41,7 +42,7 @@ async def goofish_page(*, headless=None, viewport=(1440, 900), cookies=None):
         validate_operation('search')
         try:
             ws = websocket_url(address)
-            async with guarded_websocket(ws) as guarded, playwright() as pw:
+            async with cancellation_scope(), guarded_websocket(ws) as guarded, playwright() as pw:
                 browser = await pw.chromium.connect_over_cdp(guarded, timeout=10000, no_defaults=True)
                 # Stopping Playwright disconnects its transport. Never Browser.close/context.close.
                 async with task_page(browser, os.environ['XY_OPERATION_UID']) as page:
@@ -84,3 +85,10 @@ def install(operation: str):
     validate_operation(operation)
     from goofish_cli.core import browser
     browser.goofish_page = goofish_page
+    if os.environ.get('XY_BROWSER_CDP_ENDPOINT'):
+        from goofish_cli.core.session import Session
+
+        def forbidden_session(*args, **kwargs):
+            raise BrowserError('cdp_session_forbidden')
+
+        Session.load = forbidden_session

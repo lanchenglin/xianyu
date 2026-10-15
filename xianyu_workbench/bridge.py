@@ -5,6 +5,7 @@ No arbitrary module/function names, shell commands, or transaction operations ar
 """
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import importlib
 import io
@@ -56,6 +57,8 @@ def main() -> None:
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             data = dispatch(request["operation"], request["payload"])
         output = {"ok": True, "data": data}
+    except asyncio.CancelledError:
+        output = {'ok': False, 'code': 'timeout'}
     except Exception as exc:
         text = str(exc).lower()
         from .browser_config import BrowserError

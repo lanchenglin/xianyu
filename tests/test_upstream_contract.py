@@ -57,6 +57,26 @@ def test_project_adapter_installed_before_search_import(tmp_path):
     assert result is True
 
 
+def test_cdp_install_blocks_session_cookie_fallback(tmp_path):
+    result = isolated("""
+        import os, json
+        os.environ.update(XY_BROWSER_CDP_ENDPOINT='http://127.0.0.1:9999',
+                          XY_BROWSER_CDP_ACCOUNT_ID='fake', XY_OPERATION_ACCOUNT_ID='fake',
+                          XY_BROWSER_CDP_UID='12345', XY_OPERATION_UID='12345')
+        from goofish_cli.core.session import Session
+        def forbidden_fixture(*args, **kwargs):
+            raise RuntimeError('unsafe fallback reached')
+        Session.load = forbidden_fixture
+        from xianyu_workbench.browser_adapter import install
+        install('search')
+        try:
+            Session.load()
+        except Exception as exc:
+            print(json.dumps(str(exc)))
+    """, tmp_path)
+    assert result == 'cdp_session_forbidden'
+
+
 def test_installed_commit_is_pinned():
     direct = distribution("goofish-cli").read_text("direct_url.json")
     assert direct, "Install via the pinned .[live] extra, not an unrelated PyPI package"

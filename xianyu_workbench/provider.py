@@ -8,6 +8,8 @@ import signal
 import subprocess
 import sys
 import time
+import uuid
+from contextlib import suppress
 from pathlib import Path
 
 from filelock import FileLock, Timeout
@@ -50,7 +52,7 @@ class Provider:
                     raise Problem("live_disabled", "真实执行未启用；由部署者设置 XY_LIVE_ENABLED=true", 409)
                 if operation == "item.publish":
                     raise Problem("publish_snapshot_unavailable", "固定上游无法冻结类目和发布地点；真实发布暂不开放", 409)
-                if not account["secret"]:
+                if not self.s.browser_cdp_endpoint and not account["secret"]:
                     raise Problem("auth_required", "请管理员导入此账号的登录态", 409)
                 now = time.time()
                 interval = self.s.write_interval if write else self.s.read_interval
@@ -76,24 +78,28 @@ class Provider:
         home.chmod(0o700)
         private.chmod(0o700)
         cookie_file = private / "cookies.json"
-        cookies = self.vault.open(account["secret"])
-        if cookies.get("unb") != account["uid"]:
-            raise Problem("account_mismatch", "登录态所属账号不一致，拒绝执行", 409)
-        fd = os.open(cookie_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(canonical(cookies))
+        if not self.s.browser_cdp_endpoint:
+            cookies = self.vault.open(account["secret"])
+            if cookies.get("unb") != account["uid"]:
+                raise Problem("account_mismatch", "登录态所属账号不一致，拒绝执行", 409)
+            fd = os.open(cookie_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(canonical(cookies))
+        cancel_file = private / ('cancel-' + uuid.uuid4().hex)
         safe_keys = {"PATH", "SYSTEMROOT", "WINDIR", "COMSPEC", "TEMP", "TMP", "DISPLAY",
                      "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR", "XAUTHORITY", "LANG", "LC_ALL",
                      "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMW6432", "LOCALAPPDATA", "TMPDIR"}
         env = {k: v for k, v in os.environ.items() if k.upper() in safe_keys}
         env.update({"HOME": str(home), "USERPROFILE": str(home), "PYTHONUTF8": "1",
-                    "GOOFISH_COOKIES_PATH": str(cookie_file), "GOOFISH_NO_CHROME_BOOTSTRAP": "1",
+                    'XY_BRIDGE_CANCEL_FILE': str(cancel_file), "GOOFISH_NO_CHROME_BOOTSTRAP": "1",
                     "GOOFISH_HEADLESS": "0",
                     'XY_BROWSER': self.s.browser, 'XY_BROWSER_EXECUTABLE': self.s.browser_executable,
                     'XY_BROWSER_CDP_ENDPOINT': self.s.browser_cdp_endpoint,
                     'XY_BROWSER_CDP_ACCOUNT_ID': self.s.browser_cdp_account_id,
                     'XY_BROWSER_CDP_UID': self.s.browser_cdp_uid,
                     'XY_OPERATION_ACCOUNT_ID': account['id'], 'XY_OPERATION_UID': account['uid']})
+        if not self.s.browser_cdp_endpoint:
+            env['GOOFISH_COOKIES_PATH'] = str(cookie_file)
         command = [self.s.upstream_python or sys.executable, "-u", "-m", "xianyu_workbench.bridge"]
         try:
             process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -103,11 +109,21 @@ class Provider:
                 stdout, _ = process.communicate(canonical({"operation": operation, "payload": payload}),
                                                 timeout=self.s.operation_timeout)
             except subprocess.TimeoutExpired:
-                if os.name == "nt":
-                    subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], capture_output=True, timeout=10)
-                else:
-                    os.killpg(process.pid, signal.SIGKILL)
-                process.communicate()
+                # Cross-platform cooperative cancellation; do not kill the CDP transport
+                # before the bridge has unwound its owned task page.
+                with suppress(OSError):
+                    cancel_file.touch(mode=0o600)
+                try:
+                    process.communicate(timeout=8)
+                except subprocess.TimeoutExpired:
+                    if os.name == "nt":
+                        with suppress(OSError, subprocess.TimeoutExpired):
+                            subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], capture_output=True, timeout=10)
+                    else:
+                        with suppress(ProcessLookupError):
+                            os.killpg(process.pid, signal.SIGKILL)
+                    with suppress(subprocess.TimeoutExpired):
+                        process.communicate(timeout=5)
                 raise Problem("uncertain" if write else "timeout", "执行超时；写操作结果不确定，禁止自动重试，请先在闲鱼核对", 504)
             if len(stdout) > 5_000_000:
                 raise Problem("uncertain" if write else "upstream_error", "上游返回过大，结果需人工核实", 502)
@@ -134,7 +150,9 @@ class Provider:
             return redact(output["data"])
         finally:
             # Never retain readable login cookies at rest. Crash residue is removed at startup.
-            cookie_file.unlink(missing_ok=True)
+            cancel_file.unlink(missing_ok=True)
+            if not self.s.browser_cdp_endpoint:
+                cookie_file.unlink(missing_ok=True)
             shutil.rmtree(private / "profiles", ignore_errors=True)
 
     @staticmethod

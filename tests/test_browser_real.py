@@ -78,6 +78,60 @@ def test_real_cdp_disconnect_keeps_browser_and_existing_tab(tmp_path, monkeypatc
                         raise RuntimeError('local failure')
                 assert len(context.pages) == 1
                 assert not original.is_closed()
+                # Exercise the real provider timeout and bridge cancellation, not a
+                # manually raised exception. Only replace marketplace work with local HTML.
+                from unittest.mock import MagicMock
+
+                from cryptography.fernet import Fernet
+
+                from xianyu_workbench.config import Settings
+                from xianyu_workbench.provider import Problem, Provider
+                settings = Settings(tmp_path / 'workbench', 'a'*40, 'b'*40, Fernet.generate_key().decode(),
+                                    operation_timeout=5, browser_cdp_endpoint=address,
+                                    browser_cdp_account_id='fake-account', browser_cdp_uid='12345')
+                vault = MagicMock()
+                vault.open.side_effect = AssertionError('CDP must not decrypt')
+                provider = Provider(settings, MagicMock(), vault)
+                real_popen = subprocess.Popen
+                script = '''
+import asyncio
+from xianyu_workbench import bridge
+from xianyu_workbench.browser_adapter import goofish_page, install
+async def local():
+    async with goofish_page() as page:
+        await page.set_content('<title>timeout task</title>')
+        await asyncio.sleep(60)
+def dispatch(operation, payload):
+    install(operation)
+    return asyncio.run(local())
+bridge.dispatch = dispatch
+bridge.main()
+'''
+                def spawn(command, **kwargs):
+                    assert 'GOOFISH_COOKIES_PATH' not in kwargs['env']
+                    return real_popen([command[0], '-u', '-c', script], **kwargs)
+                with monkeypatch.context() as patch:
+                    patch.setattr('xianyu_workbench.provider.subprocess.Popen', spawn)
+                    call = asyncio.create_task(asyncio.to_thread(provider._live,
+                        {'id': 'fake-account', 'uid': '12345', 'secret': 'must-not-read'}, 'search', {}, write=False))
+                    saw_task = False
+                    for _ in range(100):
+                        if len(context.pages) == 2:
+                            saw_task = True
+                            break
+                        if call.done():
+                            break
+                        await asyncio.sleep(.05)
+                    with pytest.raises(Problem) as error:
+                        await call
+                    assert error.value.code == 'timeout'
+                    assert saw_task, 'test must observe the owned page before timeout'
+                assert len(context.pages) == 1
+                assert not original.is_closed()
+                assert await original.title() == 'owned by fixture'
+                assert await context.cookies() == before
+                assert process.poll() is None
+                vault.open.assert_not_called()
             # Both Playwright connections stopped; process and original target still alive.
             assert process.poll() is None
             async with guarded_websocket(ws) as guarded, async_playwright() as pw:
