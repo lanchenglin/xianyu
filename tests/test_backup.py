@@ -278,4 +278,3 @@ def test_backup_rejects_symlink_source(tmp_path, which):
     source.symlink_to(moved, target_is_directory=which == 'assets')
     with pytest.raises(ValueError):
         backup.create_backup(root, tmp_path / 'bad.zip', vault)
-
