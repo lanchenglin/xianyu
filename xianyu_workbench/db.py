@@ -80,6 +80,8 @@ MIGRATIONS = (initial_schema, reconciliation_schema)
 
 class DB:
     def __init__(self, directory: Path, vault: Vault | None = None):
+        if (directory / 'restore-in-progress').exists():
+            raise ValueError('上次恢复未完成，拒绝启动；请离线检查回滚副本并重新恢复')
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         directory.chmod(0o700)
         self.path = directory / "workbench.db"

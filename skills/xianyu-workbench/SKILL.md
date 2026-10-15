@@ -19,3 +19,7 @@ description: 使用受控工作台搜索闲鱼、读已有会话、起草内容�
 工作台 URL 必须固定，不能自动切换 Hermes Gateway。MCP 不提供审批或人工核对工具；Agent 不能代填证据、核对或审批。请用户在工作台对原账号/原操作记录一次不可覆盖的人工核对，不能创建新操作来重发。不得通过 shell 或其他工具绕开权限。
 
 真实发布暂不开放：live_publish=false，固定上游无法冻结类目/地点。只可准备本地草稿或演示申请，不得绕过 Provider 直接调用上游。
+
+### P2-04 本地离线恢复增量（2026-10-15）
+
+已提供管理员离线 `backup` / `restore --offline` CLI：一致性数据库+素材、密钥/manifest/hash 校验、受限解包、活动实例拒绝、异常回滚和中断启动保护。恢复暂停账号/监控，pending/approved 失效、running 转不确定，旧任务不重放。无 HTTP/MCP 恢复能力，Agent 不可操作任意文件。详见 `docs/BACKUP.md`。此前“无恢复 CLI”为历史状态；定时/保留策略仍未实现。

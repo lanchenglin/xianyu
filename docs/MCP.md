@@ -103,3 +103,7 @@ MCP 上传图片没有通用“读取服务器本地任意路径”能力。先�
 如果 Hermes 同时拥有工作台所在用户的 shell、读取 `.env` 或 Docker 控制权，它仍可能绕过工具层角色。需要强隔离时，把 Agent 放在另一用户/容器/机器，只通过专用令牌访问 API，不挂载 data、`.env` 或 Docker socket。本项目不宣称同一系统管理员权限下存在安全隔离。
 
 真实发布暂不开放：live_publish=false，固定上游无法冻结类目/地点。只可准备本地草稿或演示申请，不得绕过 Provider 直接调用上游。
+
+### P2-04 本地离线恢复增量（2026-10-15）
+
+已提供管理员离线 `backup` / `restore --offline` CLI：一致性数据库+素材、密钥/manifest/hash 校验、受限解包、活动实例拒绝、异常回滚和中断启动保护。恢复暂停账号/监控，pending/approved 失效、running 转不确定，旧任务不重放。无 HTTP/MCP 恢复能力，Agent 不可操作任意文件。详见 [备份说明](BACKUP.md)。此前“无恢复 CLI”为历史状态；定时/保留策略仍未实现。

@@ -190,3 +190,9 @@ UI 不确定状态由脚本仅在临时演示数据库注入；没有开启 live
 固定上游五项核实见 [静态可行性报告](UPSTREAM_FEASIBILITY.md)。真实发布因不能冻结类目/地点暂时禁用（live_publish=false）；本地草稿、演示发布和审批申请保留。禁止用默认值变化后的上游发布代替完整审批。
 
 A 安全保护 TDD：a-red.log 实际失败（此前进入真实处理），a-green.log 全量 108 passed / 1 既有弃用警告；证据目录 `/home/lan/.hermes/cache/scratch/xianyu-next2-evidence`。
+
+### P2-04 本地离线恢复增量（2026-10-15）
+
+已提供管理员离线 `backup` / `restore --offline` CLI：一致性数据库+素材、密钥/manifest/hash 校验、受限解包、活动实例拒绝、异常回滚和中断启动保护。恢复暂停账号/监控，pending/approved 失效、running 转不确定，旧任务不重放。无 HTTP/MCP 恢复能力，Agent 不可操作任意文件。详见 [备份说明](BACKUP.md)。此前“无恢复 CLI”为历史状态；定时/保留策略仍未实现。
+
+B 阶段：15 项备份恢复测试通过；全量 123 passed / 1 既有弃用警告。实际临时数据备份→破坏副本→恢复、错误 key 拒绝、重新打开数据库并运行队列不重放、活动锁/路径穿越/符号链接/大小限制/哈希/未来 schema/回滚注入均覆盖。b1～b6-red.log 记录逐行为失败，b-green.log 为全量回归。

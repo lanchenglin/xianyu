@@ -36,6 +36,13 @@ def main():
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", default=8099, type=int)
     sub.add_parser("doctor", help="检查依赖，不访问闲鱼或登录态")
+    backup = sub.add_parser('backup', help='离线私有备份数据库和素材，不导出配置密钥')
+    backup.add_argument('--data-dir', type=Path, required=True)
+    backup.add_argument('--output', type=Path, required=True)
+    restore = sub.add_parser('restore', help='离线恢复并使历史待执行申请失效')
+    restore.add_argument('--data-dir', type=Path, required=True)
+    restore.add_argument('--archive', type=Path, required=True)
+    restore.add_argument('--offline', action='store_true', required=True)
     args = parser.parse_args()
     if args.command == "init":
         try:
@@ -43,6 +50,21 @@ def main():
         except FileExistsError:
             parser.exit(1, ".env 已存在，未覆盖。请先备份原配置；切勿丢失加密密钥。\n")
         print(f"配置已写入 {path}；请自行查看管理员令牌登录，Agent 只使用 XY_AGENT_TOKEN。")
+    elif args.command in ('backup', 'restore'):
+        from .backup import create_backup, restore_backup
+        from .security import Vault
+        try:
+            # Deliberately do not load .env or require API tokens for offline administration.
+            vault = Vault(os.environ.get('XY_VAULT_KEY', ''))
+            directory = args.data_dir.absolute()
+            if args.command == 'backup':
+                create_backup(directory, args.output.absolute(), vault)
+                print('私有备份完成；包含隐私，禁止提交 Git。密钥须独立保管。')
+            else:
+                rollback = restore_backup(directory, args.archive.absolute(), vault)
+                print(f'恢复完成；账号/监控暂停，旧待执行申请失效。回滚副本：{rollback}')
+        except Exception:
+            parser.exit(1, '备份/恢复失败：请检查离线状态、密钥、路径、备份完整性与权限；未输出敏感异常。\n')
     elif args.command == "serve":
         import uvicorn
 
