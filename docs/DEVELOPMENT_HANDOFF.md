@@ -4,7 +4,11 @@
 
 本文件交给在本地继续开发的人、Codex、Claude Code 或 Hermes。**下列任务是待办与设计建议，不代表功能已经实现。** 原始交接只更新文档；2026-10-14 续开发在 `feat/local-next` 完成 P0-ENV 本地修复、P2-04 迁移必要基础及 P1-02 人工核对，以下各节标注当前实现与未验收边界，不新增平台动作。
 
-## 2026-10-16 分页时序修复（最新）
+## 2026-10-16 分页滚动几何修复（最新）
+
+父助手报告 27298e5 部署后仍一页/time_limit，确认真实 root 的 clientHeight 比 innerHeight 少 15px，旧算法停在假底端。隔离 HTML 横向溢出/15px 滚动条已在双 Python 复现首屏不翻页 RED；最小修复统一 scrollingElement 的高度稳定检测及 scrollHeight/clientHeight/scrollTop 底端计算，不增加 selector，保留 750ms/loading/资源 deadline/身份清理。父助手一次滚到真实底端后 2.5 秒仍未增卡，因此几何缺陷不宣称唯一根因；真实 API 仍待父助手复测。本轮不连接 8099/9235，不读取真实 .env/data/profile，不 push/部署。测试证据见 TEST_REPORT。
+
+## 2026-10-16 分页时序修复
 
 父助手报告部署 1ef2c3f 的 inventory/orders API 都止于一页 time_limit，直接页面延后滚动却可继续。隔离 Chromium 延迟 DOM/hook fixture 先复现 RED 后修复：750ms tick、loading 暂停、高度稳定后滚动、已到底时分 tick 回退再到底；总 deadline 与全部范围/预算/归属边界不变。只修页面时序，无 schema/能力扩展；不触碰运行的 8099/9235 或真实数据。真实工作台复测由父助手完成，详情及证据见 TEST_REPORT / OPERATION_PAGINATION。
 

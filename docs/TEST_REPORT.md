@@ -4,6 +4,16 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
+## 2026-10-16 横向滚动条 / scroll root 几何修复
+
+基线 `27298e5`。父助手报告 API inventory20/orders10、均页1/time_limit；相同 guarded_websocket/no_defaults/task_page/capture 路径下 body/root.scrollHeight=1241、innerHeight=931、root.clientHeight=916。旧算法目标310，但真实最大scrollY=325，导致回退246/到底310循环。父助手一次 scrollTo(body.scrollHeight) 达到325后2.5秒仍20卡，故本轮仅修确证几何缺陷，**不宣称唯一根因或真实 API 已恢复**。
+
+- 严格 TDD：先在隔离 Chromium HTML 加 standards mode、200vw 横向溢出和15px可见滚动条，保留延迟渲染/hook；fixture 按真实 scroll root 到底才翻页。几何断言通过后 inventory/orders 均在 `pages_read 1 != 2` 失败。Python 3.12 RED：2 failed / 1 passed / 2 deselected（23.28s；额外通过的是原无横向溢出 late-hook 用例）；Python 3.11 RED：2 failed / 3 deselected（18.78s）。日志 `/tmp/xianyu-geometry-red{311,312}.log`。
+- 最小生产修复：高度稳定检测使用 document.scrollingElement.scrollHeight；bottom 使用同一 root 的 scrollHeight - clientHeight，当前位置使用 scrollTop。不增加 selector，不改750ms节流、loading/pending暂停、64px跨tick回退、资源/总deadline、身份核验或清理；无能力/schema扩展。
+- 双版本相关31项通过：3.11 87.01s，3.12 82.55s。包含新增横向滚动条、延迟hook、五页读取、loading/失败释放、资源限制、身份/原页保留/cleanup。首次并行运行3.12为30 passed / 1 failed：既有 CDP 集成 provider→bridge 的3秒超时；不改timeout或生产逻辑，原样复跑31 passed。保留失败日志 `/tmp/xianyu-geometry-related312.log`，成功日志 `related312-rerun.log` / `related311.log`（同前缀）。
+- 最终串行全量启用隔离 Chromium，无 skip：Python **3.12.14：399 passed, 1 warning / 142.30s**；Python **3.11.16：399 passed, 1 warning / 141.54s**。各1条既有 Starlette/httpx 弃用警告。日志 `/tmp/xianyu-geometry-full{311,312}.log`。双环境 pip check / ruff、git diff --check 均通过。本轮未另跑独立 smoke_ui.py（全量包含浏览器/UI回归）。
+- 本轮使用专用下载版 Chromium、新临时 profile、拦截 HTML/虚构数据，不读取真实 .env/data/profile，不连接8099/9235；scratch未跟踪内容不动，不push、不部署。真实API仍由父助手再测。
+
 ## 2026-10-16 页面响应 / DOM / hook 时序修复
 
 基线 `1ef2c3f`。父助手报告部署服务 8099/worker=false，inventory API 20 条/1 页、orders 10 条/1 页，均 time_limit；直接页面延后滚动能读 personal 40 条/2 页/bool false、bought 50 条/5 页/仍 true。本轮不连接该服务/CDP、不部署，不将父助手直接页面证据写成工作台 API 通过。

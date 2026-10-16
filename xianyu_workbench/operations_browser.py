@@ -95,13 +95,14 @@ async def capture(page, kind: str, *, timeout=25, max_bytes=5_000_000) -> dict:
                     break
                 if observed.empty() and loop.time() >= next_tick:
                     if result is not None and own and not loading and not pending:
-                        current_height = await page.evaluate('document.body.scrollHeight')
+                        current_height = await page.evaluate('document.scrollingElement.scrollHeight')
                         if current_height == height:
                             # Re-arm a bottom scroll missed before the page installed its hook.
                             # One movement per tick; no synthetic events, clicks or requests.
                             await page.evaluate('''() => {
-                                const bottom = Math.max(0, document.body.scrollHeight - innerHeight);
-                                window.scrollTo(0, scrollY >= bottom - 2 ? Math.max(0, bottom - 64) : bottom);
+                                const root = document.scrollingElement;
+                                const bottom = Math.max(0, root.scrollHeight - root.clientHeight);
+                                window.scrollTo(0, root.scrollTop >= bottom - 2 ? Math.max(0, bottom - 64) : bottom);
                             }''')
                         height = current_height
                     else:

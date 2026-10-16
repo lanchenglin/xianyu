@@ -15,7 +15,7 @@ def test_stalled_page_ticks_are_bounded_and_loading_suppresses_scroll(loading):
             self.moves = []
 
         async def evaluate(self, script):
-            if script != 'document.body.scrollHeight':
+            if script != 'document.scrollingElement.scrollHeight':
                 self.moves.append(asyncio.get_running_loop().time())
                 if loading:
                     self.session.handlers['Network.requestWillBeSent']({'requestId': 'waiting', 'request': {

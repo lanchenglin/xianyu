@@ -10,16 +10,20 @@ from test_operations import inventory
 pytestmark = pytest.mark.skipif(not os.getenv('XY_TEST_CHROMIUM'), reason='isolated Chromium opt-in')
 
 
-@pytest.mark.parametrize('kind,late_hook,pages', [('inventory', False, 2), ('orders', True, 2),
-                                                ('orders', False, 5)])
-def test_delayed_layout_and_hook_continue_observation(kind, late_hook, pages):
+@pytest.mark.parametrize('kind,late_hook,pages,horizontal', [
+    ('inventory', False, 2, False), ('orders', True, 2, False), ('orders', False, 5, False),
+    ('inventory', False, 2, True), ('orders', True, 2, True),
+])
+def test_delayed_layout_and_hook_continue_observation(kind, late_hook, pages, horizontal):
     from playwright.async_api import async_playwright
 
     from xianyu_workbench.operations_browser import capture
 
     async def check():
         async with async_playwright() as pw:
-            browser = await pw.chromium.launch(executable_path=os.environ['XY_TEST_CHROMIUM'], headless=True)
+            browser = await pw.chromium.launch(
+                executable_path=os.environ['XY_TEST_CHROMIUM'], headless=True,
+                ignore_default_args=['--hide-scrollbars'] if horizontal else [])
             try:
                 context = await browser.new_context()
                 requests = []
@@ -27,7 +31,9 @@ def test_delayed_layout_and_hook_continue_observation(kind, late_hook, pages):
                 endpoint = f'https://h5api.m.goofish.com/h5/{api}/1.0/'
                 # Response precedes rendering/hook registration by 2.7s. The late-hook
                 # variant has already reached bottom: another scrollTo(bottom) is a no-op.
-                html = '''<body style="margin:0;height:HEIGHTpx"><script>
+                html = '''<!doctype html><style>
+                SCROLLBARS
+                </style><body style="margin:0;height:HEIGHTpx;WIDTH"><script>
                 window.scrolls = [];
                 window.addEventListener('scroll', () => scrolls.push(performance.now()));
                 const endpoint = ENDPOINT;
@@ -44,10 +50,13 @@ def test_delayed_layout_and_hook_continue_observation(kind, late_hook, pages):
                 load();
                 fetch('https://h5api.m.goofish.com/h5/mtop.idle.web.user.page.head/1.0/');
                 setTimeout(() => window.addEventListener('scroll', () => {
-                    if (!loading && innerHeight + scrollY >= document.body.scrollHeight - 2) load();
+                    const root = document.scrollingElement;
+                    if (!loading && root.scrollTop + root.clientHeight >= root.scrollHeight - 2) load();
                 }), HOOK);
                 </script></body>'''.replace('HEIGHT', '4000' if late_hook else '100').replace(
-                    'ENDPOINT', json.dumps(endpoint)).replace('HOOK', '2700' if late_hook else '0')
+                    'ENDPOINT', json.dumps(endpoint)).replace('HOOK', '2700' if late_hook else '0').replace(
+                    'WIDTH', 'width:200vw' if horizontal else '').replace(
+                    'SCROLLBARS', '::-webkit-scrollbar { width:15px; height:15px; }' if horizontal else '')
 
                 async def route(route):
                     url = route.request.url
@@ -77,7 +86,13 @@ def test_delayed_layout_and_hook_continue_observation(kind, late_hook, pages):
                 await context.route('**/*', route)
                 page = await context.new_page()
                 result = await capture(page, kind, timeout=18 if pages == 5 else 8)
-                assert result['pages_read'] == pages
+                if horizontal:
+                    geometry = await page.evaluate('''() => ({
+                        scrollbar: innerHeight - document.scrollingElement.clientHeight,
+                        overflow: document.scrollingElement.scrollWidth > document.scrollingElement.clientWidth
+                    })''')
+                    assert geometry == {'scrollbar': 15, 'overflow': True}
+                assert result['pages_read'] == pages, result
                 assert pages <= len(requests) <= pages + (pages == 5)
                 assert len(result['items']) == pages
                 assert result['partial'] is (kind == 'orders')

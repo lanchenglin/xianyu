@@ -23,7 +23,7 @@ class ScrollingPage(Page):
         self.scrolls = 0
 
     async def evaluate(self, script):
-        if script == 'document.body.scrollHeight':
+        if script == 'document.scrollingElement.scrollHeight':
             return 4000
         assert 'window.scrollTo' in script
         self.scrolls += 1
