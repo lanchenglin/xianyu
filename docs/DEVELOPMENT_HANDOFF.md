@@ -4,7 +4,11 @@
 
 本文件交给在本地继续开发的人、Codex、Claude Code 或 Hermes。**下列任务是待办与设计建议，不代表功能已经实现。** 原始交接只更新文档；2026-10-14 续开发在 `feat/local-next` 完成 P0-ENV 本地修复、P2-04 迁移必要基础及 P1-02 人工核对，以下各节标注当前实现与未验收边界，不新增平台动作。
 
-## 2026-10-16 有界分页（最新）
+## 2026-10-16 分页时序修复（最新）
+
+父助手报告部署 1ef2c3f 的 inventory/orders API 都止于一页 time_limit，直接页面延后滚动却可继续。隔离 Chromium 延迟 DOM/hook fixture 先复现 RED 后修复：750ms tick、loading 暂停、高度稳定后滚动、已到底时分 tick 回退再到底；总 deadline 与全部范围/预算/归属边界不变。只修页面时序，无 schema/能力扩展；不触碰运行的 8099/9235 或真实数据。真实工作台复测由父助手完成，详情及证据见 TEST_REPORT / OPERATION_PAGINATION。
+
+## 2026-10-16 有界分页
 
 买到订单固定页面滚动读取、稳定 ID 去重、重复游标/页停止、字节/页数/条数/时长限制及 v10 进度迁移已接入；订单末页未证仍 partial。本人发布列表也已接同一多页路径，必须 self=true，bool false 才完成该范围；卖出订单、下架列表、全状态库存未实现。API/UI/MCP 回读边界与父助手必须补证字段见 [OPERATION_PAGINATION](OPERATION_PAGINATION.md)。无真实平台验收，不 push/部署；此前“仅单页”是历史状态，不代表完整订单已实现。
 

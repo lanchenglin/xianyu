@@ -2,7 +2,7 @@
 
 ## 买到订单
 
-固定自建 `/bought` 页观察 allowlisted MTOP，不回放请求、不猜页码/POST 参数、不点击订单动作。首屏后仅执行固定 `window.scrollTo(0, document.body.scrollHeight)`。这是固定上游 `core/browser.py:148–153` 已使用的通用页面滚动方式，不代表真实 bought 页滚动容器已验收；没有新响应时返回 partial/time_limit。UID 前后核验、原页不导航、借用 context 不关闭保持不变。
+固定自建 `/bought` 页观察 allowlisted MTOP，不回放请求、不猜页码/POST 参数、不点击订单动作。首屏响应不代表 DOM/hook 就绪：以 750ms 最小 tick 等待队列和页面，allowlisted 请求 loading/pending 时不滚动；body 高度跨 tick 稳定才使用 window 滚动。已到底时先回退 64px，下一 tick 再到底，以恢复在加载 hook 注册前错过的滚动事件；每 tick 最多一次移动，不发 synthetic 事件、不主动请求。高度变化或新数据后重新等待稳定。总 25 秒 deadline 不重置，没有新响应仍 partial/time_limit；高度稳定不等于末页。UID 前后核验、原页不导航、借用 context 不关闭保持不变。
 
 结构来源：父助手 `/home/lan/.hermes/cache/scratch/xianyu-readonly/order-pagination-observation.json` 和 ORDER-PAGINATION-NOTE.md。仅严格字符串 `"true"` 已证。`"false"`、空值、布尔值等仍未知，不能推断订单末页。因此 order_sync 完整能力仍 false。本次范围仅 bought_orders，**卖出订单不支持**。
 
@@ -12,7 +12,7 @@
 
 固定自建 `/personal` 页使用同一有界滚动路径，必须观察 `head.baseInfo.self is True`，仍保留前后 UID 核验。仅 bool `nextPage is False` 且分页结构有效才返回 `partial=false/completion=complete/stop_reason=end_reached`，范围严格是 `self_published`。空末页可完整；未知类型、无新响应、重复页、限制停止均 partial。短页和 totalCount 不作为末页依据；同一 ID 内容冲突失败而不覆盖。
 
-**未实现范围单列：卖出订单、下架列表、全状态库存。** full_inventory_sync 与 order_sync 仍 false；能力接口分别声明 scopes/unsupported_scopes、orders_terminal_verified=false、platform_verified=false。实际 personal 页面是否用 window 滚动触发下一页仍待父助手验收；本地两页 HTML/响应已覆盖滚动路径，不以假数据冒充真实验证。
+**未实现范围单列：卖出订单、下架列表、全状态库存。** full_inventory_sync 与 order_sync 仍 false；能力接口分别声明 scopes/unsupported_scopes、orders_terminal_verified=false、platform_verified=false。父助手报告直接页面等待 2.5–3 秒后 window 滚动已读 personal 两页 40 条/bool false、bought 五页 50 条/仍 true；但部署基线 1ef2c3f 的 API 均仅一页/time_limit，因此工作台真实分页仍未验收。本地延迟 HTML/真实 CDP 回归覆盖两页与五页路径，不以假数据冒充真实验证；修复后真实 API 由父助手再测。
 
 ## 持久与接口
 

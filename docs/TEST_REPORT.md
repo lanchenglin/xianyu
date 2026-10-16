@@ -4,6 +4,18 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
+## 2026-10-16 页面响应 / DOM / hook 时序修复
+
+基线 `1ef2c3f`。父助手报告部署服务 8099/worker=false，inventory API 20 条/1 页、orders 10 条/1 页，均 time_limit；直接页面延后滚动能读 personal 40 条/2 页/bool false、bought 50 条/5 页/仍 true。本轮不连接该服务/CDP、不部署，不将父助手直接页面证据写成工作台 API 通过。
+
+- 根因：响应完成后立即只滚一次，再无限等队列至总 deadline；DOM 高度或 scroll hook 尚未就绪时错过触发，已到底时重复 scrollTo 同位置也没有事件。
+- TDD RED：新增隔离 Chromium + 真实 CDP Network 的 HTML fixture，响应后延迟 2.7 秒渲染/注册 hook，两例均 `pages_read: 1 != 2`，**2 failed / 18.91s**，日志 `/tmp/xianyu-timing-red.log`。随后最小修复后相关 23 项通过。额外五页/true、loading 暂停、失败加载释放、无 self 不滚动、无响应节流测试通过（后补边界为回归，不冒称全部先 RED）。
+- 改动仅页面时序：750ms tick、allowlisted loading/pending 时不滚动、高度跨 tick 稳定后滚动，已到底以分 tick 回退 64px/到底恢复事件。队列优先处理，总 deadline 不重置；原页数/items/bytes、self/UID、重复页/游标和未知订单末页边界不变。不请求重放、不点写操作、不新增 scope/schema/capability。
+- Python **3.12.14：396 passed, 1 warning, 133.80s**；Python **3.11.16：396 passed, 1 warning, 136.15s**。均全量启用隔离 Chromium，无 skip；含原 CDP 所有权/UID/cleanup、相关 browser、MCP 与 UI 回归。各 1 条既有 Starlette/httpx 弃用警告。
+- 双环境 pip check / ruff 通过；node --check / git diff --check 通过。双环境独立 `scripts/smoke_ui.py` 通过。日志 `/tmp/xianyu-timing-full{311,312}.log`、`/tmp/xianyu-timing-ui{311,312}.log`；额外最终等待/预算回归 17 passed。
+- 浏览器为专用 `/home/lan/.hermes/cache/scratch/xianyu-completion-evidence/browsers/chromium-1248/chrome-linux64/chrome`；`PLAYWRIGHT_BROWSERS_PATH` 指向项目 `.test-browsers`，`PLAYWRIGHT_SKIP_BROWSER_GC=1`，清除 PYTHONPATH。测试仅新临时 profile/演示数据/拦截页面，不读取真实 .env/data/profile，不连 8099/9235，不重启服务；scratch 未跟踪内容保持不动。
+- **本地代码回归完成，真实 API 修复效果待父助手验收。** 建议同账号再测 inventory/sync 的 count/pages_read/stop_reason/partial（40/2/end_reached/false 仅在相同页面数据且 self/末页条件满足时），orders 继续保持 partial，不预设终页 false。无 push/部署。
+
 ## 2026-10-16 本人发布列表有界分页
 
 订单提交 8401eea 后继续商品纵向，不 push/部署。商品多页 stable ID 去重、bool false 范围末页、空末页、unknown partial、self 缺失/不符拒绝、完整读取不清历史、item/page/byte/time 限制均覆盖。安全复核发现累计字节上限可能遮蔽后续 head.self 响应，双版本 RED 重现后修复为失败，不返回可采纳部分结果。

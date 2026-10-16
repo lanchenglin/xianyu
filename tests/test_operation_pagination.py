@@ -23,7 +23,9 @@ class ScrollingPage(Page):
         self.scrolls = 0
 
     async def evaluate(self, script):
-        assert script == 'window.scrollTo(0, document.body.scrollHeight)'
+        if script == 'document.body.scrollHeight':
+            return 4000
+        assert 'window.scrollTo' in script
         self.scrolls += 1
         value = next(self.following, None)
         if value is not None:
@@ -37,7 +39,7 @@ class ScrollingPage(Page):
 def test_capture_scrolls_and_preserves_partial_on_stall():
     from xianyu_workbench.operations_browser import capture
     page = ScrollingPage([order_page('9002', 'two')])
-    result = asyncio.run(capture(page, 'orders', timeout=.05))
+    result = asyncio.run(capture(page, 'orders', timeout=2))
     assert [item['order_id'] for item in result['items']] == ['9001', '9002']
     assert result['pages_read'] == 2 and result['partial']
     assert result['stop_reason'] == 'time_limit'
@@ -47,7 +49,7 @@ def test_capture_scrolls_and_preserves_partial_on_stall():
 def test_capture_stops_repeated_response():
     from xianyu_workbench.operations_browser import capture
     page = ScrollingPage([order_page()])
-    result = asyncio.run(capture(page, 'orders', timeout=.1))
+    result = asyncio.run(capture(page, 'orders', timeout=2))
     assert result['stop_reason'] == 'repeated_cursor'
     assert page.scrolls == 1
 
@@ -145,7 +147,7 @@ def test_capture_total_response_budget():
     from xianyu_workbench.operations_browser import capture
     pages = [order_page(str(9002 + n), str(n + 2)) for n in range(20)]
     page = ScrollingPage(pages)
-    result = asyncio.run(capture(page, 'orders', timeout=1, max_bytes=1000))
+    result = asyncio.run(capture(page, 'orders', timeout=4, max_bytes=1000))
     assert result['stop_reason'] == 'byte_limit'
     assert result['pages_read'] == 2
     assert result['partial']
