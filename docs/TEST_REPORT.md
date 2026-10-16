@@ -4,7 +4,18 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
-## 2026-10-16 安全单条消息与中断后最终回归
+## 2026-10-16 P0 FAIL 修复验收（禁止上线，待独立复审）
+
+独立审查确认 `75b6f98` **FAIL / P0**：仅 live+CDP 走新绑定，旧无CDP live 可绕过 XY_MESSAGE_SEND_ENABLED=false，worker 可领取历史approved并 chats→message.send。上一节/下方历史441项通过不证明该安全边界正确，保留原记录而非抹去失败。修复沿用部署基线 b8ea112，不改分页、不扩展发送机制。
+
+- TDD 参数矩阵首次 **9 failed / 8 passed**：无CDP开关false/true、历史approved worker、直接Provider（含提供正确binding但无队列授权）复现；`scratch/xianyu-send-evidence/p0-red.txt` 保留。补齐指定execute缺绑定的CDP对照后共19项。相关回归 **112 passed**，ruff通过。
+- 初次全量未启用浏览器为 **3 failed / 440 passed / 15 skipped**：旧live测试期待默认关闭时仍可提案、模式改变时期待worker领取，以及transport测试直接调用Provider。均保留测试并按新语义更新：提案立即拒绝、worker不领取且指定execute仍验证模式、transport经真实统一队列执行，不删测试隐藏语义变更。
+- 修复：所有live消息提案和execute统一开关/强绑定检查，无CDP拒绝；worker排除action或account任一live的消息，历史approved不回放。Provider在锁内独立检查绑定和一次性指定动作作用域、running记录、批准/时效、账号/模式/kind、完整payload/digest；直接call不授权。旧无CDP真实直发关闭，演示自动流程保留。接管revision/限速/unknown不重发回归保留。
+- 最终 **Python 3.12.14：460 passed，186.41s；Python 3.11.16：460 passed，191.68s**；均无skip，各1条既有Starlette/httpx弃用警告。含opt-in隔离Chromium、真实MCP stdio、单条UI及虚构transport。日志在仓库外 `/home/lan/.hermes/cache/scratch/xianyu-p0-final{312,311}.log`。
+- 两版本独立 `scripts/smoke_ui.py` 均通过；日志同目录 `xianyu-p0-ui{312,311}.log`。两版本pip check/ruff、JS node --check及git diff --check通过。
+- 命令统一 `env -u PYTHONPATH TMPDIR=/home/lan/.hermes/cache/scratch`；解释器/专用chromium-1248及独立缓存设置沿用下方记录。未读真实.env/data/profile、未连8099/9235、未真实发送、不push不部署。修复只完成本地验收，仍须独立复审；ACK accepted判定/真实Hermes/商品/FAQ/首次联系未交付。
+
+## 2026-10-16 安全单条消息与中断后最终回归（P0 修复前历史）
 
 基线 b8ea112，既有分页不改。新增默认关闭管理员开关、独立同 UID Cookie/WS 来源、CDP 当次 peer/CID 复核、冻结凭据/接管 revision/正文 digest、管理员指定单条领取与只读事后核对。无 schema 迁移。完整限制见 [MESSAGE_SEND](MESSAGE_SEND.md)。用户提供的基线真实 inventory2页40条 self_published complete、orders13页130条 time_limit partial 与 CI38857758684 五绿，不冒充本批验收。
 

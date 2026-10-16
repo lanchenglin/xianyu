@@ -12,9 +12,20 @@ from xianyu_workbench.provider import Problem
 
 def test_provider_uses_explicit_independent_cookie_source(workbench, monkeypatch):
     client, service = workbench
-    aid = account(client, 'live', '{"unb":"11","_m_h5_tk":"fictional_123456"}')
-    service.provider.s = replace(service.s, live_enabled=True, message_send_enabled=True,
-        browser_cdp_endpoint='http://127.0.0.1:19876', browser_cdp_account_id=aid, browser_cdp_uid='11')
+    from tests.test_message_send_binding import propose, setup_live
+    from tests.test_workbench import approve
+    original_live = service.provider._live
+    aid, _, _ = setup_live(client, service, monkeypatch)
+    action = propose(client, aid).json()
+    approve(client, action)
+    read_fixture = service.provider._live
+
+    def transport(account, operation, payload, *, write):
+        if write:
+            return original_live(account, operation, payload, write=write)
+        return read_fixture(account, operation, payload, write=write)
+
+    monkeypatch.setattr(service.provider, '_live', transport)
     seen = []
 
     def popen(command, **kwargs):
@@ -29,8 +40,9 @@ def test_provider_uses_explicit_independent_cookie_source(workbench, monkeypatch
         return process
 
     monkeypatch.setattr('xianyu_workbench.provider.subprocess.Popen', popen)
-    result = service.provider.call(aid, 'message.send', {'cid': '123', 'toid': '22', 'text': '您好'}, write=True)
-    assert result['mid'] == 'local-only'
+    result = service.execute_one(action['id'], action['digest'])
+    assert result['state'] == 'unconfirmed'
+    assert result['result']['mid'] == 'local-only'
     assert len(seen) == 1 and not seen[0].exists()
     assert not (seen[0].parent / 'im_token.json').exists()
     with pytest.raises(Problem):

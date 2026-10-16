@@ -7,9 +7,10 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 import uuid
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 from pathlib import Path
 
 from filelock import FileLock, Timeout
@@ -30,6 +31,32 @@ class Provider:
     def __init__(self, settings: Settings, db: DB, vault: Vault):
         self.s, self.db, self.vault = settings, db, vault
         self.lock_path = str(settings.data_dir / "operations.lock")
+        self._selected = threading.local()
+
+    @contextmanager
+    def selected_message(self, action_id: str):
+        """One-use internal dispatch scope, entered only after queue preflight."""
+        self._selected.action_id = action_id
+        try:
+            yield
+        finally:
+            self._selected.action_id = None
+
+    def _authorize_message(self, account, payload, expected_binding):
+        from .message_send import binding
+        from .security import digest
+        current = binding(self, account)
+        if expected_binding != current:
+            raise Problem('send_binding_changed', '审批绑定缺失或已改变，禁止发送', 409)
+        action_id = getattr(self._selected, 'action_id', None)
+        self._selected.action_id = None
+        row = self.db.one('SELECT * FROM actions WHERE id=?', (action_id,)) if action_id else None
+        if not row or row['state'] != 'running' or row['kind'] != 'message.send' or row['account_id'] != account['id'] or row['mode'] != 'live' or not row['approved_at'] or row['expires'] <= time.time():
+            raise Problem('send_authorization_required', '必须由管理员指定已批准单条队列操作', 409)
+        frozen = self.vault.open(row['payload'])
+        if (frozen != {**payload, '_binding': current} or row['digest'] != digest(
+                {'account_id': account['id'], 'kind': 'message.send', 'payload': frozen, 'mode': 'live'})):
+            raise Problem('send_authorization_required', '发送参数与冻结审批不符', 409)
 
     def account(self, account_id: str) -> dict:
         account = self.db.one("SELECT * FROM accounts WHERE id=?", (account_id,))
@@ -46,7 +73,9 @@ class Provider:
         try:
             with FileLock(self.lock_path, timeout=0.1):
                 account = self.account(account_id)
-                if expected_binding is not None:
+                if account['mode'] == 'live' and operation == 'message.send':
+                    self._authorize_message(account, payload, expected_binding)
+                elif expected_binding is not None:
                     from .message_send import binding
                     if operation != 'message.send' or binding(self, account) != expected_binding:
                         raise Problem('send_binding_changed', '审批绑定已改变，禁止发送', 409)

@@ -18,6 +18,10 @@
 
 **默认支持 Linux / WSL，Python 3.11 / 3.12，本地示例使用 3.12；Windows 原生支持暂停。** `53400f8` 的 [CI run 38727928186](https://github.com/lanchenglin/xianyu/actions/runs/38727928186) 中 Linux 双版本、双版本 upstream-contract 和 browser-smoke 通过，Windows 3.11/3.12 失败。Windows 快照保存在独立分支 `work/windows-support-53400f8`（`53400f82f1ce4f1b1322f184b4b15e2e2c949e97`）；当前分支仅保留 Linux CI 门槛，不删除跨平台源码或回归。后续 Linux 全绿不代表 Windows 支持恢复；历史成功与失败见[测试报告](docs/TEST_REPORT.md)。
 
+## 2026-10-16 P0 审查修复（仍禁止上线）
+
+`75b6f98` 独立审查 FAIL：旧无 CDP live 发送绕过默认关闭开关与 worker 单条限制。本次关闭旧直发路径；所有 live 消息必须显式开关、CDP/凭据绑定、管理员指定队列单条执行，worker 永不领取历史或新 live 消息，Provider 直接调用也拒绝。演示自动流程保留。修复后仍待独立复审，不将本地测试当上线许可；[FAIL 及修复契约](docs/MESSAGE_SEND.md)。
+
 ## 2026-10-16 单条审批消息增量
 
 新增默认关闭的管理员 `XY_MESSAGE_SEND_ENABLED`，仅允许已核验 peer/CID 的 `message.send`。CDP 只读核验，发送明确使用独立导入、同 UID 绑定的 Cookie/WS；审批冻结来源绑定与正文，管理员可只执行指定一条，不消费历史 approved 消息。其他 CDP 写、FAQ、首次联系仍拒绝。发送后只读核对但无可靠 ACK 关联，仍 unconfirmed、不宣称 accepted/送达；[完整契约与父助手最小取证](docs/MESSAGE_SEND.md)。真实发送/Hermes 接入尚未验收。

@@ -325,9 +325,9 @@ def test_live_disabled_by_default(workbench):
     client, _ = workbench
     aid = account(client, "live", json.dumps({"unb": "12345", "_m_h5_tk": "test-only"}))
     assert client.post("/api/search", json={"account_id": aid, "query": "商品"}).status_code == 409
-    action = message(client, aid).json()
-    response = client.post(f"/api/actions/{action['id']}/approve", json={"digest": action["digest"], "confirm": "确认执行"})
+    response = message(client, aid)
     assert response.status_code == 409
+    assert response.json()['code'] == 'message_send_disabled'
 
 
 def test_modes_are_frozen_into_approval(workbench):
@@ -336,7 +336,8 @@ def test_modes_are_frozen_into_approval(workbench):
     action = message(client, aid).json()
     approve(client, action)
     service.db.execute("UPDATE accounts SET mode='live' WHERE id=?", (aid,))
-    service.run_once()
+    assert not service.run_once()  # A live account is never auto-claimed, even with a legacy demo row.
+    service.execute_one(action['id'], action['digest'])
     assert client.get(f"/api/actions/{action['id']}").json()["state"] == "failed"
 
 

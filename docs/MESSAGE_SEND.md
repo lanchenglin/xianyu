@@ -1,5 +1,13 @@
 # 人工审批单条消息（2026-10-16）
 
+## P0 独立审查 FAIL 与修复边界
+
+`75b6f98` 独立审查 **FAIL / P0，禁止上线**：当时仅 live+CDP 执行新安全检查，无 CDP 的旧 Cookie 直发仍可绕过默认关闭开关，worker 也可领取历史 approved live 消息。此前测试通过不能抵消该漏洞。
+
+本次关闭旧无 CDP 真实直发路径：**所有 live message.send 无条件检查默认关闭开关；没有 CDP 一律拒绝**，不提供另一核验机制或回退。worker 无条件排除 action 或账号模式为 live 的消息，含历史 approved；演示自动流程保留。只能由管理员指定单条 execute，通过前置核验后进入线程局部、一次性发送作用域；Provider 在操作锁内独立校验开关、CDP/凭据/接管 revision、running 队列记录、账号/模式/操作、批准时间、有效期及完整 digest/参数。仅提供 expected_binding 或直接 Provider.call 不构成授权。
+
+修复本地测试不等于独立复审通过，不恢复上线许可。真实发送、accepted 回执判定及 Hermes 验收均未完成。
+
 ## 范围与来源
 
 仅已有、当次 CDP 样本可核验 peer/CID 的普通文本；不建立会话、不发送图片、不提供任意 URL/JS。固定上游仍为 c2d5a02ad83b18863514389cedf7afbd993b683d。
@@ -13,7 +21,7 @@
 1. 通过既有 HTTP `/api/actions` 或 MCP 消息提案工具提交 account_id、kind=`message.send`、payload={cid,toid,text}、稳定 idempotency_key。
 2. 开关、账号及独立 Cookie UID 检查，按需 CDP 只读采集并确认同 CID 的 peer；缺失/冲突即拒绝，不猜 CID、不使用历史缓存替代当前采集。
 3. 加密 payload 冻结 UID、独立凭据 digest、CDP endpoint、接管 revision 与完整正文；整体审批 digest 覆盖账号、模式和所有 payload。绑定元数据仅管理员可见，不给 Agent 凭据指纹/端点。
-4. 管理员核对完整 payload 并批准；有效期 15 分钟。批准不是立即发送。CDP 模式 live 消息不由定时 worker 自动领取，历史 approved 消息也不会因开关启用被批量执行。
+4. 管理员核对完整 payload 并批准；有效期 15 分钟。批准不是立即发送。所有 live 消息不由定时 worker 自动领取，历史 approved 消息也不会因开关启用被批量执行。
 5. 管理员 POST `/api/actions/{id}/execute`，body 为 `{digest,confirm:"确认执行"}`，或 UI “仅执行这一条”。原子领取指定 approved action，不启动其他历史操作。Agent/MCP 无执行、审批、解除接管、开关配置权。
 6. 执行前再次只读核验 peer/CID、账号/凭据绑定、时效、接管、暂停；Provider 在操作锁内重查凭据绑定与限速。正文只接受 cid/toid/text；上游 item_id/image/任意扩展拒绝。
 7. 未领取前可撤销；running 无法撤回已发出的请求。失败/超时/中断保持终态待核实，不自动重试。只有 Provider 明确在出站前拒绝的 busy/rate_limited 可保留 approved；CDP live 仍需重新显式选择执行，同一幂等申请不重放终态。

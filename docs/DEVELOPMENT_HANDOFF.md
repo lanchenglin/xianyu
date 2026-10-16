@@ -4,7 +4,11 @@
 
 本文件交给在本地继续开发的人、Codex、Claude Code 或 Hermes。**下列任务是待办与设计建议，不代表功能已经实现。** 原始交接只更新文档；2026-10-14 续开发在 `feat/local-next` 完成 P0-ENV 本地修复、P2-04 迁移必要基础及 P1-02 人工核对，以下各节标注当前实现与未验收边界，不新增平台动作。
 
-## 2026-10-16 单条安全消息增量（最新）
+## 2026-10-16 P0 修复（最新，仍禁止上线）
+
+75b6f98 独立审查 FAIL：旧无CDP真实消息绕过开关并可被worker领取。本次所有live消息统一默认关闭、无CDP拒绝；历史approved也永不自动领取，仅管理员指定execute；Provider独立检查一次性队列授权/绑定/digest/时效。旧无CDP直发明确关闭，演示自动行为保留。双Python含隔离浏览器全量各460 passed，详见 TEST_REPORT；待独立复审，不push不部署，不代表真实账号验收。
+
+## 2026-10-16 单条安全消息增量（历史）
 
 默认关闭的管理员开关仅放行 message.send；CDP 只读 peer/CID 校验 + 明确独立绑定 Cookie/WS，冻结来源与正文 digest，人工审批后管理员 HTTP/UI 只执行指定一条，其他历史 approved 不被启动。FAQ、首次联系、商品写链路、实际 Hermes 接入、完整订单仍未完成。发送后只读辅助核对已接，但缺少可靠发送 ACK 关联，不能实现 accepted 自动判定，始终保留 unconfirmed；父助手最小取证见 [MESSAGE_SEND](MESSAGE_SEND.md)。本批不 push/部署。
 

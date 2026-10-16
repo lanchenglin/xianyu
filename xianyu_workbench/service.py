@@ -139,7 +139,7 @@ class Service:
             raise Problem("invalid_payload", "操作参数无效，请检查消息、金额、图片 ID 和删除确认文字", 422)
         if body.kind == 'message.send':
             self.observation.guard(account['id'])
-        if body.kind == 'message.send' and account['mode'] == 'live' and self.s.browser_cdp_endpoint:
+        if body.kind == 'message.send' and account['mode'] == 'live':
             old = self.db.one('SELECT * FROM actions WHERE account_id=? AND idem=?', (account['id'], body.idempotency_key))
             if old:
                 old_payload = self.vault.open(old['payload'])
@@ -207,7 +207,7 @@ class Service:
             if action_id is not None:
                 row = c.execute(query + ' AND a.id=? AND a.digest=?', (action_id, signature)).fetchone()
             else:
-                restriction = " AND NOT (a.kind='message.send' AND a.mode='live')" if self.s.browser_cdp_endpoint else ''
+                restriction = " AND NOT (a.kind='message.send' AND (a.mode='live' OR b.mode='live'))"
                 row = c.execute(query + restriction + ' ORDER BY a.created LIMIT 1').fetchone()
             if not row:
                 return False
@@ -226,7 +226,7 @@ class Service:
             execution = dict(payload)
             if row["kind"] == "message.send":
                 self.observation.guard(account['id'])
-                if account['mode'] == 'live' and self.s.browser_cdp_endpoint:
+                if account['mode'] == 'live':
                     from .message_send import preflight
                     before = preflight(self, account, payload)
                     from .message_send import binding
@@ -249,7 +249,11 @@ class Service:
                 raise Problem("approval_expired", "审批在执行准备期间过期，请重新申请", 409)
             entered_write = True
             kwargs = {'expected_binding': payload['_binding']} if before is not None else {}
-            result = self.provider.call(account["id"], row["kind"], execution, write=True, **kwargs)
+            if before is not None:
+                with self.provider.selected_message(row['id']):
+                    result = self.provider.call(account["id"], row["kind"], execution, write=True, **kwargs)
+            else:
+                result = self.provider.call(account["id"], row["kind"], execution, write=True, **kwargs)
             if account["mode"] == "demo":
                 state = "simulated"
             elif row["kind"] == "message.send":
