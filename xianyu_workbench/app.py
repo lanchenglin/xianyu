@@ -39,6 +39,7 @@ from .models import (
     SearchIn,
 )
 from .provider import Problem, asset_path
+from .publish_preview import PublishDefaults, defaults, save_defaults
 from .security import canonical, parse_cookies
 from .service import Service
 
@@ -126,7 +127,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def capabilities(current=Depends(role)):
         return {"search": True, "item_detail": True, "existing_chats": True, "message_history": True,
                 "send_with_approval": True, "publish_with_approval": True, "delete_with_explicit_approval": True,
-                "live_publish": False, "publish_complete_snapshot": False,
+                "live_publish": False, "publish_complete_snapshot": False, "local_publish_preview": True,
+                "publish_policy": {"live_executor_enabled": False, "source": "admin_local_unverified",
+                                   "preview_uploads": False, "selected_live_execution_only": True},
                 "browser_policy": {"isolated_browsers": ["chrome", "chromium"],
                                    "cdp_operations": ["search", "orders", "inventory", "messages"], "cdp_writes": False,
                                    "admin_configuration_only": True, "failure_fallback": False},
@@ -161,6 +164,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                                   "private_cache_encrypted": True, "platform_verified": False},
                 "payment": False, "refund": False, "confirm_receipt": False,
                 "notice": "False 表示本版本没有开放，不会伪造成功；交易仅在闲鱼人工完成"}
+
+    @app.get('/api/accounts/{account_id}/publish-defaults')
+    def get_publish_defaults(account_id: str, current=Depends(admin)):
+        return defaults(service, account_id)
+
+    @app.put('/api/accounts/{account_id}/publish-defaults')
+    def put_publish_defaults(account_id: str, body: PublishDefaults, current=Depends(admin)):
+        return save_defaults(service, account_id, body)
+
+    @app.post('/api/publish-preview', status_code=201)
+    def publish_preview(body: ActionIn, current=Depends(role)):
+        if body.kind != 'item.publish':
+            raise Problem('invalid_request', '预览仅接受 item.publish', 422)
+        return service.propose(body, current, publish_preview=True)
 
     @app.get("/api/dashboard")
     def dashboard(current=Depends(role)):

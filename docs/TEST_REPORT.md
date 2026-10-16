@@ -4,7 +4,19 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
-## 2026-10-16 P0 FAIL 修复验收（禁止上线，待独立复审）
+## 2026-10-16 本地发布冻结预览最终验收
+
+本批交付本地冻结预览、角色投影、审批和指定单条执行前校验，不代表真实发布或平台自动回验实现。类目/地点为管理员本地未验证输入；真实执行器保持关闭。所有 live action 排除 worker 自动领取，旧 live delete 直通关闭，不以删除替代普通下架。契约与取证清单见 [PUBLISH_PREVIEW](PUBLISH_PREVIEW.md)。用户报告独立发布预览审查 PASS、父助手35项预览/P0测试通过；这是外部报告，不冒充本轮亲自运行结果。
+
+- 早期 `final312.log`、`final-verified312.log`、`final-verified311.log` 只有部分输出，无 summary，**不计为通过**。收尾时 `pgrep -af '[p]ython.*pytest'` 未发现残留 pytest；改为前台等待，双版本完整重跑。
+- **Python 3.12.14：477 passed，182.49s；Python 3.11.16：477 passed，182.07s**。均无 skipped，各1条既有 Starlette/httpx 弃用警告，退出码均0。
+- 全量包含隔离系统 Chromium `/snap/bin/chromium` 的预览 UI/Agent 隐私投影与既有单条 UI，真实 MCP stdio 连接临时本地 API（包含成功预览、缺素材拒绝、管理员令牌拒绝），以及既有隔离 transport/固定上游契约。不是平台浏览器或真实账号验收。本轮没有另跑 `scripts/smoke_ui.py`，不复用历史 smoke 结果声称本轮通过。
+- 两版本 `ruff check .`、`pip check`，`node --check xianyu_workbench/static/app.js`、`git diff --check` 全部通过。
+- 日志在仓库外 `/home/lan/.hermes/cache/scratch/xianyu-publish-evidence/complete312.log` 与 `complete311.log`。命令使用 `env -u PYTHONPATH TMPDIR=/home/lan/.hermes/cache/scratch`；解释器 `.venv/bin/python` 与 `/home/lan/.hermes/cache/scratch/xianyu-venv311/bin/python`，独立 `PLAYWRIGHT_BROWSERS_PATH=/home/lan/.hermes/cache/scratch/xianyu-test-browsers`、`PLAYWRIGHT_SKIP_BROWSER_GC=1`。
+- RED/GREEN 证据：初始预览6项因路由/worker边界缺失失败；UI/MCP入口2项失败后实现；旧delete直接调用边界先失败后关闭。收尾 UI 复现旧申请与预览幂等键碰撞（`resume-ui-red.log`），隔离命名空间后通过。默认类目/地点变化、变回原值、素材/UID/模式/审批内容篡改与真实MCP成功投影为后补集成回归，不冒称全部先RED。
+- 不读真实 `.env/data/profile`，不连8099/9235，不真实平台操作，不push/部署；保留原未跟踪 scratch，不提交运行日志。无schema迁移，使用已有加密settings/actions字段。真实发布协议/ACK、自动只读回验、改价/非删除上下架仍未实现。
+
+## 2026-10-16 P0 FAIL 修复验收（历史：当时禁止上线，待独立复审）
 
 独立审查确认 `75b6f98` **FAIL / P0**：仅 live+CDP 走新绑定，旧无CDP live 可绕过 XY_MESSAGE_SEND_ENABLED=false，worker 可领取历史approved并 chats→message.send。上一节/下方历史441项通过不证明该安全边界正确，保留原记录而非抹去失败。修复沿用部署基线 b8ea112，不改分页、不扩展发送机制。
 

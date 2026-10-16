@@ -157,6 +157,17 @@ def propose_listing(account_id: str, title: str, desc: str, price: str, images: 
 
 
 @mcp.tool()
+def preview_listing(account_id: str, title: str, desc: str, price: str, images: list[str],
+                    idempotency_key: str, delivery: str = '无需邮寄', post_price: str = '0',
+                    can_self_pickup: bool = True) -> dict:
+    """本地冻结图片hash/管理员类目地区快照并申请审批；不上传平台，真实执行器未开放。地点隐私不返回模型。"""
+    return api('POST', '/api/publish-preview', {'account_id': account_id, 'kind': 'item.publish',
+        'payload': {'title': title, 'desc': desc, 'price': price, 'images': images,
+                    'delivery': delivery, 'post_price': post_price, 'can_self_pickup': can_self_pickup},
+        'idempotency_key': idempotency_key})
+
+
+@mcp.tool()
 def save_listing_draft(account_id: str, title: str, desc: str, price: str = "0", images: list[str] | None = None) -> dict:
     """保存本地商品草稿，不执行发布或改价。"""
     return api("POST", "/api/drafts", {"account_id": account_id, "title": title, "desc": desc,

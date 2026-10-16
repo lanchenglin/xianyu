@@ -4,6 +4,10 @@
 
 接入前先按部署说明启动工作台；本地完整开发推荐 Python 3.12。以下示例是当前已提供的通用配置，不代表你的具体客户端或三个远程 Gateway 已联调通过。首次建会话、实时自动客服等待办见交接清单，MCP 不会额外实现后端没有的能力。
 
+## 本地发布冻结预览（2026-10-16）
+
+新增 `preview_listing(account_id,title,desc,price,images,idempotency_key,delivery,post_price,can_self_pickup)`，对应 POST `/api/publish-preview`，仅本地冻结并提出审批，不上传闲鱼。需要管理员预先录入类目/地点本地快照；缺少时明确拒绝，不编造默认值。Agent 只得到类目、地区摘要、图片 hash 与快照 revision，看不到 GPS/POI/完整协议候选。无默认配置、审批、执行的 MCP 工具；管理员令牌仍被 stdio 拒绝。旧 `propose_listing` 保留不完整申请语义。真实执行器未开放，详情与字段证据见 [PUBLISH_PREVIEW](PUBLISH_PREVIEW.md)。
+
 ## 人工单条发送更新（2026-10-16，优先于历史禁止描述）
 
 现有消息提案工具可在显式管理员开关下申请已有 peer/CID 普通文本，不新增 MCP 审批/执行工具。管理员 POST `/api/actions/{id}/execute`，body=`{digest,confirm:"确认执行"}`，原子领取仅此条；Agent 返回 403。实际 WS 来源是独立导入同 UID Cookie，不是浏览器 Cookie 自动提取；审批冻结并复核来源、账号、收件人、CID、正文。默认关闭，不启用 FAQ，结果仍 unconfirmed；[发送契约](MESSAGE_SEND.md)。实际 Hermes 注册与真实写仍未验收。

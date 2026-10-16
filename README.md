@@ -18,7 +18,11 @@
 
 **默认支持 Linux / WSL，Python 3.11 / 3.12，本地示例使用 3.12；Windows 原生支持暂停。** `53400f8` 的 [CI run 38727928186](https://github.com/lanchenglin/xianyu/actions/runs/38727928186) 中 Linux 双版本、双版本 upstream-contract 和 browser-smoke 通过，Windows 3.11/3.12 失败。Windows 快照保存在独立分支 `work/windows-support-53400f8`（`53400f82f1ce4f1b1322f184b4b15e2e2c949e97`）；当前分支仅保留 Linux CI 门槛，不删除跨平台源码或回归。后续 Linux 全绿不代表 Windows 支持恢复；历史成功与失败见[测试报告](docs/TEST_REPORT.md)。
 
-## 2026-10-16 P0 审查修复（仍禁止上线）
+## 2026-10-16 本地发布冻结预览
+
+用户报告基线 cea21b7 消息 P0 复审 PASS、已 push 且 CI38868085093 五绿；真实发送未开、ACK 未核实。新增 [本地发布冻结链](docs/PUBLISH_PREVIEW.md)：管理员加密类目/地点、图片 hash/配送候选快照、审批与指定单条校验、HTTP/UI/MCP 权限隔离。`local_publish_preview=true`；真实发布执行器及自动回验未开放，live_publish/publish_complete_snapshot 仍 false。所有 live 商品写排除 worker 自动领取，旧 live delete 同步关闭；不以删除冒充下架。改价/非删除上下架尚待真实协议证据。此次不 push/部署，未做真实账号写验收。
+
+## 2026-10-16 P0 审查修复（历史）
 
 `75b6f98` 独立审查 FAIL：旧无 CDP live 发送绕过默认关闭开关与 worker 单条限制。本次关闭旧直发路径；所有 live 消息必须显式开关、CDP/凭据绑定、管理员指定队列单条执行，worker 永不领取历史或新 live 消息，Provider 直接调用也拒绝。演示自动流程保留。修复后仍待独立复审，不将本地测试当上线许可；[FAIL 及修复契约](docs/MESSAGE_SEND.md)。
 

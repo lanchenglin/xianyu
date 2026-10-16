@@ -2,6 +2,10 @@
 
 这是账号主人自用的闲鱼工作台，不是无条件全自动交易系统。当前真实能力和未实现事项以 README / `/api/capabilities` 为准，禁止把占位接口或演示数据写成已完成。
 
+## 2026-10-16 本地发布冻结链
+
+新增 publish_preview 项目 adapter，仅本地冻结与校验，详见 [PUBLISH_PREVIEW](docs/PUBLISH_PREVIEW.md)。类目/地点为管理员未验证输入，候选 DTO 不是完整平台协议。location 加密且 Agent 不可读，不进入 catalog；默认 revision/图片 hash/UID 变化重新审批。真实发布与自动回验未开，改价/非删除上下架未实现。worker 不领取任何 live action，Provider 同步关闭旧 live delete；不得以删除/重建替代状态转移。schema v10 不变，使用已有加密 settings/actions 字段。本批不 push/部署。
+
 ## 2026-10-16 人工审批单条消息（优先于历史写禁用说明）
 
 新增管理员部署开关 XY_MESSAGE_SEND_ENABLED，默认关闭，仅精确 message.send。浏览器仍只读；独立同 UID Cookie/WS 来源明确绑定，不提取浏览器 Cookie，不放行其他 CDP 写。审批冻结凭据指纹/UID/endpoint/正文，执行前再次核对 peer/CID；管理员仅领取指定 action，CDP live 消息不由 worker 消费历史 approved。FAQ/首次联系仍关闭，真实执行仍交父助手/Hermes。发送 ACK 无已证契约，结果保持 unconfirmed，新增同文只读观察不是 accepted/送达；不得猜 mid/cid。详见 [MESSAGE_SEND](docs/MESSAGE_SEND.md)。

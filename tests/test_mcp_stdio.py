@@ -59,6 +59,24 @@ def test_stdio_discovery_call_and_local_notice_state(api_server, tmp_path):
             result = await session.call_tool('cached_messages', {'account_id': 'messages'})
             assert not result.isError
             assert 'unavailable' in str(result) and 'last_message_samples' in str(result)
+            assert 'preview_listing' in tools
+            assert not {'publish_defaults', 'execute_action'} & tools
+            result = await session.call_tool('preview_listing', {'account_id': 'messages', 'title': '测试',
+                'desc': '测试', 'price': '12.30', 'images': ['a' * 32], 'idempotency_key': 'preview-mcp-001'})
+            assert result.isError  # No administrator defaults/assets; never invent them.
+            import httpx
+
+            from tests.test_publish_preview import DEFAULTS
+            from tests.test_workbench import upload
+            with httpx.Client(base_url=url, headers={'Authorization': 'Bearer ' + settings.admin_token}) as admin:
+                assert admin.put('/api/accounts/messages/publish-defaults', json=DEFAULTS).status_code == 200
+                image = upload(admin, 'messages')
+            result = await session.call_tool('preview_listing', {'account_id': 'messages', 'title': '测试',
+                'desc': '测试', 'price': '12.30', 'images': [image], 'idempotency_key': 'preview-mcp-valid'})
+            assert not result.isError and 'pending' in str(result)
+            assert 'private-poi' not in str(result) and '120.1' not in str(result)
+            assert '测试市' in str(result)
+            preview_actions = service.db.all('SELECT * FROM actions')
             assert 'message_reply_draft' in tools
             from test_message_text import text_frame
 
@@ -68,7 +86,7 @@ def test_stdio_discovery_call_and_local_notice_state(api_server, tmp_path):
             sample = service.db.one("SELECT record_key FROM operation_records WHERE kind='messages'")['record_key']
             result = await session.call_tool('message_reply_draft', {'account_id': 'messages', 'sample_id': sample})
             assert not result.isError and 'local_template' in str(result)
-            assert service.db.all('SELECT * FROM actions') == []
+            assert service.db.all('SELECT * FROM actions') == preview_actions
             assert {'message_observation_status', 'message_human_takeover'} <= tools
             result = await session.call_tool('message_observation_status', {'account_id': 'messages'})
             assert not result.isError and 'conversation_last_message_samples' in str(result)

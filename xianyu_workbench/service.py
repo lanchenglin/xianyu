@@ -78,6 +78,9 @@ class Service:
         result["payload"] = self.vault.open(row["payload"])
         if actor != 'admin':
             result['payload'].pop('_binding', None)
+            if '_publish_snapshot' in result['payload']:
+                from .publish_preview import public_snapshot
+                result['payload']['_publish_snapshot'] = public_snapshot(result['payload']['_publish_snapshot'])
         result["result"] = self.vault.open(row["result"]) if row.get("result") else None
         result.pop("idem", None)
         record = self.db.one("SELECT * FROM reconciliations WHERE action_id=?", (row["id"],))
@@ -131,7 +134,7 @@ class Service:
             paths.append(str(asset_path(self.s, row)))
         return paths
 
-    def propose(self, body: ActionIn, actor: str) -> dict:
+    def propose(self, body: ActionIn, actor: str, *, publish_preview: bool = False) -> dict:
         account = self.provider.account(body.account_id)
         try:
             payload = ACTION_MODELS[body.kind].model_validate(body.payload).model_dump(mode="json")
@@ -150,6 +153,15 @@ class Service:
             payload = prepare(self, account, payload)
         if body.kind == "item.publish":
             self.validate_assets(account["id"], payload["images"])
+            if publish_preview:
+                old = self.db.one('SELECT * FROM actions WHERE account_id=? AND idem=?', (account['id'], body.idempotency_key))
+                if old:
+                    prior = self.vault.open(old['payload'])
+                    if old['kind'] != body.kind or '_publish_snapshot' not in prior or {k: v for k, v in prior.items() if k != '_publish_snapshot'} != payload:
+                        raise Problem('idempotency_conflict', '相同幂等键不能用于不同内容', 409)
+                    return self.action_view(old, actor)
+                from .publish_preview import prepare
+                payload = prepare(self, account, payload)
         signature = digest({"account_id": account["id"], "kind": body.kind, "payload": payload, "mode": account["mode"]})
         with self.db.connect() as c:
             c.execute("BEGIN IMMEDIATE")
@@ -207,7 +219,7 @@ class Service:
             if action_id is not None:
                 row = c.execute(query + ' AND a.id=? AND a.digest=?', (action_id, signature)).fetchone()
             else:
-                restriction = " AND NOT (a.kind='message.send' AND (a.mode='live' OR b.mode='live'))"
+                restriction = " AND NOT (a.mode='live' OR b.mode='live')"
                 row = c.execute(query + restriction + ' ORDER BY a.created LIMIT 1').fetchone()
             if not row:
                 return False
@@ -239,6 +251,10 @@ class Service:
                     if not matching:
                         raise Problem("recipient_unverified", "未验证到该收件人与会话的对应关系，请先在闲鱼人工建立/核对会话", 409)
             elif row["kind"] == "item.publish":
+                if '_publish_snapshot' in payload or account['mode'] == 'live':
+                    from .publish_preview import preflight
+                    preflight(self, account, payload)
+                execution.pop('_publish_snapshot', None)
                 execution["images"] = self.validate_assets(account["id"], payload["images"])
             elif row["kind"] == "item.delete":
                 item = self.provider.call(account["id"], "item", {"item_id": payload["item_id"]})
@@ -271,7 +287,7 @@ class Service:
             self.db.execute("UPDATE actions SET state=?,result=?,error=NULL WHERE id=?",
                             (state, self.vault.seal(result), row["id"]))
             if row["kind"] == "item.publish" and state in ("submitted", "simulated"):
-                self.save_catalog(account["id"], str(result["item_id"]), {**payload, "mode": account["mode"], "platform_state": "待人工核对"}, True)
+                self.save_catalog(account["id"], str(result["item_id"]), {**{k: v for k, v in payload.items() if k != '_publish_snapshot'}, "mode": account["mode"], "platform_state": "待人工核对"}, True)
             self.db.audit("worker", "action.executed", row["id"], {"state": state, "mode": account["mode"]})
         except Problem as exc:
             if exc.code in ("rate_limited", "busy"):
