@@ -72,14 +72,21 @@ def freeze(service, account, payload):
 
 
 def prepare(service, account, payload):
-    return {**payload, '_publish_snapshot': freeze(service, account, payload)}
-
-
-def preflight(service, account, payload):
-    frozen = payload.get('_publish_snapshot')
-    if not frozen or digest(frozen) != digest(freeze(service, account, payload)):
-        raise Problem('publish_snapshot_changed', '图片、账号或默认快照已变化，请重新预览审批', 409)
+    snapshot = freeze(service, account, payload)
     if account['mode'] == 'live':
+        from .publish_executor import freeze as freeze_executor
+        executor = freeze_executor(service, account, snapshot)
+        if executor:
+            snapshot['executor'] = executor
+    return {**payload, '_publish_snapshot': snapshot}
+
+
+def preflight(service, account, payload, *, executing=False):
+    frozen = payload.get('_publish_snapshot')
+    current = prepare(service, account, {k: v for k, v in payload.items() if k != '_publish_snapshot'})['_publish_snapshot']
+    if not frozen or digest(frozen) != digest(current):
+        raise Problem('publish_snapshot_changed', '图片、账号或默认快照已变化，请重新预览审批', 409)
+    if account['mode'] == 'live' and not (executing and frozen.get('executor')):
         raise Problem('publish_evidence_required', '本地快照校验通过；真实类目/地点/上传/ACK 证据不足，执行器未开放', 409)
 
 

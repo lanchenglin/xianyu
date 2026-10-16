@@ -26,6 +26,7 @@ class Settings:
     browser_cdp_account_id: str = ''
     browser_cdp_uid: str = ''
     message_send_enabled: bool = False
+    publish_enabled: bool = False
 
     def validate(self) -> None:
         if min(len(self.admin_token), len(self.agent_token)) < 32:
@@ -63,6 +64,7 @@ class Settings:
             browser_cdp_account_id=os.getenv('XY_BROWSER_CDP_ACCOUNT_ID', ''),
             browser_cdp_uid=os.getenv('XY_BROWSER_CDP_UID', ''),
             message_send_enabled=os.getenv('XY_MESSAGE_SEND_ENABLED', 'false').lower() == 'true',
+            publish_enabled=os.getenv('XY_PUBLISH_ENABLED', 'false').lower() == 'true',
         )
         obj.validate()
         return obj

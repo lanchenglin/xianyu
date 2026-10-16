@@ -4,7 +4,16 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
-## 2026-10-16 本地发布冻结预览最终验收
+## 2026-10-16 受控发布执行器隔离验收
+
+- 最终前台等待完整 summary：Python 3.12 **504 passed / 183.93s**，Python 3.11 **504 passed / 185.85s**，无 skipped，退出码均 0；各有 1 条既有 Starlette/httpx 弃用警告。日志 `scratch/publish-final312.log`、`scratch/publish-final311.log`。
+- 双 Python 各自运行 `scripts/smoke_ui.py` 成功，日志 `scratch/publish-smoke312.log`、`scratch/publish-smoke311.log`。隔离 Chromium `/snap/bin/chromium` 使用临时 profile/API，不是平台浏览器。
+- 双 Python pip check 均 No broken requirements；ruff、node --check、git diff --check 通过。命令均 `env -u PYTHONPATH`；日志稳定保存在 scratch，不提交私有目录或日志。
+- 全量包含真实 MCP stdio→临时 API 的权限/预览回归；本批新增协议管理员 UI/Agent 隐藏、单条执行权限/并发领取、默认关闭/凭据和配置变化阻断、upload/submit/readback 异常 unknown 不重试、错误 ACK/归属/ID/ret、上传阶段回执加密保存、重启保留阶段、Provider 子进程凭据清理边界。传输用虚构模块/响应隔离，不声称真实平台 ACK 已验证。
+- RED 证据：`publish-red.log`（readback 错误 ret 被接受、上传回执未保存）；`publish-ui-red.log`（协议表单缺失）；`publish-hash-red.log`（上传字节 hash 未重验）；`publish-readback-red.log`（回读期间 UID 变化未阻断）。修复后全量通过。其余并发/恢复/权限矩阵为补充回归，不冒称均经历 RED。
+- [执行器契约](PUBLISH_EXECUTOR.md)：默认关闭、单 action 单次授权，实际 HTTP 上传/显式发布/本人 itemId 回读实现。**未真实平台验收**，没有 push/部署，没有读真实 .env/data/profile 或私有 source snapshot，没有连接8099/9235或真实写。平台 schema/类别层级/uniqueCode/配送/图片语义与 ACK 仍由父助手取证；自动回读只证本人 ID，不证明在售或价格内容等价。
+
+## 2026-10-16 本地发布冻结预览最终验收（历史）
 
 本批交付本地冻结预览、角色投影、审批和指定单条执行前校验，不代表真实发布或平台自动回验实现。类目/地点为管理员本地未验证输入；真实执行器保持关闭。所有 live action 排除 worker 自动领取，旧 live delete 直通关闭，不以删除替代普通下架。契约与取证清单见 [PUBLISH_PREVIEW](PUBLISH_PREVIEW.md)。用户报告独立发布预览审查 PASS、父助手35项预览/P0测试通过；这是外部报告，不冒充本轮亲自运行结果。
 

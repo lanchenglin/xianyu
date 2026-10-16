@@ -82,6 +82,8 @@ class Service:
                 from .publish_preview import public_snapshot
                 result['payload']['_publish_snapshot'] = public_snapshot(result['payload']['_publish_snapshot'])
         result["result"] = self.vault.open(row["result"]) if row.get("result") else None
+        if actor != 'admin' and row['kind'] == 'item.publish' and result['result']:
+            result['result'].pop('uploads', None)
         result.pop("idem", None)
         record = self.db.one("SELECT * FROM reconciliations WHERE action_id=?", (row["id"],))
         result["reconciliation"] = self.reconciliation_view(record, actor) if record else None
@@ -251,6 +253,14 @@ class Service:
                     if not matching:
                         raise Problem("recipient_unverified", "未验证到该收件人与会话的对应关系，请先在闲鱼人工建立/核对会话", 409)
             elif row["kind"] == "item.publish":
+                if account['mode'] == 'live' and payload.get('_publish_snapshot', {}).get('executor'):
+                    from .publish_executor import execute
+                    result = execute(self, row['id'])
+                    state = 'submitted' if result.get('ownership_verified') else 'unconfirmed'
+                    self.db.execute('UPDATE actions SET state=?,result=?,error=NULL WHERE id=?',
+                                    (state, self.vault.seal(result), row['id']))
+                    self.db.audit('admin', 'publish.executed', row['id'], {'state': state})
+                    return True
                 if '_publish_snapshot' in payload or account['mode'] == 'live':
                     from .publish_preview import preflight
                     preflight(self, account, payload)

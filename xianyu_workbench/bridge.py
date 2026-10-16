@@ -27,6 +27,8 @@ WRITES = {
 
 
 def dispatch(operation: str, payload: dict):
+    if operation in {'publish.upload', 'publish.submit', 'publish.readback'}:
+        return dispatch_publish(operation, payload)
     if operation == 'message.send':
         from .models import MessageIn
         if set(payload) != {'cid', 'toid', 'text'}:
@@ -61,6 +63,46 @@ def dispatch(operation: str, payload: dict):
         payload["price"] = Decimal(str(payload["price"]))
         payload["post_price"] = Decimal(str(payload.get("post_price", 0)))
     return function(**payload)
+
+
+def dispatch_publish(operation, payload):
+    """Private fixed transport; no browser, recommendation, default lookup or retry."""
+    import os
+    from pathlib import Path
+    if os.environ.get('XY_PUBLISH_ENABLED') != 'true':
+        raise ValueError('publish_disabled')
+    from goofish_cli.core import Session
+    from goofish_cli.core.mtop import call
+    from goofish_cli.core.session import USER_AGENT
+    session = Session.load()
+    if not session.unb or session.unb != os.environ.get('XY_OPERATION_UID'):
+        raise ValueError('account_mismatch')
+    if operation == 'publish.upload':
+        import hashlib
+        content = Path(payload['path']).read_bytes()
+        if hashlib.sha256(content).hexdigest() != payload.get('sha256'):
+            raise ValueError('asset_changed')
+        with io.BytesIO(content) as image:
+            response = session.http.post('https://stream-upload.goofish.com/api/upload.api',
+                headers={'accept': '*/*', 'origin': 'https://www.goofish.com',
+                         'referer': 'https://www.goofish.com/', 'user-agent': USER_AGENT},
+                params={'floderId': '0', 'appkey': 'xy_chat', '_input_charset': 'utf-8'},
+                files={'file': ('image.png', image, 'image/png')}, timeout=60, allow_redirects=False)
+            response.raise_for_status()
+            obj = response.json().get('object') or {}
+        width, height = map(int, str(obj.get('pix', '0x0')).split('x'))
+        return {'url': obj.get('url', ''), 'width': width, 'height': height}
+    # requests follows redirects by default: suppress all redirects, including 307 POST replay.
+    original_post = session.http.post
+    def post_once(*args, **kwargs):
+        kwargs['allow_redirects'] = False
+        return original_post(*args, **kwargs)
+    session.http.post = post_once
+    return call(session,
+        api='mtop.idle.pc.idleitem.publish' if operation == 'publish.submit' else 'mtop.taobao.idle.pc.detail',
+        data=payload, version='1.0',
+        spm_cnt='a21ybx.publish.0.0' if operation == 'publish.submit' else 'a21ybx.item.0.0',
+        _auto_refresh=False)
 
 
 def main() -> None:

@@ -18,7 +18,11 @@
 
 **默认支持 Linux / WSL，Python 3.11 / 3.12，本地示例使用 3.12；Windows 原生支持暂停。** `53400f8` 的 [CI run 38727928186](https://github.com/lanchenglin/xianyu/actions/runs/38727928186) 中 Linux 双版本、双版本 upstream-contract 和 browser-smoke 通过，Windows 3.11/3.12 失败。Windows 快照保存在独立分支 `work/windows-support-53400f8`（`53400f82f1ce4f1b1322f184b4b15e2e2c949e97`）；当前分支仅保留 Linux CI 门槛，不删除跨平台源码或回归。后续 Linux 全绿不代表 Windows 支持恢复；历史成功与失败见[测试报告](docs/TEST_REPORT.md)。
 
-## 2026-10-16 本地发布冻结预览
+## 2026-10-16 受控单条发布执行器
+
+新增默认关闭 `XY_PUBLISH_ENABLED`：管理员录入已核验完整协议，冻结素材 hash/价格/类目/地点/凭据后批准并指定一个 action。执行器实际实现独立 Cookie 上传、单次显式 payload 发布和同 UID itemId 只读回验，不调用旧隐式 publish。上传回执/阶段加密持久化，未知结果不重试，worker 不领取 live，Agent 无审批/执行权限。**尚未真实平台验收**，`live_publish` 仍 false，`publish_policy.executor_implemented=true` 区分代码实现与平台证据。见 [执行方法、边界与父助手证据清单](docs/PUBLISH_EXECUTOR.md)。不 push、不部署。
+
+## 2026-10-16 本地发布冻结预览（历史）
 
 用户报告基线 cea21b7 消息 P0 复审 PASS、已 push 且 CI38868085093 五绿；真实发送未开、ACK 未核实。新增 [本地发布冻结链](docs/PUBLISH_PREVIEW.md)：管理员加密类目/地点、图片 hash/配送候选快照、审批与指定单条校验、HTTP/UI/MCP 权限隔离。`local_publish_preview=true`；真实发布执行器及自动回验未开放，live_publish/publish_complete_snapshot 仍 false。所有 live 商品写排除 worker 自动领取，旧 live delete 同步关闭；不以删除冒充下架。改价/非删除上下架尚待真实协议证据。此次不 push/部署，未做真实账号写验收。
 

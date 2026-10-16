@@ -32,6 +32,12 @@ def test_local_publish_preview_ui(api_server):
                 page.locator('#publish-defaults-form textarea').fill(json.dumps(DEFAULTS, ensure_ascii=False))
                 page.locator('#publish-defaults-form button').click()
                 expect(page.locator('#toast')).to_contain_text('本地快照已加密保存')
+                page.locator('#publish-protocol-form textarea').fill(json.dumps({
+                    'template': {'imageInfoDOList': [], 'uniqueCode': 'fictional-ui'},
+                    'success_ret': ['SUCCESS::fixture'], 'evidence': 'Isolated UI fixture only',
+                    'upload_authorized': True}))
+                page.locator('#publish-protocol-form button').click()
+                expect(page.locator('#toast')).to_contain_text('协议已加密保存')
                 page.get_by_role('button', name='载入编辑区', exact=True).click()
                 page.locator('#listing-form .primary').click()
                 expect(page.locator('#toast')).to_contain_text('待你审批')
@@ -48,5 +54,6 @@ def test_local_publish_preview_ui(api_server):
                 expect(page.locator('#queue-list')).not_to_contain_text('120.1')
                 page.locator('[data-page="listings"]').click()
                 expect(page.locator('#publish-defaults-form')).not_to_be_visible()
+                expect(page.locator('#publish-protocol-form')).not_to_be_visible()
             finally:
                 browser.close()

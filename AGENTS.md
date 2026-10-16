@@ -2,7 +2,11 @@
 
 这是账号主人自用的闲鱼工作台，不是无条件全自动交易系统。当前真实能力和未实现事项以 README / `/api/capabilities` 为准，禁止把占位接口或演示数据写成已完成。
 
-## 2026-10-16 本地发布冻结链
+## 2026-10-16 受控发布执行器（优先于历史禁用描述）
+
+新增默认关闭 XY_PUBLISH_ENABLED，独立 Cookie HTTP 上传/显式完整模板发布/同 itemId seller UID 回读；仅管理员指定已批准 action，仍统一 operations.lock，旧隐式 item.publish 入口继续阻断。完整协议须管理员取证录入，不猜类目层级/地点/uniqueCode；上传也是单次外部写，绑定素材 hash 和审批。阶段/上传回执加密持久化，unknown 使用 unconfirmed 禁止重试，Agent 无协议配置和执行权限。未真实平台验收，能力声明区分 executor_implemented 与 platform_verified，详见 [PUBLISH_EXECUTOR](docs/PUBLISH_EXECUTOR.md)。不读真实 .env/data/profile，不连接真实实例，不 push/部署。
+
+## 2026-10-16 本地发布冻结链（历史）
 
 新增 publish_preview 项目 adapter，仅本地冻结与校验，详见 [PUBLISH_PREVIEW](docs/PUBLISH_PREVIEW.md)。类目/地点为管理员未验证输入，候选 DTO 不是完整平台协议。location 加密且 Agent 不可读，不进入 catalog；默认 revision/图片 hash/UID 变化重新审批。真实发布与自动回验未开，改价/非删除上下架未实现。worker 不领取任何 live action，Provider 同步关闭旧 live delete；不得以删除/重建替代状态转移。schema v10 不变，使用已有加密 settings/actions 字段。本批不 push/部署。
 

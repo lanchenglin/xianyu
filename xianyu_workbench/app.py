@@ -39,6 +39,7 @@ from .models import (
     SearchIn,
 )
 from .provider import Problem, asset_path
+from .publish_executor import PublishProtocol, save_protocol
 from .publish_preview import PublishDefaults, defaults, save_defaults
 from .security import canonical, parse_cookies
 from .service import Service
@@ -128,7 +129,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"search": True, "item_detail": True, "existing_chats": True, "message_history": True,
                 "send_with_approval": True, "publish_with_approval": True, "delete_with_explicit_approval": True,
                 "live_publish": False, "publish_complete_snapshot": False, "local_publish_preview": True,
-                "publish_policy": {"live_executor_enabled": False, "source": "admin_local_unverified",
+                "publish_policy": {"live_executor_enabled": s.live_enabled and s.publish_enabled,
+                                   "executor_implemented": True, "platform_verified": False,
+                                   "source": "admin_verified_protocol_required", "default_enabled": False,
                                    "preview_uploads": False, "selected_live_execution_only": True},
                 "browser_policy": {"isolated_browsers": ["chrome", "chromium"],
                                    "cdp_operations": ["search", "orders", "inventory", "messages"], "cdp_writes": False,
@@ -172,6 +175,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.put('/api/accounts/{account_id}/publish-defaults')
     def put_publish_defaults(account_id: str, body: PublishDefaults, current=Depends(admin)):
         return save_defaults(service, account_id, body)
+
+    @app.put('/api/accounts/{account_id}/publish-protocol')
+    def put_publish_protocol(account_id: str, body: PublishProtocol, current=Depends(admin)):
+        return save_protocol(service, account_id, body)
 
     @app.post('/api/publish-preview', status_code=201)
     def publish_preview(body: ActionIn, current=Depends(role)):
