@@ -2,6 +2,10 @@
 
 这是账号主人自用的闲鱼工作台，不是无条件全自动交易系统。当前真实能力和未实现事项以 README / `/api/capabilities` 为准，禁止把占位接口或演示数据写成已完成。
 
+## 2026-10-16 人工审批单条消息（优先于历史写禁用说明）
+
+新增管理员部署开关 XY_MESSAGE_SEND_ENABLED，默认关闭，仅精确 message.send。浏览器仍只读；独立同 UID Cookie/WS 来源明确绑定，不提取浏览器 Cookie，不放行其他 CDP 写。审批冻结凭据指纹/UID/endpoint/正文，执行前再次核对 peer/CID；管理员仅领取指定 action，CDP live 消息不由 worker 消费历史 approved。FAQ/首次联系仍关闭，真实执行仍交父助手/Hermes。发送 ACK 无已证契约，结果保持 unconfirmed，新增同文只读观察不是 accepted/送达；不得猜 mid/cid。详见 [MESSAGE_SEND](docs/MESSAGE_SEND.md)。
+
 ## 浏览器适配增量（2026-10-15）
 
 项目管理 Chrome/Chromium 发现及 bridge 页面适配，不改固定上游/site-packages。管理员可选固定账号 loopback CDP，**仅 search、orders 买到订单有界分页（未知末页保持 partial）、inventory 本人发布列表有界分页（仅 self_published 页面范围可 complete，不等同全状态库存），以及 messages 会话末条样本（[限制](docs/MESSAGES.md)）**，其余操作 fail closed（[样本契约](docs/OPERATIONS_SAMPLES.md)；全量能力仍 false）；不得注入 Cookie、关闭借用浏览器/context、导航已有页或失败后换浏览器。所有权/重定向/隔离设计及配置见 [BROWSER.md](docs/BROWSER.md)。不要将真实 Chromium 本地 HTML 验收写成真实平台或 Chrome 验收；上线和真实只读验证交 Hermes。

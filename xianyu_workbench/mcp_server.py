@@ -77,7 +77,7 @@ def chat_history(account_id: str, cid: str):
 
 @mcp.tool()
 def sync_message_sample(account_id: str) -> dict:
-    """按需只读会话末条样本；不是历史/实时消息。仅白名单普通文本可读；未知正文不可回复，CDP 不可提案/发送。"""
+    """按需只读会话末条样本；不是历史/实时消息。仅白名单普通文本可读；未知正文不可回复；发送需独立管理员开关、同账号 Cookie、逐条审批和管理员单条执行。"""
     from urllib.parse import quote
     return api('POST', f'/api/accounts/{quote(account_id, safe="")}/messages/sync')
 

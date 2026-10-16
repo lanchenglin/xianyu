@@ -148,7 +148,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "message_observation_policy": {"default_enabled": False, "minimum_interval_s": 300,
                                                "coverage": "conversation_last_message_samples",
                                                "configuration_role": "admin", "send_allowed": False},
-                "message_bodies": True, "message_reply_drafts": True, "message_sample_propose": False,
+                "message_bodies": True, "message_reply_drafts": True, "message_sample_propose": True,
+                "message_send_policy": {"default_enabled": False, "configuration_role": "admin",
+                                        "allowed_operations": ["message.send"], "selected_execution_only": True,
+                                        "credential_source": "independent_cookie_ws", "pair_source": "cdp_readonly",
+                                        "automatic_acceptance_verified": False, "delivery_verified": False,
+                                        "faq_send_allowed": False, "platform_verified": False},
                 "sample_policy": {"pages": 20, "pagination": True, "all_statuses": False,
                                   "scopes": ["bought_orders", "self_published"],
                                   "unsupported_scopes": ["sold_orders", "off_shelf_inventory", "all_status_inventory"],
@@ -330,6 +335,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def approve(action_id: str, body: ApprovalIn, current=Depends(admin)):
         service.approve(action_id, body.digest)
         return {"ok": True, "state": "approved"}
+
+    @app.post('/api/actions/{action_id}/execute')
+    def execute(action_id: str, body: ApprovalIn, current=Depends(admin)):
+        return service.execute_one(action_id, body.digest)
 
     @app.post("/api/actions/{action_id}/reject")
     def reject(action_id: str, current=Depends(admin)):

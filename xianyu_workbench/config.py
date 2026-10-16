@@ -25,6 +25,7 @@ class Settings:
     browser_cdp_endpoint: str = ''
     browser_cdp_account_id: str = ''
     browser_cdp_uid: str = ''
+    message_send_enabled: bool = False
 
     def validate(self) -> None:
         if min(len(self.admin_token), len(self.agent_token)) < 32:
@@ -39,6 +40,8 @@ class Settings:
             endpoint(self.browser_cdp_endpoint)
             if not self.browser_cdp_account_id or not self.browser_cdp_uid.isdecimal():
                 raise ValueError('cdp_binding_required')
+        if self.message_send_enabled and not all((self.browser_cdp_endpoint, self.browser_cdp_account_id, self.browser_cdp_uid)):
+            raise ValueError('message_send_binding_required')
         if self.operation_timeout < 5:
             raise ValueError("operation_timeout 必须 >= 5 秒")
 
@@ -59,6 +62,7 @@ class Settings:
             browser_cdp_endpoint=os.getenv('XY_BROWSER_CDP_ENDPOINT', ''),
             browser_cdp_account_id=os.getenv('XY_BROWSER_CDP_ACCOUNT_ID', ''),
             browser_cdp_uid=os.getenv('XY_BROWSER_CDP_UID', ''),
+            message_send_enabled=os.getenv('XY_MESSAGE_SEND_ENABLED', 'false').lower() == 'true',
         )
         obj.validate()
         return obj

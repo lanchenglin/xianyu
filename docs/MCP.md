@@ -4,7 +4,11 @@
 
 接入前先按部署说明启动工作台；本地完整开发推荐 Python 3.12。以下示例是当前已提供的通用配置，不代表你的具体客户端或三个远程 Gateway 已联调通过。首次建会话、实时自动客服等待办见交接清单，MCP 不会额外实现后端没有的能力。
 
-## 浏览器部署边界
+## 人工单条发送更新（2026-10-16，优先于历史禁止描述）
+
+现有消息提案工具可在显式管理员开关下申请已有 peer/CID 普通文本，不新增 MCP 审批/执行工具。管理员 POST `/api/actions/{id}/execute`，body=`{digest,confirm:"确认执行"}`，原子领取仅此条；Agent 返回 403。实际 WS 来源是独立导入同 UID Cookie，不是浏览器 Cookie 自动提取；审批冻结并复核来源、账号、收件人、CID、正文。默认关闭，不启用 FAQ，结果仍 unconfirmed；[发送契约](MESSAGE_SEND.md)。实际 Hermes 注册与真实写仍未验收。
+
+## 浏览器部署边界（历史）
 
 Chrome/Chromium 发现和 CDP 属于工作台管理员部署配置，不是 MCP 工具参数。Agent 不能指定浏览器路径、profile、CDP 端点或任意 URL。可选 CDP 只读 search、orders/inventory 单页样本、messages 末条元数据样本绑定唯一工作台账号 id 与平台 uid；item、历史消息和所有写操作 fail closed。新增 `sync_message_sample(account_id)` / `cached_messages(account_id)`，对应 POST `/api/accounts/{account_id}/messages/sync` / GET `/api/accounts/{account_id}/messages`。`partial_messages=true` 不等于 history/realtime，body unavailable 不得生成回复；已核验 incoming 普通文本可显式调用 `message_reply_draft(account_id,sample_id)`（对应 POST `/api/accounts/{account_id}/messages/{sample_id}/reply-draft`）生成加密本地模板草稿，不调用模型、不提案/发送。CDP 真实账号发送提案拒绝；详见 [MESSAGES](MESSAGES.md)。不能因失败要求换账号/换浏览器重试。Hermes 上线及真实只读验证请先独立审查 [BROWSER.md](BROWSER.md)，不要将离线 doctor/模拟测试当作真实登录验收。
 

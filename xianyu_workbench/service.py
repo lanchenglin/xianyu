@@ -41,6 +41,8 @@ class Service:
         if runtime.exists():
             for path in runtime.glob("*/.goofish-cli/cookies.json"):
                 path.unlink(missing_ok=True)
+            for path in runtime.glob('*/.goofish-cli/im_token.json'):
+                path.unlink(missing_ok=True)
             for path in runtime.glob("*/.goofish-cli/profiles"):
                 shutil.rmtree(path, ignore_errors=True)
 
@@ -74,6 +76,8 @@ class Service:
     def action_view(self, row: dict, actor: str = "agent") -> dict:
         result = dict(row)
         result["payload"] = self.vault.open(row["payload"])
+        if actor != 'admin':
+            result['payload'].pop('_binding', None)
         result["result"] = self.vault.open(row["result"]) if row.get("result") else None
         result.pop("idem", None)
         record = self.db.one("SELECT * FROM reconciliations WHERE action_id=?", (row["id"],))
@@ -136,7 +140,14 @@ class Service:
         if body.kind == 'message.send':
             self.observation.guard(account['id'])
         if body.kind == 'message.send' and account['mode'] == 'live' and self.s.browser_cdp_endpoint:
-            raise Problem('recipient_unverified', '末条消息样本尚不能证明会话收件人；禁止生成发送提案', 409)
+            old = self.db.one('SELECT * FROM actions WHERE account_id=? AND idem=?', (account['id'], body.idempotency_key))
+            if old:
+                old_payload = self.vault.open(old['payload'])
+                if {k: v for k, v in old_payload.items() if k != '_binding'} != payload:
+                    raise Problem('idempotency_conflict', '相同幂等键不能用于不同内容', 409)
+                return self.action_view(old, actor)
+            from .message_send import prepare
+            payload = prepare(self, account, payload)
         if body.kind == "item.publish":
             self.validate_assets(account["id"], payload["images"])
         signature = digest({"account_id": account["id"], "kind": body.kind, "payload": payload, "mode": account["mode"]})
@@ -153,7 +164,7 @@ class Service:
                       (action_id, account["id"], body.kind, self.vault.seal(payload), signature, account["mode"],
                        body.idempotency_key, "pending", now, now + 86400))
         self.db.audit(actor, "action.proposed", action_id, {"kind": body.kind, "digest": signature})
-        return self.action_view(self.db.one("SELECT * FROM actions WHERE id=?", (action_id,)))
+        return self.action_view(self.db.one("SELECT * FROM actions WHERE id=?", (action_id,)), actor)
 
     def approve(self, action_id: str, signature: str):
         with self.db.connect() as c:
@@ -182,17 +193,30 @@ class Service:
                 raise Problem("state_conflict", "该操作不可撤回，可能已执行或正在执行", 409)
         self.db.audit("admin", "action.rejected", action_id)
 
-    def run_once(self) -> bool:
+    def execute_one(self, action_id: str, signature: str):
+        if not self.run_once(action_id=action_id, signature=signature):
+            raise Problem('state_conflict', '该单条操作不可执行或已被领取', 409)
+        return self.action_view(self.db.one('SELECT * FROM actions WHERE id=?', (action_id,)), 'admin')
+
+    def run_once(self, *, action_id: str | None = None, signature: str | None = None) -> bool:
         now = time.time()
         with self.db.connect() as c:
             c.execute("BEGIN IMMEDIATE")
             c.execute("UPDATE actions SET state='expired' WHERE state IN ('pending','approved') AND expires<?", (now,))
-            row = c.execute("SELECT a.* FROM actions a JOIN accounts b ON a.account_id=b.id WHERE a.state='approved' AND b.paused=0 ORDER BY a.created LIMIT 1").fetchone()
+            query = "SELECT a.* FROM actions a JOIN accounts b ON a.account_id=b.id WHERE a.state='approved' AND b.paused=0"
+            if action_id is not None:
+                row = c.execute(query + ' AND a.id=? AND a.digest=?', (action_id, signature)).fetchone()
+            else:
+                restriction = " AND NOT (a.kind='message.send' AND a.mode='live')" if self.s.browser_cdp_endpoint else ''
+                row = c.execute(query + restriction + ' ORDER BY a.created LIMIT 1').fetchone()
             if not row:
                 return False
             row = dict(row)
+            observation = c.execute('SELECT revision FROM message_observation WHERE account_id=?', (row['account_id'],)).fetchone()
+            observation_revision = observation['revision'] if observation else 0
             c.execute("UPDATE actions SET state='running' WHERE id=? AND state='approved'", (row["id"],))
         entered_write = False
+        before = None
         try:
             account = self.provider.account(row["account_id"])
             payload = self.vault.open(row["payload"])
@@ -202,10 +226,18 @@ class Service:
             execution = dict(payload)
             if row["kind"] == "message.send":
                 self.observation.guard(account['id'])
-                chats = self.provider.call(account["id"], "chats", {"fetch_num": 50})
-                matching = [s for s in chats.get("sessions", []) if str(s.get("session_id")) == payload["cid"] and str(s.get("peer_user_id")) == payload["toid"]]
-                if not matching:
-                    raise Problem("recipient_unverified", "未验证到该收件人与会话的对应关系，请先在闲鱼人工建立/核对会话", 409)
+                if account['mode'] == 'live' and self.s.browser_cdp_endpoint:
+                    from .message_send import preflight
+                    before = preflight(self, account, payload)
+                    from .message_send import binding
+                    if binding(self, self.provider.account(account['id'])) != payload['_binding']:
+                        raise Problem('send_binding_changed', '准备期间登录态改变，停止执行', 409)
+                    execution.pop('_binding', None)
+                else:
+                    chats = self.provider.call(account["id"], "chats", {"fetch_num": 50})
+                    matching = [s for s in chats.get("sessions", []) if str(s.get("session_id")) == payload["cid"] and str(s.get("peer_user_id")) == payload["toid"]]
+                    if not matching:
+                        raise Problem("recipient_unverified", "未验证到该收件人与会话的对应关系，请先在闲鱼人工建立/核对会话", 409)
             elif row["kind"] == "item.publish":
                 execution["images"] = self.validate_assets(account["id"], payload["images"])
             elif row["kind"] == "item.delete":
@@ -216,12 +248,16 @@ class Service:
             if time.time() > row["expires"]:
                 raise Problem("approval_expired", "审批在执行准备期间过期，请重新申请", 409)
             entered_write = True
-            result = self.provider.call(account["id"], row["kind"], execution, write=True)
+            kwargs = {'expected_binding': payload['_binding']} if before is not None else {}
+            result = self.provider.call(account["id"], row["kind"], execution, write=True, **kwargs)
             if account["mode"] == "demo":
                 state = "simulated"
             elif row["kind"] == "message.send":
                 state = "unconfirmed"  # Upstream's mid is NOT a delivery receipt.
                 result["notice"] = "已调用发送接口；上游未验证送达回执，请在闲鱼核对。不会自动重发。"
+                if self.s.browser_cdp_endpoint:
+                    from .message_send import observe
+                    result.update(observe(self, account, payload, before))
             elif result.get("ok") is not True:
                 state = "unconfirmed"
             elif row["kind"] == "item.publish" and not str(result.get("item_id", "")).isdigit():
@@ -242,7 +278,17 @@ class Service:
                 state = "unconfirmed"
             else:
                 state = "failed"
-            self.db.execute("UPDATE actions SET state=?,error=? WHERE id=?", (state, exc.message, row["id"]))
+            if state == 'unconfirmed' and before is not None:
+                from .message_send import observe
+                evidence = observe(self, account, payload, before)
+                self.db.execute('UPDATE actions SET result=? WHERE id=?', (self.vault.seal(evidence), row['id']))
+            with self.db.connect() as c:
+                c.execute('BEGIN IMMEDIATE')
+                if state == 'approved' and row['kind'] == 'message.send':
+                    observation = c.execute('SELECT revision,takeover FROM message_observation WHERE account_id=?', (row['account_id'],)).fetchone()
+                    if observation and (observation['takeover'] or observation['revision'] != observation_revision):
+                        state = 'blocked'
+                c.execute("UPDATE actions SET state=?,error=? WHERE id=?", (state, exc.message, row["id"]))
             self.db.audit("worker", "action.stopped", row["id"], {"code": exc.code, "state": state})
         except Exception as exc:
             self.db.execute("UPDATE actions SET state='unconfirmed',error=? WHERE id=?", ("执行状态不确定，请人工核对，禁止自动重试", row["id"]))

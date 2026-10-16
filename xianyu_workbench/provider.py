@@ -37,7 +37,7 @@ class Provider:
             raise Problem("not_found", "账号不存在", 404)
         return account
 
-    def call(self, account_id: str, operation: str, payload: dict, *, write: bool = False):
+    def call(self, account_id: str, operation: str, payload: dict, *, write: bool = False, expected_binding: dict | None = None):
         expected_write = operation in {"message.send", "item.publish", "item.delete"}
         if operation not in {"search", "orders", "inventory", "messages", "item", "chats", "history", "message.send", "item.publish", "item.delete"} or write != expected_write:
             raise Problem("unsupported", "该操作没有开放；交易操作必须在闲鱼人工完成", 403)
@@ -46,6 +46,10 @@ class Provider:
         try:
             with FileLock(self.lock_path, timeout=0.1):
                 account = self.account(account_id)
+                if expected_binding is not None:
+                    from .message_send import binding
+                    if operation != 'message.send' or binding(self, account) != expected_binding:
+                        raise Problem('send_binding_changed', '审批绑定已改变，禁止发送', 409)
                 if account["paused"]:
                     raise Problem("account_paused", "账号已暂停：" + account["pause_reason"], 409)
                 if operation in {'messages', 'message.send'}:
@@ -75,8 +79,9 @@ class Provider:
     def _live(self, account: dict, operation: str, payload: dict, *, write: bool):
         if operation in {'orders', 'inventory', 'messages'} and not self.s.browser_cdp_endpoint:
             raise Problem('cdp_required', '单页样本同步仅支持管理员绑定的 CDP 账号', 409)
+        cookie_send = bool(self.s.browser_cdp_endpoint and self.s.message_send_enabled and operation == 'message.send')
         if self.s.browser_cdp_endpoint:
-            if operation not in {'search', 'orders', 'inventory', 'messages'}:
+            if operation not in {'search', 'orders', 'inventory', 'messages'} and not cookie_send:
                 raise Problem('cdp_search_only', 'CDP 仅支持搜索、订单、本人商品和末条消息样本；写操作未开放', 409)
             if (account['id'] != self.s.browser_cdp_account_id or account['uid'] != self.s.browser_cdp_uid):
                 raise Problem('cdp_binding_mismatch', 'CDP 固定账号绑定不匹配，拒绝执行', 409)
@@ -86,7 +91,9 @@ class Provider:
         home.chmod(0o700)
         private.chmod(0o700)
         cookie_file = private / "cookies.json"
-        if not self.s.browser_cdp_endpoint:
+        if not self.s.browser_cdp_endpoint or cookie_send:
+            if not account['secret']:
+                raise Problem('auth_required', '独立发送登录态缺失，请管理员导入同账号 Cookie', 409)
             cookies = self.vault.open(account["secret"])
             if cookies.get("unb") != account["uid"]:
                 raise Problem("account_mismatch", "登录态所属账号不一致，拒绝执行", 409)
@@ -105,8 +112,9 @@ class Provider:
                     'XY_BROWSER_CDP_ENDPOINT': self.s.browser_cdp_endpoint,
                     'XY_BROWSER_CDP_ACCOUNT_ID': self.s.browser_cdp_account_id,
                     'XY_BROWSER_CDP_UID': self.s.browser_cdp_uid,
+                    'XY_MESSAGE_SEND_ENABLED': 'true' if cookie_send else 'false',
                     'XY_OPERATION_ACCOUNT_ID': account['id'], 'XY_OPERATION_UID': account['uid']})
-        if not self.s.browser_cdp_endpoint:
+        if not self.s.browser_cdp_endpoint or cookie_send:
             env['GOOFISH_COOKIES_PATH'] = str(cookie_file)
         command = [self.s.upstream_python or sys.executable, "-u", "-m", "xianyu_workbench.bridge"]
         try:
@@ -159,8 +167,9 @@ class Provider:
         finally:
             # Never retain readable login cookies at rest. Crash residue is removed at startup.
             cancel_file.unlink(missing_ok=True)
-            if not self.s.browser_cdp_endpoint:
+            if not self.s.browser_cdp_endpoint or cookie_send:
                 cookie_file.unlink(missing_ok=True)
+                (private / 'im_token.json').unlink(missing_ok=True)
             shutil.rmtree(private / "profiles", ignore_errors=True)
 
     @staticmethod

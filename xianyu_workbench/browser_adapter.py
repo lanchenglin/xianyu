@@ -26,7 +26,8 @@ def validate_operation(operation: str):
         endpoint(address)
     except ValueError:
         raise BrowserError('cdp_config_invalid') from None
-    if operation not in CDP_OPERATIONS:
+    send_allowed = operation == 'message.send' and os.environ.get('XY_MESSAGE_SEND_ENABLED') == 'true'
+    if operation not in CDP_OPERATIONS and not send_allowed:
         raise BrowserError('cdp_search_only')
     if (not os.environ.get('XY_BROWSER_CDP_ACCOUNT_ID') or
             os.environ.get('XY_BROWSER_CDP_ACCOUNT_ID') != os.environ.get('XY_OPERATION_ACCOUNT_ID') or
@@ -91,4 +92,15 @@ def install(operation: str):
         def forbidden_session(*args, **kwargs):
             raise BrowserError('cdp_session_forbidden')
 
-        Session.load = forbidden_session
+        if operation == 'message.send':
+            original_load = Session.load
+
+            def bound_session(*args, **kwargs):
+                session = original_load(*args, **kwargs)
+                if session.unb != os.environ['XY_OPERATION_UID']:
+                    raise BrowserError('account_mismatch')
+                return session
+
+            Session.load = bound_session
+        else:
+            Session.load = forbidden_session

@@ -2,7 +2,11 @@
 
 日期：2026-10-15；起点 feat/local-next / 121f3c8。本轮不接触 .env/data、8099、9235 或真实平台；不升级固定上游，不部署、不 push。500 轮为工作上限而非验收指标；批次完成不等于全部需求完成。
 
-## 2026-10-16 有界分页（最新）
+## 2026-10-16 已有会话单条发送（最新）
+
+默认关闭开关 + 独立绑定 Cookie/WS + CDP peer/CID 只读复核 + 冻结审批 + 指定单条队列执行已实现；UI 样本选择起草、管理员单条按钮均有隔离浏览器测试。FAQ 仍非执行策略，实际 Hermes 接入/商品写/订单全量仍待继续。发送后的只读同文观察不能可靠关联 ACK，accepted 判定尚未交付；缺口与父助手最小取证见 [MESSAGE_SEND](MESSAGE_SEND.md)。先完成已有会话真实安全验收，再取首次联系响应 CID 关联；不猜 mid。用户报告 b8ea112 已部署且 CI38857758684 五绿，inventory2页40条 self_published complete，orders13页130条 time_limit partial；不重复分页修复。
+
+## 2026-10-16 有界分页（历史）
 
 买到订单已提交 8401eea；本人发布列表继续使用同一有界滚动状态机。v10 进度、去重、重复页/游标停止及完整/部分/失败缓存保留已实现。订单仅 known string true，末页 false 留待父助手取证；商品 bool false 仅完成 self_published 范围，不能称全状态库存。卖出订单/下架列表未实现。真实滚动触发、POST 分页字段和末页取证需求见 [OPERATION_PAGINATION](OPERATION_PAGINATION.md)。以下单页研究结论为历史状态。
 

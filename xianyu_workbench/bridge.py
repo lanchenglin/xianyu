@@ -27,6 +27,13 @@ WRITES = {
 
 
 def dispatch(operation: str, payload: dict):
+    if operation == 'message.send':
+        from .models import MessageIn
+        if set(payload) != {'cid', 'toid', 'text'}:
+            raise ValueError('text_send_payload')
+        validated = MessageIn.model_validate(payload).model_dump()
+        if validated != payload:
+            raise ValueError('text_send_payload')
     if operation in {'orders', 'inventory', 'messages'}:
         if payload:
             raise ValueError('operation takes no parameters')

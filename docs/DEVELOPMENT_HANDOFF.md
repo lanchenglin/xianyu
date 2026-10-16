@@ -4,7 +4,13 @@
 
 本文件交给在本地继续开发的人、Codex、Claude Code 或 Hermes。**下列任务是待办与设计建议，不代表功能已经实现。** 原始交接只更新文档；2026-10-14 续开发在 `feat/local-next` 完成 P0-ENV 本地修复、P2-04 迁移必要基础及 P1-02 人工核对，以下各节标注当前实现与未验收边界，不新增平台动作。
 
-## 2026-10-16 任务页 focus emulation（最新）
+## 2026-10-16 单条安全消息增量（最新）
+
+默认关闭的管理员开关仅放行 message.send；CDP 只读 peer/CID 校验 + 明确独立绑定 Cookie/WS，冻结来源与正文 digest，人工审批后管理员 HTTP/UI 只执行指定一条，其他历史 approved 不被启动。FAQ、首次联系、商品写链路、实际 Hermes 接入、完整订单仍未完成。发送后只读辅助核对已接，但缺少可靠发送 ACK 关联，不能实现 accepted 自动判定，始终保留 unconfirmed；父助手最小取证见 [MESSAGE_SEND](MESSAGE_SEND.md)。本批不 push/部署。
+
+用户报告 b8ea112 已部署，CI38857758684 五作业绿；真实 inventory 2 页40条 self_published complete，orders13页130条因25秒 limit partial。不再重复分页修复，下方待复测为历史记录。
+
+## 2026-10-16 任务页 focus emulation（历史）
 
 父助手真实单变量 probe 证明同 no_defaults=True 任务页启用 focus emulation 后 root/body 1241→3729，hidden=false/hasFocus=true 未变，不能归因为仅 document.hidden。经批准只对 orders/inventory 新任务页导航前启用，task_page 可选参数默认 false，search/messages 不变。保留借用 context 默认、原页、前后 UID 校验、root几何/750ms节流/预算；失败或取消清理 session 和新页。脚本/初轮诊断测试一并保留，详见 CDP_DEFAULTS_DIAGNOSIS / TEST_REPORT。代码本地验证不代表真实 API 分页通过，待父助手验收；无部署/push，无真实实例连接。
 

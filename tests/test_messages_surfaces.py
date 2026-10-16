@@ -81,4 +81,4 @@ def test_message_capabilities_schema_allowlist_and_unknown_recipient(workbench, 
     result = client.post('/api/actions', json={'account_id': ident, 'kind': 'message.send',
         'payload': {'cid': '123', 'toid': '22', 'text': 'no unknown recipient'}, 'idempotency_key': 'blocked-msg'})
     assert result.status_code == 409
-    assert result.json()['code'] == 'recipient_unverified'
+    assert result.json()['code'] == 'message_send_disabled'

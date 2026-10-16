@@ -18,6 +18,12 @@
 
 **默认支持 Linux / WSL，Python 3.11 / 3.12，本地示例使用 3.12；Windows 原生支持暂停。** `53400f8` 的 [CI run 38727928186](https://github.com/lanchenglin/xianyu/actions/runs/38727928186) 中 Linux 双版本、双版本 upstream-contract 和 browser-smoke 通过，Windows 3.11/3.12 失败。Windows 快照保存在独立分支 `work/windows-support-53400f8`（`53400f82f1ce4f1b1322f184b4b15e2e2c949e97`）；当前分支仅保留 Linux CI 门槛，不删除跨平台源码或回归。后续 Linux 全绿不代表 Windows 支持恢复；历史成功与失败见[测试报告](docs/TEST_REPORT.md)。
 
+## 2026-10-16 单条审批消息增量
+
+新增默认关闭的管理员 `XY_MESSAGE_SEND_ENABLED`，仅允许已核验 peer/CID 的 `message.send`。CDP 只读核验，发送明确使用独立导入、同 UID 绑定的 Cookie/WS；审批冻结来源绑定与正文，管理员可只执行指定一条，不消费历史 approved 消息。其他 CDP 写、FAQ、首次联系仍拒绝。发送后只读核对但无可靠 ACK 关联，仍 unconfirmed、不宣称 accepted/送达；[完整契约与父助手最小取证](docs/MESSAGE_SEND.md)。真实发送/Hermes 接入尚未验收。
+
+用户提供的基线：b8ea112 已 push/部署，CI 38857758684 五作业绿；真实 inventory 2 页 40 条仅 self_published complete，orders 13 页 130 条因 25 秒 limit partial。本批不重复分页修复、不 push/部署。
+
 ## 2026-10-16 有界页面读取
 
 买到订单与本人发布列表支持固定任务页有界滚动、多页去重和持久进度；订单末页字符串仍未获证，保持 partial。本人发布列表仅在已证布尔末页时 complete；卖出订单、下架列表、全状态库存未实现。历史缓存不冒充完整快照。响应早于 DOM/hook 的时序改用 750ms 有界等待/滚动，加载中不滚动；高度与底端统一按 document.scrollingElement 计算，避免横向滚动条使滚动停在真实底端之前。保留 no_defaults=True，仅 orders/inventory 新任务页启用 focus emulation，不改借用 context 默认或用户原页，search/messages 不变；依据父助手真实几何对照，不将原因简化为 document.hidden。真实工作台 API 修复效果待父助手复测，不扩大能力范围。迁移与取证需求见 [分页边界](docs/OPERATION_PAGINATION.md)。
@@ -41,8 +47,8 @@
 | MCP / HTTP API | 已实现；MCP 只接受 Agent 令牌，没有审批、凭据或交易工具 |
 | 陌生卖家首次建会话 | **未开放**；先人工在闲鱼建立会话，再回到工作台 |
 | 平台改价、普通下架/重新上架、全量库存同步 | **未实现**；只保留本地管理，不返回虚假成功 |
-| 买到订单 / 本人发布列表有界分页 | **已实现代码，工作台分页 API 真实验收未完成**；订单未知末页保持 partial；商品仅 `self_published` 页面范围可 complete，不等同全状态库存；加密缓存、API/UI/MCP，`partial_orders/partial_inventory=true`，完整同步能力仍 false；[分页契约](docs/OPERATION_PAGINATION.md) |
-| 会话末条消息样本 | `partial_messages=true`；CDP 被动 WS、加密缓存、HTTP/UI/MCP；严格解码已验证普通文本，核验双方后可按需生成本地模板草稿；不提案/发送，非历史/实时聊天，真实未验收，见[消息契约](docs/MESSAGES.md) |
+| 买到订单 / 本人发布列表有界分页 | **用户报告 b8ea112 真实 API：库存2页40条，订单13页130条**；订单未知末页保持 partial；商品仅 `self_published` 页面范围可 complete，不等同全状态库存；加密缓存、API/UI/MCP，`partial_orders/partial_inventory=true`，完整同步能力仍 false；[分页契约](docs/OPERATION_PAGINATION.md) |
+| 会话末条消息样本 | `partial_messages=true`；CDP 被动 WS、加密缓存、HTTP/UI/MCP；严格解码已验证普通文本，核验双方后可按需生成本地模板草稿、选择会话提交单条审批；发送另需默认关闭的管理员独立 Cookie/WS 开关，非历史/实时聊天，真实发送未验收，见[消息契约](docs/MESSAGES.md) |
 | 低频消息采集 / 人工接管 | 默认关闭、最短 5 分钟、同一 worker、持久去重与失败退避；只是末条样本不是完整历史。API/UI/MCP，见[观察契约](docs/MESSAGE_OBSERVATION.md) |
 | 管理员有限 FAQ 策略 | 默认关闭；加密商品+会话范围、固定模板、期限、频率与撤销；发送适配未接入，策略永不触发发送，`autonomous_reply=false` |
 | 完整订单同步、实时自动客服、自动议价成交 | **未实现**；样本不等于完整订单/全状态库存；消息仍按需读取、起草、审批发送 |

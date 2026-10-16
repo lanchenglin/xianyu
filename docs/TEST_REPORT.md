@@ -4,6 +4,18 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
+## 2026-10-16 安全单条消息与中断后最终回归
+
+基线 b8ea112，既有分页不改。新增默认关闭管理员开关、独立同 UID Cookie/WS 来源、CDP 当次 peer/CID 复核、冻结凭据/接管 revision/正文 digest、管理员指定单条领取与只读事后核对。无 schema 迁移。完整限制见 [MESSAGE_SEND](MESSAGE_SEND.md)。用户提供的基线真实 inventory2页40条 self_published complete、orders13页130条 time_limit partial 与 CI38857758684 五绿，不冒充本批验收。
+
+- TDD 阶段日志保留于未跟踪 `scratch/xianyu-send-evidence/`：开关/指定领取、绑定/来源、严格 bridge payload、Cookie/token 清理、操作锁绑定、接管 revision、只读限速、单条 UI 与样本选择均有失败及修复回归。首次全量 `full312-first.txt` 为 416 passed / 1 failed / 14 skipped；失败是旧断言仍期待 recipient_unverified，新默认开关先返回 message_send_disabled，已同步契约。初次 UI worker-off 测试阻断原监控通知，因此恢复完整 smoke 的 worker 设置，另建独立 worker-off 单条 UI 测试；未改生产监控逻辑。
+- 中断前 `final312.txt` / `final311.txt` 各441 passed；本次恢复先确认无遗留测试进程，未触碰运行中的真实服务，然后重新验证当前文件，非复用旧绿灯。
+- **最终 Python 3.12.14：441 passed，166.77s；Python 3.11.16：441 passed，170.26s；均无 skip。** 各1条既有 Starlette/httpx 弃用警告。日志 `resume312.txt` / `resume311.txt`。
+- 两版本额外运行 `tests/test_mcp_stdio.py tests/test_message_send_transport.py tests/test_message_send_bridge.py`：各 **7 passed**（6.37s / 6.28s），真实 MCP stdio 连接临时演示 API；发送 subprocess 契约使用虚构 Session/transport 替身，**不是向真实 WS 发送的验收**。日志 `resume-boundary{312,311}.txt`。
+- 全量含独立真实 Chromium 单条 UI（worker关闭、只执行指定一条、历史approved不动、样本选择起草）；另运行 `scripts/smoke_ui.py` 双版本均通过，覆盖既有登录/搜索/监控/审批/人工核对/XSS/Agent隔离/图片/演示发布/移动端。日志 `resume-ui{312,311}.txt`。
+- 双环境 `pip check`、`ruff check .`，`node --check xianyu_workbench/static/app.js`、`git diff --check` 均通过。命令统一 `env -u PYTHONPATH TMPDIR=/home/lan/.hermes/cache/scratch`。解释器为项目 `.venv/bin/python` 和 `/home/lan/.hermes/cache/scratch/xianyu-venv311/bin/python`；测试浏览器为专用 `xianyu-completion-evidence/browsers/chromium-1248/chrome-linux64/chrome`，独立临时 profile，`PLAYWRIGHT_BROWSERS_PATH` 指向项目 `.test-browsers` 且 `PLAYWRIGHT_SKIP_BROWSER_GC=1`。
+- 未读取真实 .env/data/profile，未连接8099/9235，不启用真实发送、不push、不部署。测试仅临时虚构数据；不提交 scratch。发送 ACK 关联缺证，accepted/unconfirmed 自动区分仍未完成，始终保守 unconfirmed，不声称接受/送达。实际 Hermes 接入、真实消息、商品写、FAQ、首次联系及订单全量仍未完成，取证留给父助手/Hermes。
+
 ## 2026-10-16 仅任务 target focus emulation
 
 基线 `3bb8734`，保留并提交已有未提交诊断脚本/文档/tests，scratch 原有文件不覆盖、不提交。父助手真实控制实验原件已读取：`/home/lan/.hermes/cache/scratch/xianyu-layout-probe.json`。同一 no_defaults=True `/personal` 页 baseline/置前均 height1241，只对任务页启用 focus emulation 后3729；hidden=false/hasFocus=true、图片93/93decoded与媒体布尔值不变，列表父容器 maxHeight480→3060px。此为真实几何恢复证据，**不是仅 document.hidden 原因，也不是工作台分页 API 验收**。具体阶段/限制见 CDP_DEFAULTS_DIAGNOSIS。

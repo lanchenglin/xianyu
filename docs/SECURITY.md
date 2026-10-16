@@ -1,5 +1,9 @@
 # 安全边界与账号保护
 
+## 2026-10-16 单条消息安全边界
+
+默认关闭的部署开关只允许 message.send；CDP 只读验证 pair，独立导入的 Cookie/WS 负责发送。审批冻结 UID、凭据 digest、CDP endpoint、接管 revision 与完整正文，执行时复核；指纹/端点仅管理员可见。单条 HTTP/UI 执行经过原 action 队列，Agent 无执行权，CDP live 消息不自动消费历史 approved。接管/解除期间 revision 变化使旧授权失效；busy/rate_limit 只可在 revision 不变且未接管时恢复 approved。未知写不重放；只读核对最多等待10秒限速窗口，不跳过暂停/接管。Cookie/IM token 临时文件结束与重启清理；FAQ/首次联系保持关闭。完整来源与 ACK 证据缺口见 [MESSAGE_SEND](MESSAGE_SEND.md)。
+
 ## 受控能力
 
 工作台不提供支付、下单、确认收货、退款等执行代码。真实消息发送、发布和删除必须经人工审批；Agent 不能改账号、导入凭据、配置模型或审批。可调用的上游操作是代码白名单，不接受任意模块、命令、脚本或 URL 作为执行目标。

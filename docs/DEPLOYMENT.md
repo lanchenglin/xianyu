@@ -2,6 +2,10 @@
 
 文档导航：[仓库首页](../README.md) · [本地开发交接/未完成清单](DEVELOPMENT_HANDOFF.md) · [MCP 接入](MCP.md) · [测试记录](TEST_REPORT.md)。
 
+## 2026-10-16 单条消息配置（默认关闭）
+
+新增部署者控制的 `XY_MESSAGE_SEND_ENABLED=false`，不提供 Agent/API 开关。启用需完整 CDP account/UID/endpoint、XY_LIVE_ENABLED，以及管理员独立导入同 UID Cookie；绝不提取现有浏览器 Cookie。仅 message.send 白名单、人工逐条审批、管理员指定 action 执行，不启动历史 approved live 消息。浏览器仍只读，其他写与 FAQ 仍拒绝。无需 schema 迁移；绑定放在原加密 action payload。真实启用/执行由父助手 Hermes 完成，本批不部署。[发送契约及取证](MESSAGE_SEND.md)。
+
 ## 2026-10-16 分页迁移注意
 
 有界订单/本人发布列表增量使用 schema v10，启动持单实例锁执行显式迁移并生成 before-v9 一致性备份；保留原 vault key 和旧库，旧同步不追认为完整。部署前按既有离线备份流程保存数据，不在运行中换库。此轮仅本地测试，未部署，工作台分页 API 尚未真实验收；父助手报告已取得浏览器滚动分页证据，但订单末页仍未知，证据范围与限制见 [浏览器验收边界](BROWSER.md#验收边界) 及 [分页契约](OPERATION_PAGINATION.md)。无需新增 endpoint/浏览器配置，仍禁止备用浏览器/账号回退。
