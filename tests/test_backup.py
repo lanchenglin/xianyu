@@ -57,7 +57,9 @@ def test_restore_destroyed_copy_pauses_and_never_replays(tmp_path):
                (vault.seal({'text': 'private draft', 'state': 'draft', 'sent': False}),))
     db.execute("INSERT INTO operation_records VALUES('a','messages','hmac',?,'fixture',1)",
                (vault.seal({'message_id': '987654', 'body_status': 'unavailable'}),))
+    db.execute("INSERT INTO message_observation(account_id,enabled) VALUES('a',1)")
     db.execute("INSERT INTO monitors(id,account_id,query,filters,interval_s) VALUES('m','a','fake','{}',300)")
+    db.execute("INSERT INTO settings VALUES('faq:a',?)", (vault.seal({'enabled': True, 'revision': 1}),))
     db.execute("INSERT INTO settings VALUES('notifications',?)", (vault.seal({'enabled': True}),))
     db.execute("INSERT INTO notifications(monitor_id,content,created) VALUES('m','{}',1)")
     db.execute("INSERT INTO notification_deliveries VALUES('d',1,'retry',1,0,1,NULL)")
@@ -77,6 +79,9 @@ def test_restore_destroyed_copy_pauses_and_never_replays(tmp_path):
     assert vault.open(restored.one('SELECT payload FROM message_reply_drafts')['payload'])['sent'] is False
     assert restored.one('SELECT paused FROM accounts')['paused'] == 1
     assert restored.one('SELECT enabled FROM monitors')['enabled'] == 0
+    assert restored.one('SELECT enabled FROM message_observation')['enabled'] == 0
+    assert restored.one('SELECT takeover FROM message_observation')['takeover'] == 1
+    assert vault.open(restored.one("SELECT value FROM settings WHERE key='faq:a'")['value'])['enabled'] is False
     assert vault.open(restored.one("SELECT value FROM settings WHERE key='notifications'")['value'])['enabled'] is False
     assert restored.one('SELECT state FROM notification_deliveries')['state'] == 'cancelled'
     import base64
@@ -190,6 +195,7 @@ def test_restore_v2_archive_migrates_drafts_before_install(tmp_path):
     old_db = tmp_path / 'old.db'
     old_db.write_bytes(files['workbench.db'])
     with closing(sqlite3.connect(old_db)) as c:
+        c.execute('DROP TABLE message_observation')
         c.execute('DROP TABLE message_reply_drafts')
         c.execute('DROP TABLE operation_records')
         c.execute('DROP TABLE operation_syncs')

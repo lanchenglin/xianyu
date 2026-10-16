@@ -122,8 +122,18 @@ def message_reply_schema(conn):
     )''')
 
 
+def message_observation_schema(conn):
+    conn.execute('''CREATE TABLE message_observation (
+        account_id TEXT PRIMARY KEY REFERENCES accounts(id),
+        enabled INTEGER NOT NULL DEFAULT 0, interval_s INTEGER NOT NULL DEFAULT 900,
+        takeover INTEGER NOT NULL DEFAULT 0, next_run REAL NOT NULL DEFAULT 0,
+        failures INTEGER NOT NULL DEFAULT 0, last_error TEXT,
+        last_run REAL, revision INTEGER NOT NULL DEFAULT 1
+    )''')
+
+
 MIGRATIONS = (initial_schema, reconciliation_schema, draft_revision_schema,
-              notification_state_schema, notification_delivery_schema, operations_schema, message_samples_schema, message_reply_schema)
+              notification_state_schema, notification_delivery_schema, operations_schema, message_samples_schema, message_reply_schema, message_observation_schema)
 
 
 class DB:

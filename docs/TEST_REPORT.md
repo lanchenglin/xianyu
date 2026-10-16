@@ -4,7 +4,20 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
-## 2026-10-15 严格 JSON 常量审查修复（最新，仍待独立复审）
+## 2026-10-16 低频消息观察与有限 FAQ 策略
+
+基线 4d5db8e；用户报告基线已部署 43 条/32 文本、350 tests / CI 五项绿。本增量未 push、未部署、未运行远端 CI，也未连接真实平台。
+
+- 逐行为 RED→GREEN：默认关闭/管理员配置、调度到期/持久去重、退避、接管/解除权限、恢复延后、同 worker、异常失败缓存标记、capability、有限 FAQ 范围/期限/模板/加密/撤销、备份恢复撤销授权；日志 01–22。
+- 真 MCP stdio：新增状态/接管工具发现和调用成功，接管后 sync 拒绝，禁止管理员令牌/授权工具。隔离 Chromium UI：配置→接管→解除、FAQ 保存→撤销通过。
+- 独立审查发现旧审批接管后快速解除可能执行、FAQ 表单跨账号残留；两项均先 RED 后修复（23–26 日志）。接管事务立即阻止 pending/approved 消息，UI 切换清空并加载当前账号策略。复审未发现这两项修复的剩余实质问题；审查者独立执行相关测试 23 passed，未独立重跑 UI。
+- timeout 接续后的最终完整回归：Python **3.12.14：373 passed, 1 warning, 97.68s**；Python **3.11.16：373 passed, 1 warning, 96.76s**，均无跳过，包含真实 MCP stdio 与隔离浏览器测试。唯一警告为既有 Starlette/httpx 弃用提示。双版本独立 `scripts/smoke_ui.py` 均通过，包含观察配置/接管/解除及 FAQ 保存/撤销/切账号清理。
+- 最终命令均使用 `env -u PYTHONPATH TMPDIR=/home/lan/.hermes/cache/scratch`；已核对两个解释器导入的包均为 `/home/lan/projects/xianyu/xianyu_workbench`，未使用全局 PYTHONPATH 旧快照。Python 路径分别为项目 `.venv/bin/python`、`/home/lan/.hermes/cache/scratch/xianyu-venv311/bin/python`。`XY_TEST_CHROMIUM=/home/lan/.hermes/cache/scratch/xianyu-completion-evidence/browsers/chromium-1248/chrome-linux64/chrome`，这是专用下载版，**不是系统 Chromium**。
+- 最终证据：`resume-verified311.log` / `resume-verified312.log`、`resume-ui311.log` / `resume-ui312.log`、`resume-checks.log`。旧 `review-final311/312.log` 被原进程 timeout 截断，不算通过；接续首次 `resume-final312.log` 使用了不存在的 chrome-linux 路径，主动停止后改用已核对的 chrome-linux64 路径重新全量验证，不把该次尝试计为通过。
+- `ruff check .`、`node --check xianyu_workbench/static/app.js`、`git diff --check` 与双环境 `pip check` 通过。测试均用临时虚构数据、随机端口、新 profile；浏览器专用路径 `/home/lan/.hermes/cache/scratch/xianyu-completion-evidence/browsers`，`PLAYWRIGHT_SKIP_BROWSER_GC=1`。
+- 全部证据绝对路径 `/home/lan/.hermes/cache/scratch/xianyu-completion-evidence/`。未读取真实 .env/data/profile、未连接 8099/9235；未跟踪 repo scratch 保留。无真实自动回复；autonomous_reply=false。完整分页/商品写/首次联系/实际 Hermes 注册仍未交付。
+
+## 2026-10-15 严格 JSON 常量审查修复（历史）
 
 用户报告精确快照 `24aa585e9cb18aafb26e3f7d0cfcc645b1c9c796` 独立审查 **FAIL**：`json.loads` 默认接受 `NaN`、`Infinity`、`-Infinity`，即使出现在未使用字段中，正文仍被标为 available。此前本地全绿不代表严格 JSON 契约成立，也不覆盖本次独立审查失败。
 

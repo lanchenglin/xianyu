@@ -20,6 +20,10 @@
 
 完整矩阵与真实页面取证断点见 [OPERATIONS_NEXT](docs/OPERATIONS_NEXT.md)。本批新增站内通知已读/归档、默认关闭的管理员外部摘要通知，契约见 [NOTIFICATIONS](docs/NOTIFICATIONS.md)。它是独立投递队列，不是平台写通道；仅固定摘要，Agent 不可配置目的地/密钥。恢复必须关闭外部通知，通知重试不得重放业务。无人值守 FAQ 仍 false，未修改逐条平台审批策略。
 
+## 2026-10-16 低频消息观察增量
+
+默认关闭的账号低频末条采集已接现有单 worker，v9 状态迁移、退避、接管与 API/UI/MCP 见 [MESSAGE_OBSERVATION](docs/MESSAGE_OBSERVATION.md)。管理员 FAQ 只保存加密有限策略，不具备发送适配或限额执行器，effective/send_allowed 永远 false；autonomous_reply 保持 false。Agent 只可读取摘要/请求接管，不能配置、解除或授权。恢复关闭采集、接管并撤销策略。分页、首次联系与真实商品写链路仍未交付，本批不 push/部署。
+
 ## 不可破坏的边界
 
 - 付款、下单、退款、确认收货和其他交易由人完成，不增加自主交易工具。

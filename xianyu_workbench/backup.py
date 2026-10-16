@@ -192,6 +192,11 @@ def restore_backup(directory: Path, archive_path: Path, vault: Vault) -> Path:
             with db.connect() as c:
                 c.execute("UPDATE accounts SET paused=1,pause_reason='备份恢复后需人工核实'")
                 c.execute('UPDATE monitors SET enabled=0')
+                c.execute('UPDATE message_observation SET enabled=0,takeover=1,revision=revision+1')
+                for policy in c.execute("SELECT key,value FROM settings WHERE key LIKE 'faq:%'").fetchall():
+                    value = vault.open(policy['value'])
+                    value.update(enabled=False, revision=value.get('revision', 0) + 1)
+                    c.execute('UPDATE settings SET value=? WHERE key=?', (vault.seal(value), policy['key']))
                 notification_config = c.execute("SELECT value FROM settings WHERE key='notifications'").fetchone()
                 if notification_config:
                     value = vault.open(notification_config['value'])

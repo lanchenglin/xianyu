@@ -48,6 +48,10 @@ class Provider:
                 account = self.account(account_id)
                 if account["paused"]:
                     raise Problem("account_paused", "账号已暂停：" + account["pause_reason"], 409)
+                if operation in {'messages', 'message.send'}:
+                    state = self.db.one('SELECT takeover FROM message_observation WHERE account_id=?', (account_id,))
+                    if state and state['takeover']:
+                        raise Problem('human_takeover', '人工已接管，禁止新消息操作；已发出的操作无法撤回', 409)
                 if account["mode"] == "demo":
                     return self.demo(operation, payload)
                 if not self.s.live_enabled:

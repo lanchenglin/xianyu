@@ -18,7 +18,7 @@ def test_partial_messages_encrypted_isolated_idempotent_and_fail_closed(workbenc
     assert client.get(f'/api/accounts/{other}/messages').json()['items'] == []
     rows = service.db.all("SELECT * FROM operation_records WHERE kind='messages'")
     assert len(rows) == 1 and rows[0]['payload'].startswith('gAAAA')
-    assert service.db.one('PRAGMA user_version')['user_version'] == 8
+    assert service.db.one('PRAGMA user_version')['user_version'] == 9
     assert client.post(f'/api/accounts/{other}/messages/sync').status_code == 200
     keys = service.db.all("SELECT record_key FROM operation_records WHERE kind='messages'")
     assert keys[0] != keys[1]
@@ -49,7 +49,7 @@ def test_v6_message_cache_migration_preserves_ciphertext(tmp_path):
         conn.execute("INSERT INTO operation_records VALUES('a','messages','key',?,'fixture',1)", (sealed,))
         conn.commit()
     db = DB(tmp_path, vault)
-    assert db.one('PRAGMA user_version')['user_version'] == 8
+    assert db.one('PRAGMA user_version')['user_version'] == 9
     assert db.one('SELECT payload FROM operation_records')['payload'] == sealed
     assert len(list((tmp_path / 'backups').glob('before-v6-*.db'))) == 1
     with pytest.raises(ValueError, match='密钥'):

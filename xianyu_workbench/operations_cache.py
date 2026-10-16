@@ -26,13 +26,15 @@ class OperationsCache:
                 'demo': account['mode'] == 'demo'}
 
     def sync(self, account_id, kind):
+        if kind == 'messages':
+            self.service.observation.guard(account_id)
         account = self.service.provider.account(account_id)
         source = 'demo' if account['mode'] == 'demo' else (MESSAGE_SOURCE if kind == 'messages' else SOURCES[kind])
         try:
             result = self.service.provider.call(account_id, kind, {})
-        except Problem as exc:
+        except Exception as exc:
             # Codes only, never remote messages or raw response bodies.
-            safe = exc.code if exc.code in {'response_timeout', 'response_invalid', 'field_invalid',
+            safe = exc.code if isinstance(exc, Problem) and exc.code in {'response_timeout', 'response_invalid', 'field_invalid',
                 'response_failed', 'response_too_large', 'items_invalid', 'duplicate_conflict',
                 'response_limit', 'page_redirected', 'cid_mismatch',
                 'cdp_identity_mismatch', 'cdp_binding_mismatch', 'cdp_context_ambiguous',
@@ -40,7 +42,7 @@ class OperationsCache:
             self.db.execute('INSERT INTO operation_syncs(account_id,kind,source,fetched_at,state,partial,'
                             'completion,error,item_count) VALUES(?,?,?,?,?,1,?,?,0)',
                             (account_id, kind, source, time.time(), 'failed', 'failed', safe))
-            raise Problem(safe, '只读采集失败；旧缓存保留，不代表本次成功。请根据安全错误码检查。', exc.status) from None
+            raise Problem(safe, '只读采集失败；旧缓存保留，不代表本次成功。请根据安全错误码检查。', exc.status if isinstance(exc, Problem) else 502) from None
         fetched = time.time()
         with self.db.connect() as conn:
             for item in result['items']:

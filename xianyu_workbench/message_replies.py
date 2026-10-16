@@ -12,6 +12,7 @@ class MessageReplies:
 
     def generate(self, account_id, sample_id):
         service = self.service
+        service.observation.guard(account_id)
         account = service.provider.account(account_id)
         if account['paused']:
             raise Problem('account_paused', '账号暂停，交人工处理', 409)

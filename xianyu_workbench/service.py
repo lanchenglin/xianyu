@@ -27,10 +27,13 @@ class Service:
         self.provider = Provider(settings, self.db, self.vault)
         from .notifications import Delivery
         self.notifications = Delivery(self.db, self.vault)
+        from .message_observation import MessageObservation
+        self.observation = MessageObservation(self)
         self.stop = threading.Event()
         self.thread: threading.Thread | None = None
 
     def recover(self):
+        self.db.execute('UPDATE message_observation SET next_run=MAX(next_run,?+interval_s)', (time.time(),))
         self.db.execute("UPDATE notification_deliveries SET state='unknown',error='interrupted' WHERE state='sending'")
         self.db.execute("UPDATE actions SET state='unconfirmed',error=? WHERE state='running'",
                         ("上次服务在执行过程中退出；请到闲鱼核实，不会自动重试",))
@@ -60,6 +63,8 @@ class Service:
                 self.run_once()
                 if not self.stop.is_set():
                     self.monitor_once()
+                if not self.stop.is_set():
+                    self.observation.run_once()
                 if not self.stop.is_set():
                     self.notifications.run_once()
             except Exception as exc:
@@ -128,6 +133,8 @@ class Service:
             payload = ACTION_MODELS[body.kind].model_validate(body.payload).model_dump(mode="json")
         except ValidationError:
             raise Problem("invalid_payload", "操作参数无效，请检查消息、金额、图片 ID 和删除确认文字", 422)
+        if body.kind == 'message.send':
+            self.observation.guard(account['id'])
         if body.kind == 'message.send' and account['mode'] == 'live' and self.s.browser_cdp_endpoint:
             raise Problem('recipient_unverified', '末条消息样本尚不能证明会话收件人；禁止生成发送提案', 409)
         if body.kind == "item.publish":
@@ -194,6 +201,7 @@ class Service:
                 raise Problem("integrity_error", "审批内容或账号模式已改变，停止执行", 409)
             execution = dict(payload)
             if row["kind"] == "message.send":
+                self.observation.guard(account['id'])
                 chats = self.provider.call(account["id"], "chats", {"fetch_num": 50})
                 matching = [s for s in chats.get("sessions", []) if str(s.get("session_id")) == payload["cid"] and str(s.get("peer_user_id")) == payload["toid"]]
                 if not matching:
@@ -228,7 +236,7 @@ class Service:
         except Problem as exc:
             if exc.code in ("rate_limited", "busy"):
                 state = "approved"  # Provider rejected BEFORE any outbound operation.
-            elif exc.code in ("risk_control", "auth_required", "account_paused"):
+            elif exc.code in ("risk_control", "auth_required", "account_paused", "human_takeover"):
                 state = "blocked"
             elif entered_write and exc.code not in ("live_disabled", "dependency_missing", "account_mismatch"):
                 state = "unconfirmed"

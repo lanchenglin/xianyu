@@ -90,6 +90,20 @@ def message_reply_draft(account_id: str, sample_id: str) -> dict:
 
 
 @mcp.tool()
+def message_observation_status(account_id: str) -> dict:
+    """读取低频末条样本采集状态，不是完整历史或发送许可。Agent 无配置/授权权限。"""
+    from urllib.parse import quote
+    return api('GET', f'/api/accounts/{quote(account_id, safe="")}/message-observation')
+
+
+@mcp.tool()
+def message_human_takeover(account_id: str) -> dict:
+    """安全停止该账号消息采集和草稿，转交人工；只有管理员可解除，不发送消息。"""
+    from urllib.parse import quote
+    return api('POST', f'/api/accounts/{quote(account_id, safe="")}/message-observation/takeover')
+
+
+@mcp.tool()
 def cached_messages(account_id: str) -> dict:
     """读取加密末条消息样本与最后采集状态；旧缓存不是本次成功，自己消息标 outgoing。"""
     from urllib.parse import quote

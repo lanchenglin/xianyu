@@ -4,7 +4,11 @@
 
 本文件交给在本地继续开发的人、Codex、Claude Code 或 Hermes。**下列任务是待办与设计建议，不代表功能已经实现。** 原始交接只更新文档；2026-10-14 续开发在 `feat/local-next` 完成 P0-ENV 本地修复、P2-04 迁移必要基础及 P1-02 人工核对，以下各节标注当前实现与未验收边界，不新增平台动作。
 
-## 2026-10-15 消息编码修正与本地草稿（最新）
+## 2026-10-16 低频采集 / 人工接管（最新）
+
+v9 增加账号默认关闭的低频消息采集，统一 worker、持久去重、失败退避与恢复暂停；API/UI/MCP 已接入。有限 FAQ 策略只由管理员配置/撤销，商品+会话范围/模板/有效期/频率加密保存；未实现发送执行器，永远 send_allowed=false，不能自动回复。详见 [MESSAGE_OBSERVATION](MESSAGE_OBSERVATION.md)。完整分页、真实写操作、首次联系和实际 Hermes 注册仍未完成，下一证据断点见 [OPERATIONS_NEXT](OPERATIONS_NEXT.md)。不 push/部署，真实商品仍待用户内容/价格/目标确认。
+
+## 2026-10-15 消息编码修正与本地草稿（历史）
 
 基线 da3e2ad；新增父助手只读证据支持 opaque messageId、严格普通文本解码和 pair 核验。HTTP/UI/MCP 按需生成加密 local_template 草稿，不调模型、不提案、不发送；v8 迁移，恢复无重放，完整边界见 [MESSAGES](MESSAGES.md)。真实平台本轮未验收，不部署/push，自动监听/FAQ 与 CDP 写入仍关闭。
 

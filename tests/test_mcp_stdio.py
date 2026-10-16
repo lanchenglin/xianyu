@@ -69,7 +69,16 @@ def test_stdio_discovery_call_and_local_notice_state(api_server, tmp_path):
             result = await session.call_tool('message_reply_draft', {'account_id': 'messages', 'sample_id': sample})
             assert not result.isError and 'local_template' in str(result)
             assert service.db.all('SELECT * FROM actions') == []
-            assert not tools & {'approve', 'shell', 'read_cookie', 'configure_notifications', 'pay', 'refund'}
+            assert {'message_observation_status', 'message_human_takeover'} <= tools
+            result = await session.call_tool('message_observation_status', {'account_id': 'messages'})
+            assert not result.isError and 'conversation_last_message_samples' in str(result)
+            result = await session.call_tool('message_human_takeover', {'account_id': 'messages'})
+            assert not result.isError
+            assert service.db.one('SELECT takeover FROM message_observation')['takeover'] == 1
+            result = await session.call_tool('sync_message_sample', {'account_id': 'messages'})
+            assert result.isError
+            assert not tools & {'configure_observation', 'release_takeover', 'authorize_faq',
+                                'approve', 'shell', 'read_cookie', 'configure_notifications', 'pay', 'refund'}
             result = await session.call_tool('notification_state', {'notification_id': 1, 'read': True, 'archived': True})
             assert not result.isError
             assert service.db.one('SELECT archived FROM notifications')['archived'] == 1

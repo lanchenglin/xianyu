@@ -2,7 +2,21 @@
 
 日期：2026-10-15；起点 feat/local-next / 121f3c8。本轮不接触 .env/data、8099、9235 或真实平台；不升级固定上游，不部署、不 push。500 轮为工作上限而非验收指标；批次完成不等于全部需求完成。
 
-## 消息编码与本地草稿增量（最新）
+## 2026-10-16 低频采集 / 接管 / FAQ 授权存储（最新）
+
+已实现默认关闭的账号低频采集、既有单 worker 集成、持久去重、退避、接管及 API/UI/MCP；v9 迁移与恢复关闭。管理员有限 FAQ 策略加密存储、有效期/范围/模板/频率校验与撤销已实现，但没有发送执行器或频率消耗账本，永远 effective/send_allowed=false，autonomous_reply 仍 false。契约与准确限制见 [MESSAGE_OBSERVATION](MESSAGE_OBSERVATION.md)。无 push/部署，本批真实验收交 Hermes。
+
+下一断点：完成独立复审与同 SHA CI 后由 Hermes 部署只读功能（仍默认关闭）；继续以下分页和安全执行证据门槛，不把此批算作完整交付。
+
+### 分页与安全执行链研究结论
+
+- `operations.normalize` 对 orders 的 nextPage 只有字符串类型证据，lastEndRow 只做结构检查；没有末页值语义、下一请求参数和状态覆盖证据，不能猜递增页码或声称完整订单。
+- inventory 有布尔 nextPage，但当前 adapter 仅监听自建页面单次响应，没有下一页请求/范围证据；必须取得状态标签和下一页请求参数/终止样本才能做有界遍历。
+- `normalize_messages` 只投影 userConvs.lastMessage；有稳定 messageId 和双方映射，没有历史游标或消息 item_id 绑定。现有缓存能去重但不能补回采集间隔内中间消息；FAQ 的商品 AND 会话范围因此无法用于执行。
+- 安全执行必须仍经 actions 冻结账号/模式/完整 payload/digest，发送前核验会话与收件人；本批新增接管检查不能替代已有审批。未来策略执行需单独事务限额账本、策略 revision/撤销/过期二次核验、unknown 禁止自动重试，且真实 CDP 发送目前仍拒绝。
+- Hermes 待取证：脱敏的两页请求/响应关联、可验证末页、商品状态覆盖、消息历史 cursor 和 item/cid/peer 同记录。开发者不连接真实端点。2026-10-16 用户追加授权：Hermes 可从正常出售商品选择真实上架测试对象，并自行选择一个商品进行普通咨询；真实执行由 Hermes 负责。本批不执行真实发送，后续仍需冻结所选商品的实际素材、内容、价格及咨询目标/正文，遵守统一审批与不确定结果不重试。
+
+## 消息编码与本地草稿增量（历史）
 
 基线 da3e2ad。父助手新增证据已纠正 messageId 纯数字假设：按有界 opaque 字符串原样保存；普通 101/custom1→base64 JSON1/text.text 解码，type14/tip 不作正文。pair 当前 UID/sender 双成员校验，私有正文加密，不记录 raw custom。用户选择 incoming 可读样本后 HTTP/UI/MCP 生成 local_template 草稿，v8 加密表；不调模型、不提案、不发送，CDP 写入仍拒绝。旧缓存/失败采集/过期/自己消息拒绝草稿。见 [MESSAGES](MESSAGES.md)。
 

@@ -20,6 +20,8 @@ from PIL import Image, ImageOps
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .config import Settings
+from .faq_policy import FAQPolicy, FAQPolicyIn
+from .message_observation import MessageObservation, ObservationIn
 from .models import (
     AccountIn,
     ActionIn,
@@ -142,6 +144,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "first_contact": False, "platform_edit_price": False, "platform_relist": False,
                 "full_inventory_sync": False, "order_sync": False, "autonomous_reply": False,
                 "partial_orders": True, "partial_inventory": True, "partial_messages": True,
+                "message_observation": True,
+                "message_observation_policy": {"default_enabled": False, "minimum_interval_s": 300,
+                                               "coverage": "conversation_last_message_samples",
+                                               "configuration_role": "admin", "send_allowed": False},
                 "message_bodies": True, "message_reply_drafts": True, "message_sample_propose": False,
                 "sample_policy": {"pages": 1, "pagination": False, "all_statuses": False,
                                   "private_cache_encrypted": True, "platform_verified": False},
@@ -241,6 +247,38 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post('/api/accounts/{account_id}/messages/{sample_id}/reply-draft')
     def message_reply_draft(account_id: str, sample_id: str, current=Depends(role)):
         return replies.generate(account_id, sample_id)
+
+    faq = FAQPolicy(service)
+
+    @app.get('/api/accounts/{account_id}/faq-policy')
+    def faq_status(account_id: str, current=Depends(role)):
+        return faq.read(account_id, current)
+
+    @app.put('/api/accounts/{account_id}/faq-policy')
+    def faq_config(account_id: str, body: FAQPolicyIn, current=Depends(admin)):
+        return faq.configure(account_id, body)
+
+    @app.post('/api/accounts/{account_id}/faq-policy/revoke')
+    def faq_revoke(account_id: str, current=Depends(admin)):
+        return faq.revoke(account_id)
+
+    observation = MessageObservation(service)
+
+    @app.get('/api/accounts/{account_id}/message-observation')
+    def observation_status(account_id: str, current=Depends(role)):
+        return observation.read(account_id)
+
+    @app.put('/api/accounts/{account_id}/message-observation')
+    def observation_config(account_id: str, body: ObservationIn, current=Depends(admin)):
+        return observation.configure(account_id, body)
+
+    @app.post('/api/accounts/{account_id}/message-observation/takeover')
+    def message_takeover(account_id: str, current=Depends(role)):
+        return observation.takeover(account_id, True, current)
+
+    @app.post('/api/accounts/{account_id}/message-observation/release')
+    def message_release(account_id: str, current=Depends(admin)):
+        return observation.takeover(account_id, False, current)
 
     @app.get('/api/accounts/{account_id}/messages')
     def messages_cache(account_id: str, current=Depends(role)):
