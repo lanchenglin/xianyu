@@ -8,6 +8,10 @@
 
 Chrome/Chromium 发现和 CDP 属于工作台管理员部署配置，不是 MCP 工具参数。Agent 不能指定浏览器路径、profile、CDP 端点或任意 URL。可选 CDP 只读 search、orders/inventory 单页样本、messages 末条元数据样本绑定唯一工作台账号 id 与平台 uid；item、历史消息和所有写操作 fail closed。新增 `sync_message_sample(account_id)` / `cached_messages(account_id)`，对应 POST `/api/accounts/{account_id}/messages/sync` / GET `/api/accounts/{account_id}/messages`。`partial_messages=true` 不等于 history/realtime，body unavailable 不得生成回复；已核验 incoming 普通文本可显式调用 `message_reply_draft(account_id,sample_id)`（对应 POST `/api/accounts/{account_id}/messages/{sample_id}/reply-draft`）生成加密本地模板草稿，不调用模型、不提案/发送。CDP 真实账号发送提案拒绝；详见 [MESSAGES](MESSAGES.md)。不能因失败要求换账号/换浏览器重试。Hermes 上线及真实只读验证请先独立审查 [BROWSER.md](BROWSER.md)，不要将离线 doctor/模拟测试当作真实登录验收。
 
+## 有界分页更新（2026-10-16）
+
+orders/inventory 已从上述历史单页升级为固定页面有界滚动，工具名保持兼容：`sync_order_sample` / `sync_inventory_sample`，仅 account_id，无任意 URL/游标参数。返回 scope、pages_read、stop_reason、partial/completion；cached 工具的 last_sync 回读该边界，items 是历史并集而非本次快照。订单末页未证仍 partial，商品 complete 只代表 self_published；卖出订单/下架列表/全状态库存未实现。详见 [分页契约](OPERATION_PAGINATION.md)。
+
 ## 低频观察与安全接管
 
 新增 `message_observation_status(account_id)` 读取状态、`message_human_takeover(account_id)` 请求人工接管。接管只收紧权限，停止新消息采集/草稿/发送；不能解除、配置间隔或授予 FAQ 权限。管理员用 UI/API 配置，Agent 没有对应 MCP 工具。FAQ 策略即使保存 enabled 仍不可执行，不能触发发送；完整限制见 [MESSAGE_OBSERVATION](MESSAGE_OBSERVATION.md)。实际 Hermes connector 注册仍由 Hermes 使用官方工具完成，本批只验证临时 API + 真 stdio 协议，不改客户端配置。

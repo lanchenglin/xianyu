@@ -2,6 +2,10 @@
 
 2026-10-15：代码提供受限只读 CDP → 加密缓存 → API/UI/MCP 纵向链路。真实平台尚未验收，由父助手独立完成；本地虚构 fixture 和 Chromium 网络事件测试不等于真实平台成功。
 
+## 2026-10-16 更新（优先于下述单页历史契约）
+
+orders/inventory 已增加固定页有界滚动遍历、v10 范围/页数/停止原因。商品仅 self_published 页在布尔末页信号时 complete，订单字符串 false 未证仍 partial；历史缓存始终不是完整快照。详见 [OPERATION_PAGINATION](OPERATION_PAGINATION.md)。下述单页说明保留作为旧实现记录。
+
 ## 范围
 
 - `partial_orders=true`：本人 `/bought` 买到订单的一页概要，不涵盖卖出订单。

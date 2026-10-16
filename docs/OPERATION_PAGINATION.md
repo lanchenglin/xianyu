@@ -8,6 +8,12 @@
 
 上限：每响应 1 MB、累计 5 MB、每页 100 条、最多 20 页/500 个稳定 ID、采集 25 秒（外层操作超时更短时可能直接失败）。达到限制或未证末页为 partial；重复游标/重复 ID 页立即停止，无重放循环。不同页相同 ID 同内容合并；内容冲突 fail closed，缓存不覆盖。原始 lastEndRow 仅在本次内存作重复检测，不持久化、不输出。
 
+## 本人发布列表
+
+固定自建 `/personal` 页使用同一有界滚动路径，必须观察 `head.baseInfo.self is True`，仍保留前后 UID 核验。仅 bool `nextPage is False` 且分页结构有效才返回 `partial=false/completion=complete/stop_reason=end_reached`，范围严格是 `self_published`。空末页可完整；未知类型、无新响应、重复页、限制停止均 partial。短页和 totalCount 不作为末页依据；同一 ID 内容冲突失败而不覆盖。
+
+**未实现范围单列：卖出订单、下架列表、全状态库存。** full_inventory_sync 与 order_sync 仍 false；能力接口分别声明 scopes/unsupported_scopes、orders_terminal_verified=false、platform_verified=false。实际 personal 页面是否用 window 滚动触发下一页仍待父助手验收；本地两页 HTML/响应已覆盖滚动路径，不以假数据冒充真实验证。
+
 ## 持久与接口
 
 v9→v10 显式迁移给 operation_syncs 增加 scope、pages_read、stop_reason。迁移前备份，旧记录标记 legacy_samples/0 页，不追认完整。API sync 返回本次进度；GET 的 last_sync 保留该边界；MCP 现有名称兼容，透传相同结果。UI 展示范围、页数、停止原因。

@@ -36,6 +36,8 @@ class Traversal:
         self.latest = page
         if page['cursor_error']:
             return self.stop(page['cursor_error'])
+        if page['has_more'] is False:
+            return self.stop('end_reached')
         if not incoming:
             return self.stop('empty_page_without_end')
         if self.pages_read >= self.max_pages:
@@ -50,7 +52,8 @@ class Traversal:
         if self.latest is None:
             raise ValueError('response_timeout')
         return {**self.latest, 'items': list(self.items.values()),
-                'partial': True, 'completion': 'bounded_pages',
+                'partial': self.stop_reason != 'end_reached',
+                'completion': 'complete' if self.stop_reason == 'end_reached' else 'bounded_pages',
                 'scope': 'bought_orders' if self.kind == 'orders' else 'self_published',
                 'pages_read': self.pages_read, 'stop_reason': self.stop_reason,
                 'page_limit': self.max_pages, 'item_limit': self.max_items}

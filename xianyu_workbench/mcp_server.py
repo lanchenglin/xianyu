@@ -126,7 +126,7 @@ def cached_orders(account_id: str) -> dict:
 
 @mcp.tool()
 def sync_inventory_sample(account_id: str) -> dict:
-    """按需采集本人商品单页样本；并非所有状态库存，不改价或上下架。"""
+    """有界滚动读取本人发布列表，返回范围/页数/停止原因；仅已证末页 complete，不含下架或全状态库存，不改价或上下架。"""
     from urllib.parse import quote
     return api('POST', f'/api/accounts/{quote(account_id, safe="")}/inventory/sync')
 

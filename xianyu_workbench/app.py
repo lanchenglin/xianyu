@@ -149,7 +149,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                                                "coverage": "conversation_last_message_samples",
                                                "configuration_role": "admin", "send_allowed": False},
                 "message_bodies": True, "message_reply_drafts": True, "message_sample_propose": False,
-                "sample_policy": {"pages": 1, "pagination": False, "all_statuses": False,
+                "sample_policy": {"pages": 20, "pagination": True, "all_statuses": False,
+                                  "scopes": ["bought_orders", "self_published"],
+                                  "unsupported_scopes": ["sold_orders", "off_shelf_inventory", "all_status_inventory"],
+                                  "orders_terminal_verified": False, "messages_pagination": False,
                                   "private_cache_encrypted": True, "platform_verified": False},
                 "payment": False, "refund": False, "confirm_receipt": False,
                 "notice": "False 表示本版本没有开放，不会伪造成功；交易仅在闲鱼人工完成"}

@@ -10,7 +10,7 @@ from urllib.parse import urlsplit
 from .browser_adapter import goofish_page, validate_operation
 from .browser_config import BrowserError
 from .operation_pagination import Traversal
-from .operations import MAX_BODY, SOURCES, normalize, success_data
+from .operations import MAX_BODY, SOURCES, success_data
 
 HEAD = 'mtop.idle.web.user.page.head'
 PAGES = {'orders': 'https://www.goofish.com/bought', 'inventory': 'https://www.goofish.com/personal'}
@@ -51,7 +51,7 @@ async def capture(page, kind: str, *, timeout=25, max_bytes=5_000_000) -> dict:
 
     session.on('Network.responseReceived', response)
     session.on('Network.loadingFinished', finished)
-    traversal = Traversal(kind) if kind == 'orders' else None
+    traversal = Traversal(kind)
     result, own = None, kind == 'orders'
     total_bytes = 0
     try:
@@ -65,7 +65,7 @@ async def capture(page, kind: str, *, timeout=25, max_bytes=5_000_000) -> dict:
                 if overflow:
                     raise ValueError('response_limit')
                 if result is not None and own and observed.empty():
-                    if traversal is None or traversal.stop_reason:
+                    if traversal.stop_reason:
                         break
                     await page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
                 key, target, status, size = await observed.get()
@@ -82,7 +82,7 @@ async def capture(page, kind: str, *, timeout=25, max_bytes=5_000_000) -> dict:
                     raise ValueError('response_too_large')
                 total_bytes += max(len(raw), size)
                 if total_bytes > max_bytes:
-                    if traversal is not None and result is not None and own:
+                    if result is not None and own and target == kind:
                         traversal.stop('byte_limit')
                         result = traversal.result()
                         break
@@ -96,18 +96,22 @@ async def capture(page, kind: str, *, timeout=25, max_bytes=5_000_000) -> dict:
                     if data.get('baseInfo', {}).get('self') is not True:
                         raise ValueError('cdp_identity_mismatch')
                     own = True
-                elif traversal is not None:
+                else:
                     traversal.add(value)
                     result = traversal.result()
-                elif result is None:
-                    result = normalize(kind, value)
             if page.url.split('?', 1)[0].rstrip('/') != PAGES[kind]:
                 raise ValueError('page_redirected')
             return result
+    except ValueError as exc:
+        if (str(exc) == 'response_too_large' and result is not None and own and target == kind
+                and not overflow and page.url.split('?', 1)[0].rstrip('/') == PAGES[kind]):
+            traversal.stop('response_too_large')
+            return traversal.result()
+        raise
     except TimeoutError:
         if page.url.split('?', 1)[0].rstrip('/') != PAGES[kind]:
             raise ValueError('page_redirected') from None
-        if traversal is not None and result is not None and own and not overflow:
+        if result is not None and own and not overflow:
             traversal.stop('time_limit')
             return traversal.result()
         raise ValueError('response_timeout') from None

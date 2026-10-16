@@ -18,6 +18,10 @@ def seed(url, settings):
 def test_real_stdio_sample_sync_and_read(api_server, tmp_path):
     url, settings, _ = api_server
     ident = seed(url, settings)
+    service = api_server[2]
+    from xianyu_workbench.operations_cache import OperationsCache
+    OperationsCache(service).sync(ident, 'inventory')
+    service.db.execute("UPDATE operation_syncs SET state='complete',partial=0,completion='complete',scope='self_published',pages_read=2,stop_reason='end_reached' WHERE account_id=? AND kind='inventory'", (ident,))
     async def check():
         params = StdioServerParameters(command=sys.executable, args=['-m', 'xianyu_workbench.mcp_server'],
             cwd=str(tmp_path), env={'PATH': os.environ.get('PATH', ''), 'XY_API_URL': url,
@@ -26,6 +30,10 @@ def test_real_stdio_sample_sync_and_read(api_server, tmp_path):
             await session.initialize()
             names = {t.name for t in (await session.list_tools()).tools}
             assert {'sync_order_sample', 'cached_orders', 'sync_inventory_sample', 'cached_inventory'} <= names
+            cached = await session.call_tool('cached_inventory', {'account_id': ident})
+            assert not cached.isError
+            assert 'self_published' in str(cached) and 'end_reached' in str(cached)
+            assert 'complete' in str(cached) and 'pages_read' in str(cached)
             for tool in ['sync_order_sample', 'cached_orders', 'sync_inventory_sample', 'cached_inventory']:
                 result = await session.call_tool(tool, {'account_id': ident})
                 assert not result.isError
@@ -79,6 +87,10 @@ def test_real_ui_sample_sync_account_switch_and_xss(api_server):
         assert service.db.all('SELECT * FROM actions') == []
         page.locator('#sync-inventory').click()
         expect(page.locator('#inventory-samples')).to_contain_text('100001')
+        service.db.execute("UPDATE operation_syncs SET state='complete',partial=0,scope='self_published',pages_read=2,stop_reason='end_reached' WHERE account_id=? AND kind='inventory'", (first,))
+        page.locator('#refresh-samples').click()
+        expect(page.locator('#inventory-status')).to_contain_text('self_published · 2 页 · end_reached')
+        expect(page.locator('#inventory-status')).to_contain_text('非本次快照')
         row = service.db.one("SELECT * FROM operation_records WHERE kind='inventory'")
         item = service.vault.open(row['payload'])
         item['title'] = '<img src=x onerror=alert(1)>'

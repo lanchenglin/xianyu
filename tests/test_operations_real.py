@@ -62,8 +62,9 @@ def test_real_cdp_network_listener_identity_and_cleanup(tmp_path, monkeypatch):
                         apis = ['mtop.idle.web.trade.bought.list'] if url.endswith('bought') else [
                             'mtop.idle.web.user.page.head', 'mtop.idle.web.xyh.item.list']
                         script = ';'.join(f"fetch('https://h5api.m.goofish.com/h5/{api}/1.0/')" for api in apis)
-                        if state['paginate'] and url.endswith('bought'):
-                            script += ";window.addEventListener('scroll',()=>{fetch('https://h5api.m.goofish.com/h5/mtop.idle.web.trade.bought.list/1.0/')},{once:true})"
+                        if state['paginate']:
+                            api = 'mtop.idle.web.trade.bought.list' if url.endswith('bought') else 'mtop.idle.web.xyh.item.list'
+                            script += f";window.addEventListener('scroll',()=>{{fetch('https://h5api.m.goofish.com/h5/{api}/1.0/')}},{{once:true}})"
                         await request.fulfill(status=200, content_type='text/html', body=f'<body style="height:4000px"><script>{script}</script></body>')
                     elif '/h5/' in url:
                         value = orders() if 'bought.list' in url else inventory()
@@ -73,6 +74,11 @@ def test_real_cdp_network_listener_identity_and_cleanup(tmp_path, monkeypatch):
                             value = order_page(str(9000 + state['requests']), str(state['requests']))
                             if state['requests'] == 2:
                                 value['data']['nextPage'] = 'false'  # still unverified, not complete
+                        if state['paginate'] and 'xyh.item.list' in url:
+                            state['requests'] += 1
+                            value['data']['cardList'][0]['cardData']['id'] = str(1000 + state['requests'])
+                            value['data']['nextPage'] = state['requests'] < 2
+                            value['data']['totalCount'] = 2
                         if 'page.head' in url:
                             value = {'ret': ['SUCCESS::OK'], 'data': {'baseInfo': {'self': state['self']}}}
                         if state['switch']:
@@ -84,7 +90,7 @@ def test_real_cdp_network_listener_identity_and_cleanup(tmp_path, monkeypatch):
                 await context.route('**/*', route)
                 for kind in ('orders', 'inventory'):
                     result = await asyncio.to_thread(collect, kind)
-                    assert result['partial'] and len(result['items']) == 1
+                    assert result['partial'] is (kind == 'orders') and len(result['items']) == 1
                     assert len(context.pages) == 1
                     assert await original.title() == 'original fixture'
                 state['paginate'] = True
@@ -92,6 +98,12 @@ def test_real_cdp_network_listener_identity_and_cleanup(tmp_path, monkeypatch):
                 assert [item['order_id'] for item in result['items']] == ['9001', '9002']
                 assert result['pages_read'] == 2 and result['partial']
                 assert result['stop_reason'] == 'pagination_semantics_unknown'
+                assert len(context.pages) == 1
+                state['requests'] = 0
+                result = await asyncio.to_thread(collect, 'inventory')
+                assert [item['item_id'] for item in result['items']] == ['1001', '1002']
+                assert result['pages_read'] == 2 and not result['partial']
+                assert result['scope'] == 'self_published' and result['stop_reason'] == 'end_reached'
                 assert len(context.pages) == 1
                 state['paginate'] = False
                 # Full provider → real bridge subprocess → random local CDP → normalized output.

@@ -2,6 +2,10 @@
 
 文档导航：[仓库首页](../README.md) · [本地开发交接/未完成清单](DEVELOPMENT_HANDOFF.md) · [MCP 接入](MCP.md) · [测试记录](TEST_REPORT.md)。
 
+## 2026-10-16 分页迁移注意
+
+有界订单/本人发布列表增量使用 schema v10，启动持单实例锁执行显式迁移并生成 before-v9 一致性备份；保留原 vault key 和旧库，旧同步不追认为完整。部署前按既有离线备份流程保存数据，不在运行中换库。此轮仅本地测试，未部署；真实滚动触发与订单末页必须由账号主人/父助手只读取证，见 [分页契约](OPERATION_PAGINATION.md)。无需新增 endpoint/浏览器配置，仍禁止备用浏览器/账号回退。
+
 ## 1. 推荐落地方式
 
 默认支持 Linux / WSL，使用 Python 3.11/3.12；推荐工作台、虚拟环境、系统 Chrome/Chromium、Node.js 位于同一个操作系统会话中。无需显卡。Windows 原生支持暂停：`53400f8` 的 CI run 38727928186 中 Windows 3.11/3.12 失败，Linux 双版本、双 upstream-contract 和 browser-smoke 通过，详见[测试记录](TEST_REPORT.md)。独立分支 `work/windows-support-53400f8` 保存快照 `53400f82f1ce4f1b1322f184b4b15e2e2c949e97`，当前分支不继续修 Windows。新的 Linux CI 全绿不代表 Windows 支持恢复。不要修改其他项目的 Python 环境，也不要把 Windows 和 WSL 的浏览器 Cookie 数据库当作可自动互通。

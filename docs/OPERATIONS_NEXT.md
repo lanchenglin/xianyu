@@ -2,7 +2,11 @@
 
 日期：2026-10-15；起点 feat/local-next / 121f3c8。本轮不接触 .env/data、8099、9235 或真实平台；不升级固定上游，不部署、不 push。500 轮为工作上限而非验收指标；批次完成不等于全部需求完成。
 
-## 2026-10-16 低频采集 / 接管 / FAQ 授权存储（最新）
+## 2026-10-16 有界分页（最新）
+
+买到订单已提交 8401eea；本人发布列表继续使用同一有界滚动状态机。v10 进度、去重、重复页/游标停止及完整/部分/失败缓存保留已实现。订单仅 known string true，末页 false 留待父助手取证；商品 bool false 仅完成 self_published 范围，不能称全状态库存。卖出订单/下架列表未实现。真实滚动触发、POST 分页字段和末页取证需求见 [OPERATION_PAGINATION](OPERATION_PAGINATION.md)。以下单页研究结论为历史状态。
+
+## 2026-10-16 低频采集 / 接管 / FAQ 授权存储
 
 已实现默认关闭的账号低频采集、既有单 worker 集成、持久去重、退避、接管及 API/UI/MCP；v9 迁移与恢复关闭。管理员有限 FAQ 策略加密存储、有效期/范围/模板/频率校验与撤销已实现，但没有发送执行器或频率消耗账本，永远 effective/send_allowed=false，autonomous_reply 仍 false。契约与准确限制见 [MESSAGE_OBSERVATION](MESSAGE_OBSERVATION.md)。无 push/部署，本批真实验收交 Hermes。
 

@@ -48,6 +48,27 @@ def test_traversal_progress_survives_cache_read(workbench, monkeypatch):
     assert result['partial']  # historical union is not a snapshot
 
 
+def test_complete_inventory_does_not_purge_history(workbench, monkeypatch):
+    from test_operations import inventory
+
+    from xianyu_workbench.operation_pagination import Traversal
+    client, service = workbench
+    ident = account(client)
+    path = f'/api/accounts/{ident}/inventory'
+    assert client.post(path + '/sync').status_code == 200
+    state = Traversal('inventory')
+    value = inventory()
+    value['data']['cardList'] = []
+    state.add(value)
+    monkeypatch.setattr(service.provider, 'call', lambda *args: state.result())
+    assert client.post(path + '/sync').json()['completion'] == 'complete'
+    cached = client.get(path).json()
+    assert len(cached['items']) == 1 and cached['partial']
+    assert cached['last_sync']['state'] == 'complete'
+    assert cached['last_sync']['scope'] == 'self_published'
+    assert cached['last_sync']['item_count'] == 0
+
+
 def test_restart_deduplicates(tmp_path):
     from cryptography.fernet import Fernet
     from fastapi.testclient import TestClient
@@ -75,6 +96,8 @@ def test_failure_keeps_old_records_and_audits_safe_error(workbench, monkeypatch)
     result = client.get(path).json()
     assert len(result['items']) == 1 and result['last_sync']['state'] == 'failed'
     assert result['last_sync']['error'] == 'response_timeout'
+    assert result['last_sync']['scope'] == 'bought_orders'
+    assert result['last_sync']['pages_read'] == 0
     assert 'PRIVATE' not in json.dumps(service.db.all('SELECT * FROM operation_syncs'))
 
 
@@ -118,6 +141,9 @@ def test_read_sync_auth_schema_capabilities_and_no_transactions(workbench):
     caps = client.get('/api/capabilities').json()
     assert caps['partial_orders'] and caps['partial_inventory']
     assert not caps['full_inventory_sync'] and not caps['payment']
+    assert caps['sample_policy']['pagination'] is True
+    assert caps['sample_policy']['scopes'] == ['bought_orders', 'self_published']
+    assert caps['sample_policy']['unsupported_scopes'] == ['sold_orders', 'off_shelf_inventory', 'all_status_inventory']
     assert set(caps['browser_policy']['cdp_operations']) == {'search', 'orders', 'inventory', 'messages'}
     schema = client.get('/api/schema').json()
     assert '/api/accounts/{account_id}/orders/sync' in schema['paths']
@@ -139,6 +165,30 @@ def test_empty_success_does_not_purge_cached_records(workbench, monkeypatch):
     cached = client.get(path).json()
     assert len(cached['items']) == 1
     assert cached['last_sync']['item_count'] == 0
+
+
+def test_v9_progress_migration_preserves_historical_sync(tmp_path):
+    import sqlite3
+    from contextlib import closing
+
+    from cryptography.fernet import Fernet
+
+    from xianyu_workbench.db import DB, MIGRATIONS
+    from xianyu_workbench.security import Vault
+    vault = Vault(Fernet.generate_key().decode())
+    with closing(sqlite3.connect(tmp_path / 'workbench.db')) as conn:
+        for migration in MIGRATIONS[:9]:
+            migration(conn)
+        conn.execute('PRAGMA user_version=9')
+        conn.execute("INSERT INTO accounts(id,label,mode,created) VALUES('old','fixture','demo',1)")
+        conn.execute("INSERT INTO operation_syncs(account_id,kind,source,fetched_at,state,partial,completion,item_count) VALUES('old','orders','fixture',1,'partial',1,'single_page',1)")
+        conn.commit()
+    db = DB(tmp_path, vault)
+    row = db.one('SELECT * FROM operation_syncs')
+    assert row['completion'] == 'single_page' and row['item_count'] == 1
+    assert row['scope'] == 'legacy_samples' and row['pages_read'] == 0
+    assert row['stop_reason'] is None and row['partial'] == 1
+    assert len(list((tmp_path / 'backups').glob('before-v9-*.db'))) == 1
 
 
 def test_v5_migration_and_wrong_key_protect_private_cache(tmp_path):

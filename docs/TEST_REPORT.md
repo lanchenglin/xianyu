@@ -4,6 +4,17 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
+## 2026-10-16 本人发布列表有界分页
+
+订单提交 8401eea 后继续商品纵向，不 push/部署。商品多页 stable ID 去重、bool false 范围末页、空末页、unknown partial、self 缺失/不符拒绝、完整读取不清历史、item/page/byte/time 限制均覆盖。安全复核发现累计字节上限可能遮蔽后续 head.self 响应，双版本 RED 重现后修复为失败，不返回可采纳部分结果。
+
+- 本地真实 Chromium 假 personal 页面 scroll→第二页→complete，UID 改变/self=false 拒绝，原页保留。没有真实平台 I/O。
+- API 缓存完整/部分/失败状态、v9→v10 历史同步保留测试；真 MCP stdio 回读范围/末页，UI 显示 self_published/页数/停止原因及非快照警示。
+- 双版本 `scripts/smoke_ui.py` 通过，日志 `/home/lan/.hermes/cache/scratch/pagination-smoke-ui{311,312}.log`；只使用新临时演示配置/数据，不读取宿主项目 .env/data/profile。
+- 双版本 pip check、ruff、node --check、git diff --check 通过。最终含全部浏览器 opt-in 的全量：Python 3.12 **389 passed / 86.98s**，Python 3.11 **389 passed / 82.31s**，无 skip，各 1 条既有 Starlette 弃用警告。日志 `/home/lan/.hermes/cache/scratch/pagination-verified312.log`、`pagination-verified311.log`。
+- 初始 RED：`/home/lan/.hermes/cache/scratch/pagination-inventory-red{311,312}.log`；设计及父助手字段需求：`/home/lan/.hermes/cache/scratch/xianyu-pagination-plan.md` 与 OPERATION_PAGINATION.md。
+- 卖出订单、下架列表、全状态库存、订单真实末页、实际平台滚动验收、实际 Hermes 注册仍未交付/未验收。FAQ 仍仅策略存储无执行，未增加任何平台写入。
+
 ## 2026-10-16 买到订单有界分页
 
 起点 0f766ab，未 push/部署。双 Python RED 覆盖 known true、去重/重复游标、真实 capture 滚动、累计响应预算、缓存进度；UI 新进度断言先 RED 再 GREEN。首次全量失败（SQL 占位符数量、旧测试 schema v9）已修复，保留 scratch 日志。

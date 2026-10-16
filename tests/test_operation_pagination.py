@@ -3,7 +3,7 @@ import copy
 import json
 
 import pytest
-from test_operations import orders
+from test_operations import inventory, orders
 from test_operations_browser import Page, event
 
 from xianyu_workbench.operations import normalize
@@ -52,6 +52,59 @@ def test_capture_stops_repeated_response():
     assert page.scrolls == 1
 
 
+def test_inventory_only_proven_end_completes_declared_scope():
+    from xianyu_workbench.operation_pagination import Traversal
+    state = Traversal('inventory')
+    first = inventory()
+    first['data']['nextPage'] = True
+    assert state.add(first)
+    last = inventory()
+    last['data']['cardList'][0]['cardData']['id'] = '1002'
+    assert not state.add(last)
+    result = state.result()
+    assert result['partial'] is False
+    assert result['completion'] == 'complete' and result['stop_reason'] == 'end_reached'
+    assert result['scope'] == 'self_published' and result['pages_read'] == 2
+    assert len(result['items']) == 2
+
+
+def test_inventory_empty_terminal_and_unknown_pagination():
+    from xianyu_workbench.operation_pagination import Traversal
+    for more, partial in [(False, False), (True, True), ('false', True)]:
+        state = Traversal('inventory')
+        value = inventory()
+        value['data'].update(cardList=[], nextPage=more)
+        assert not state.add(value)
+        assert state.result()['partial'] is partial
+
+
+def test_item_limit_and_overlapping_pages_are_bounded():
+    from xianyu_workbench.operation_pagination import Traversal
+    state = Traversal('inventory', max_items=2)
+    first = inventory()
+    first['data']['nextPage'] = True
+    state.add(first)
+    second = copy.deepcopy(first)
+    extra = copy.deepcopy(second['data']['cardList'][0])
+    extra['cardData']['id'] = '1002'
+    second['data']['cardList'].append(extra)
+    assert state.add(second)
+    third = copy.deepcopy(first)
+    third['data']['cardList'][0]['cardData']['id'] = '1003'
+    assert not state.add(third)
+    result = state.result()
+    assert result['stop_reason'] == 'item_limit' and result['partial']
+    assert len(result['items']) == 2 and result['pages_read'] == 2
+
+
+def test_inventory_capture_completes_only_with_self():
+    from xianyu_workbench.operations_browser import capture
+    result = asyncio.run(capture(Page([event('inventory'), event('head')]), 'inventory', timeout=.1))
+    assert result['partial'] is False and result['scope'] == 'self_published'
+    with pytest.raises(ValueError, match='response_timeout'):
+        asyncio.run(capture(Page([event('inventory')]), 'inventory', timeout=.01))
+
+
 def test_only_observed_order_true_is_known():
     assert normalize('orders', order_page())['has_more'] is True
     for value in ('false', '', 'TRUE', False, True, 0):
@@ -96,6 +149,22 @@ def test_capture_total_response_budget():
     assert result['stop_reason'] == 'byte_limit'
     assert result['pages_read'] == 2
     assert result['partial']
+
+
+def test_budget_cannot_hide_later_ownership_response():
+    from xianyu_workbench.operations_browser import capture
+    events = [event('head'), event('inventory'),
+              event('head', {'ret': ['SUCCESS::OK'], 'data': {'baseInfo': {'self': False}}})]
+    with pytest.raises(ValueError):
+        asyncio.run(capture(Page(events), 'inventory', timeout=.1, max_bytes=1000))
+
+
+def test_later_oversized_response_retains_bounded_partial():
+    from xianyu_workbench.operations_browser import capture
+    page = Page([event('orders', order_page()), event('orders', order_page('9002', 'two'), size=1_000_001)])
+    result = asyncio.run(capture(page, 'orders', timeout=.1))
+    assert result['partial'] and result['stop_reason'] == 'response_too_large'
+    assert len(result['items']) == 1
 
 
 def test_page_bound_and_cross_page_conflict():
