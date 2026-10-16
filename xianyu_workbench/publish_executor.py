@@ -3,19 +3,35 @@ import copy
 import re
 import time
 import uuid
+from typing import Literal
 from urllib.parse import urlsplit
 
 from filelock import FileLock, Timeout
-from pydantic import Field
+from pydantic import Field, StrictInt, StrictStr, model_validator
 
 from .models import Model
 from .provider import Problem
 from .security import canonical, digest
 
 
+class ReadbackStatus(Model):
+    path: list[StrictStr] = Field(min_length=1, max_length=10)
+    value_type: Literal['string', 'integer']
+    allowed_values: list[StrictStr | StrictInt] = Field(min_length=1, max_length=20)
+
+    @model_validator(mode='after')
+    def typed_values(self):
+        expected = str if self.value_type == 'string' else int
+        if any(type(value) is not expected for value in self.allowed_values) or any(not key for key in self.path):
+            raise ValueError('status contract requires exact types and nonempty keys')
+        return self
+
+
 class PublishProtocol(Model):
     template: dict
     success_ret: list[str] = Field(min_length=1, max_length=4)
+    readback_success_ret: list[str] = Field(min_length=1, max_length=4)
+    readback_status: ReadbackStatus
     evidence: str = Field(min_length=10, max_length=2000)
     upload_authorized: bool
 
@@ -25,7 +41,7 @@ def save_protocol(service, account_id, body):
     value = body.model_dump(mode='json')
     if (not body.upload_authorized or body.template.get('imageInfoDOList') != []
             or not body.template.get('uniqueCode') or len(canonical(value)) > 60000
-            or any(not entry.startswith('SUCCESS::') for entry in body.success_ret)):
+            or any(not entry.startswith('SUCCESS::') for entry in body.success_ret + body.readback_success_ret)):
         raise Problem('invalid_protocol', '需要完整已核验模板、空图片占位、明确上传授权及精确成功 ret', 422)
     value['revision'] = uuid.uuid4().hex
     service.db.execute('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)',
@@ -48,6 +64,10 @@ def freeze(service, account, snapshot):
     if not row:
         return None
     protocol = service.vault.open(row['value'])
+    try:
+        PublishProtocol.model_validate({k: v for k, v in protocol.items() if k != 'revision'})
+    except ValueError:
+        raise Problem('publish_readback_contract_required', '缺少已取证的回读精确 ret 和状态契约，请重新录入审批', 409)
     template = protocol['template']
     for key, value in snapshot['candidate'].items():
         actual = template.get(key)
@@ -146,13 +166,21 @@ def _execute_locked(service, action_id):
         raw = transport('publish.readback', {'itemId': item_id}, write=False)
         data = raw.get('data', {})
         ret = raw.get('ret')
-        if (not isinstance(ret, list) or not ret
-                or any(not isinstance(code, str) or code.split('::')[0] != 'SUCCESS' for code in ret)
+        if (ret != frozen['readback_success_ret']
                 or str(data.get('itemDO', {}).get('itemId', '')) != item_id
                 or str(data.get('sellerDO', {}).get('sellerId', '')) != account['uid']):
             raise ValueError('ownership readback failed')
+        status_contract = frozen['readback_status']
+        observed = raw
+        for key in status_contract['path']:
+            if not isinstance(observed, dict) or key not in observed:
+                raise ValueError('readback status missing')
+            observed = observed[key]
+        expected_type = str if status_contract['value_type'] == 'string' else int
+        if type(observed) is not expected_type or observed not in status_contract['allowed_values']:
+            raise ValueError('readback status unknown')
         guard()
-        result.update(stage='verified', ownership_verified=True, ok=True)
+        result.update(stage='verified', ownership_verified=True, status_verified=True, ok=True)
         return result
     except Exception:
         result['notice'] = '上传或发布已尝试，结果不确定；禁止自动重试，请人工核对。'

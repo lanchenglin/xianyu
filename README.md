@@ -20,7 +20,7 @@
 
 ## 2026-10-16 受控单条发布执行器
 
-新增默认关闭 `XY_PUBLISH_ENABLED`：管理员录入已核验完整协议，冻结素材 hash/价格/类目/地点/凭据后批准并指定一个 action。执行器实际实现独立 Cookie 上传、单次显式 payload 发布和同 UID itemId 只读回验，不调用旧隐式 publish。上传回执/阶段加密持久化，未知结果不重试，worker 不领取 live，Agent 无审批/执行权限。**尚未真实平台验收**，`live_publish` 仍 false，`publish_policy.executor_implemented=true` 区分代码实现与平台证据。见 [执行方法、边界与父助手证据清单](docs/PUBLISH_EXECUTOR.md)。不 push、不部署。
+新增默认关闭 `XY_PUBLISH_ENABLED`：管理员录入已核验完整协议，冻结素材 hash/价格/类目/地点/凭据后批准并指定一个 action。执行器实际实现独立 Cookie 上传、单次显式 payload 发布和同 UID itemId 只读回验，不调用旧隐式 publish。上传回执/阶段加密持久化，未知结果不重试，worker 不领取 live，Agent 无审批/执行权限。审查 FAIL 后已补独立精确回读 ret 与严格类型的状态路径/允许值冻结，缺失或未知保持 unconfirmed。**尚未真实平台验收**：`live_publish` 和 `live_executor_enabled` 等于两个开关的逻辑与（默认 false），`publish_policy.executor_implemented=true`，`platform_verified=false`；运行启用不等于平台验证通过。见 [执行方法、边界与父助手证据清单](docs/PUBLISH_EXECUTOR.md)。不 push、不部署。
 
 ## 2026-10-16 本地发布冻结预览（历史）
 

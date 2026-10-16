@@ -128,7 +128,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def capabilities(current=Depends(role)):
         return {"search": True, "item_detail": True, "existing_chats": True, "message_history": True,
                 "send_with_approval": True, "publish_with_approval": True, "delete_with_explicit_approval": True,
-                "live_publish": False, "publish_complete_snapshot": False, "local_publish_preview": True,
+                "live_publish": s.live_enabled and s.publish_enabled, "publish_complete_snapshot": False, "local_publish_preview": True,
                 "publish_policy": {"live_executor_enabled": s.live_enabled and s.publish_enabled,
                                    "executor_implemented": True, "platform_verified": False,
                                    "source": "admin_verified_protocol_required", "default_enabled": False,

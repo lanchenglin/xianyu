@@ -35,6 +35,9 @@ def test_local_publish_preview_ui(api_server):
                 page.locator('#publish-protocol-form textarea').fill(json.dumps({
                     'template': {'imageInfoDOList': [], 'uniqueCode': 'fictional-ui'},
                     'success_ret': ['SUCCESS::fixture'], 'evidence': 'Isolated UI fixture only',
+                    'readback_success_ret': ['SUCCESS::readback-fixture'],
+                    'readback_status': {'path': ['data', 'fixtureStatus'], 'value_type': 'string',
+                                        'allowed_values': ['FICTIONAL_LISTED']},
                     'upload_authorized': True}))
                 page.locator('#publish-protocol-form button').click()
                 expect(page.locator('#toast')).to_contain_text('协议已加密保存')

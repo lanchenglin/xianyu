@@ -15,7 +15,11 @@ def ready(client, service):
     candidate = action['payload']['_publish_snapshot']['candidate']
     protocol = {'template': {**candidate, 'imageInfoDOList': [], 'uniqueCode': 'fictional-once',
                             'quantity': '1', 'sourceId': 'pcMainPublish'},
-                'success_ret': ['SUCCESS::fixture'], 'evidence': 'Fictional isolated fixture only',
+                'success_ret': ['SUCCESS::fixture'],
+                'readback_success_ret': ['SUCCESS::readback-fixture'],
+                'readback_status': {'path': ['data', 'itemDO', 'fixtureStatus'], 'value_type': 'string',
+                                    'allowed_values': ['FICTIONAL_LISTED', 'FICTIONAL_REVIEW']},
+                'evidence': 'Fictional isolated fixture only',
                 'upload_authorized': True}
     response = client.put(f'/api/accounts/{aid}/publish-protocol', json=protocol)
     assert response.status_code == 200, response.text
@@ -42,7 +46,7 @@ def transport(events, fail=None):
             assert len(payload['imageInfoDOList']) == 1
             return {'ret': ['SUCCESS::fixture'], 'data': {'itemId': '777'}}
         if operation == 'publish.readback':
-            return {'ret': ['SUCCESS::fixture'], 'data': {'itemDO': {'itemId': '777'}, 'sellerDO': {'sellerId': '12345'}}}
+            return {'ret': ['SUCCESS::readback-fixture'], 'data': {'itemDO': {'itemId': '777', 'fixtureStatus': 'FICTIONAL_LISTED'}, 'sellerDO': {'sellerId': '12345'}}}
         pytest.fail(operation)
     return call
 

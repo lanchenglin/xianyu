@@ -4,7 +4,18 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
-## 2026-10-16 受控发布执行器隔离验收
+## 2026-10-16 发布执行器独立审查 FAIL 与三项有界修复
+
+独立审查对原 ac4e991 后增量判定 **FAIL**。本轮核对 HEAD 为 `4520f5e`：P0 回读仅比较 SUCCESS 代码，`SUCCESS::different-contract` 仍被接受；P1 缺失审核/在售状态契约；P1 顶层 live_publish 固定 false，与启用执行不符（嵌套 live_executor_enabled 在此 HEAD 已动态计算）。历史 504 项通过没有覆盖这些问题，不撤销或掩盖 FAIL。
+
+- TDD RED：`scratch/publish-review-red.log` **6 failed / 3 passed**，精确 ret 反例、状态缺失/未知/字符串类型错误/bool、双开关 true 的能力声明均复现。最小修复后首轮 targeted GREEN；后补协议变化/历史缺契约阻断、允许审核中/在售虚构值和严格整数类型回归。
+- 新增必填 `readback_success_ret` 独立精确数组；`readback_status.path/value_type/allowed_values` 由管理员取证输入，与完整协议一起加密冻结到 payload/digest。不推断真实字段或状态枚举。缺契约在上传前停止，已有审批不自动补默认值；回读缺失/未知/类型不符/ret 不符一律 verifying + unconfirmed，禁止重试。
+- `live_publish` 与 `publish_policy.live_executor_enabled` 精确对应 Settings 的 live_enabled AND publish_enabled，四种组合已测；executor_implemented=true 表示代码支持，platform_verified=false 表示平台未验收，不把开启开关当验收。
+- 最终双 Python 全量（前台等待 summary）：**3.12：526 passed / 194.07s；3.11：526 passed / 196.97s**，均退出码0，无 skipped；各1条既有 Starlette/httpx 弃用警告。日志 `scratch/publish-review-full312.log` / `publish-review-full311.log`。包含 opt-in 隔离 Chromium UI、固定上游契约和 MCP stdio 权限回归。
+- 两版本 `scripts/smoke_ui.py` 成功，`scratch/publish-review-smoke312.log` / `publish-review-smoke311.log`；两版本 pip check 无依赖冲突，ruff / node --check / git diff --check 通过。命令使用 env -u PYTHONPATH；浏览器 `/snap/bin/chromium`，临时 profile，不接真实浏览器。
+- 本轮只修上述三项，保留默认关闭、管理员指定单 action、持久阶段、unknown 不重试和隐私投影。未读真实 .env/data/profile，未连8099/9235，未真实上传发布；commit 不 push、不部署。**修复已本地验证，独立复审尚未进行，平台仍未验收**。
+
+## 2026-10-16 受控发布执行器隔离验收（历史，后续独立审查 FAIL）
 
 - 最终前台等待完整 summary：Python 3.12 **504 passed / 183.93s**，Python 3.11 **504 passed / 185.85s**，无 skipped，退出码均 0；各有 1 条既有 Starlette/httpx 弃用警告。日志 `scratch/publish-final312.log`、`scratch/publish-final311.log`。
 - 双 Python 各自运行 `scripts/smoke_ui.py` 成功，日志 `scratch/publish-smoke312.log`、`scratch/publish-smoke311.log`。隔离 Chromium `/snap/bin/chromium` 使用临时 profile/API，不是平台浏览器。
