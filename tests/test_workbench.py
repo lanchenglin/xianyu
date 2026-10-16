@@ -325,9 +325,9 @@ def test_live_disabled_by_default(workbench):
     client, _ = workbench
     aid = account(client, "live", json.dumps({"unb": "12345", "_m_h5_tk": "test-only"}))
     assert client.post("/api/search", json={"account_id": aid, "query": "商品"}).status_code == 409
-    action = message(client, aid).json()
-    response = client.post(f"/api/actions/{action['id']}/approve", json={"digest": action["digest"], "confirm": "确认执行"})
+    response = message(client, aid)
     assert response.status_code == 409
+    assert response.json()['code'] == 'message_send_disabled'
 
 
 def test_modes_are_frozen_into_approval(workbench):
@@ -336,7 +336,8 @@ def test_modes_are_frozen_into_approval(workbench):
     action = message(client, aid).json()
     approve(client, action)
     service.db.execute("UPDATE accounts SET mode='live' WHERE id=?", (aid,))
-    service.run_once()
+    assert not service.run_once()  # A live account is never auto-claimed, even with a legacy demo row.
+    service.execute_one(action['id'], action['digest'])
     assert client.get(f"/api/actions/{action['id']}").json()["state"] == "failed"
 
 
@@ -418,7 +419,7 @@ def test_mcp_exposes_no_approval_credentials_or_transaction_tools():
     tools = asyncio.run(mcp.list_tools())
     names = {tool.name for tool in tools}
     assert {"search_items", "propose_message", "propose_listing", "list_actions"}.issubset(names)
-    assert not any(any(block in name for block in ("approve", "cookie", "payment", "refund", "shell")) for name in names)
+    assert not any(any(block in name for block in ("approve", "reconcile", "reconciliation", "cookie", "payment", "refund", "shell")) for name in names)
 
 
 def test_action_schema_forbids_extra_fields():
@@ -430,6 +431,238 @@ def test_provider_write_flag_cannot_be_bypassed(workbench):
     client, service = workbench
     with pytest.raises(Problem):
         service.provider.call(account(client), "message.send", {}, write=False)
+
+
+def test_wrong_vault_key_rejects_startup_without_changing_data(tmp_path):
+    from dataclasses import replace
+
+    settings = Settings(tmp_path / "data", ADMIN, AGENT, Fernet.generate_key().decode(), worker_enabled=False)
+    app = create_app(settings)
+    with TestClient(app, headers={"Authorization": "Bearer " + ADMIN}) as client:
+        message(client, account(client), text="保留的加密正文")
+    db = app.state.service.db
+    before = db.one("SELECT * FROM actions")
+    with pytest.raises(ValueError, match="密钥不匹配|加密数据损坏"):
+        create_app(replace(settings, vault_key=Fernet.generate_key().decode()))
+    assert db.one("SELECT * FROM actions") == before
+    assert create_app(settings).state.service.action_view(before)["payload"]["text"] == "保留的加密正文"
+
+
+def reconciliation_body(action, **changes):
+    return {"account_id": action["account_id"], "outcome": "observed",
+            "evidence": "人工查看平台记录：测试证据，不代表送达或已读",
+            "idempotency_key": "reconcile-once-001", **changes}
+
+
+def uncertain_action(client, service, state="unconfirmed"):
+    action = message(client, account(client)).json()
+    service.db.execute("UPDATE actions SET state=?,result=?,error=? WHERE id=?",
+                       (state, service.vault.seal({"mid": "not-a-receipt"}), "原始不确定原因", action["id"]))
+    return action
+
+
+def test_admin_reconciliation_preserves_original_execution_and_encrypts_evidence(workbench):
+    client, service = workbench
+    action = uncertain_action(client, service)
+    before = service.db.one("SELECT * FROM actions WHERE id=?", (action["id"],))
+    body = reconciliation_body(action)
+    response = client.post(f"/api/actions/{action['id']}/reconciliation", json=body)
+    assert response.status_code == 200, response.text
+    record = response.json()
+    assert record["action_id"] == action["id"]
+    assert record["account_id"] == action["account_id"]
+    assert record["outcome"] == "observed"
+    assert record["source"] == "manual"
+    assert record["evidence"] == body["evidence"]
+    assert record["recorded_at"] > 0
+    assert service.db.one("SELECT * FROM actions WHERE id=?", (action["id"],)) == before
+    stored = service.db.one("SELECT * FROM reconciliations WHERE action_id=?", (action["id"],))
+    assert body["evidence"] not in str(stored)
+    assert body["evidence"] not in client.get("/api/audit").text
+    assert len(service.db.all("SELECT * FROM audit WHERE event='action.reconciled'")) == 1
+    assert not service.run_once()
+
+
+def test_agent_cannot_reconcile_via_api_or_service(workbench):
+    from xianyu_workbench.models import ReconciliationIn
+
+    client, service = workbench
+    action = uncertain_action(client, service)
+    body = reconciliation_body(action)
+    response = client.post(f"/api/actions/{action['id']}/reconciliation", json=body,
+                           headers={"Authorization": "Bearer " + AGENT})
+    assert response.status_code == 403
+    with pytest.raises(Problem) as exc:
+        service.reconcile(action["id"], ReconciliationIn(**body), "agent")
+    assert exc.value.status == 403
+    assert not service.db.all("SELECT * FROM reconciliations")
+
+
+def test_reconciliation_rejects_cross_account_binding(workbench):
+    client, service = workbench
+    action = uncertain_action(client, service)
+    response = client.post(f"/api/actions/{action['id']}/reconciliation",
+                           json=reconciliation_body(action, account_id=account(client)))
+    assert response.status_code == 409
+    assert response.json()["code"] == "account_mismatch"
+    assert not service.db.all("SELECT * FROM reconciliations")
+
+
+@pytest.mark.parametrize("state", ["pending", "approved", "running", "failed", "rejected", "expired", "simulated"])
+def test_reconciliation_rejects_noneligible_states(workbench, state):
+    client, service = workbench
+    action = uncertain_action(client, service, state)
+    response = client.post(f"/api/actions/{action['id']}/reconciliation", json=reconciliation_body(action))
+    assert response.status_code == 409
+    assert response.json()["code"] == "state_conflict"
+    assert not service.db.all("SELECT * FROM reconciliations")
+
+
+def test_reconciliation_same_request_is_idempotent_and_conflicts_are_explicit(workbench):
+    client, service = workbench
+    action = uncertain_action(client, service)
+    path = f"/api/actions/{action['id']}/reconciliation"
+    body = reconciliation_body(action)
+    first = client.post(path, json=body)
+    second = client.post(path, json=body)
+    assert second.status_code == 200
+    assert first.json() == second.json()
+    for changes in ({"evidence": "不同证据"}, {"outcome": "not_observed"}, {"idempotency_key": "new-key-0002"}):
+        assert client.post(path, json={**body, **changes}).status_code == 409
+    assert len(service.db.all("SELECT * FROM reconciliations")) == 1
+    assert len(service.db.all("SELECT * FROM audit WHERE event='action.reconciled'")) == 1
+    assert not service.run_once()
+
+
+def test_reconciliation_read_scope_admin_evidence_agent_summary_only(workbench):
+    client, service = workbench
+    action = uncertain_action(client, service)
+    body = reconciliation_body(action)
+    client.post(f"/api/actions/{action['id']}/reconciliation", json=body).raise_for_status()
+    admin_view = client.get(f"/api/actions/{action['id']}").json()
+    assert admin_view["reconciliation"]["evidence"] == body["evidence"]
+    headers = {"Authorization": "Bearer " + AGENT}
+    for path in (f"/api/actions/{action['id']}", "/api/actions"):
+        response = client.get(path, headers=headers)
+        value = response.json()
+        row = value[0] if isinstance(value, list) else value
+        assert row["reconciliation"]["outcome"] == "observed"
+        assert row["reconciliation"]["source"] == "manual"
+        assert "evidence" not in row["reconciliation"]
+        assert body["evidence"] not in response.text
+    repeated_proposal = message(client, action["account_id"])
+    assert "evidence" not in repeated_proposal.json()["reconciliation"]
+
+
+@pytest.mark.parametrize("state", ["unconfirmed", "submitted", "blocked"])
+def test_reconciliation_concurrency_and_recovery_never_replay(workbench, state):
+    from xianyu_workbench.models import ReconciliationIn
+
+    client, service = workbench
+    action = uncertain_action(client, service, state)
+    body = ReconciliationIn(**reconciliation_body(action))
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        records = list(pool.map(lambda _: service.reconcile(action["id"], body, "admin"), range(4)))
+    assert all(record == records[0] for record in records)
+    assert len(service.db.all("SELECT * FROM audit WHERE event='action.reconciled'")) == 1
+    service.recover()
+    assert not service.run_once()
+    assert client.get(f"/api/actions/{action['id']}").json()["state"] == state
+
+
+def test_concurrent_conflicting_reconciliations_have_one_winner(workbench):
+    from xianyu_workbench.models import ReconciliationIn
+
+    client, service = workbench
+    action = uncertain_action(client, service)
+
+    def submit(index):
+        body = ReconciliationIn(**reconciliation_body(action, evidence=f"人工证据 {index}"))
+        try:
+            return service.reconcile(action["id"], body, "admin")
+        except Problem as exc:
+            return exc.status
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        results = list(pool.map(submit, range(4)))
+    assert sum(isinstance(result, dict) for result in results) == 1
+    assert results.count(409) == 3
+    assert len(service.db.all("SELECT * FROM reconciliations")) == 1
+
+
+def test_reconciliation_idempotency_key_cannot_bind_another_operation(workbench):
+    client, service = workbench
+    first = uncertain_action(client, service)
+    second = message(client, first["account_id"], key="second-operation").json()
+    service.db.execute("UPDATE actions SET state='unconfirmed' WHERE id=?", (second["id"],))
+    assert client.post(f"/api/actions/{first['id']}/reconciliation", json=reconciliation_body(first)).status_code == 200
+    response = client.post(f"/api/actions/{second['id']}/reconciliation", json=reconciliation_body(second))
+    assert response.status_code == 409
+    assert len(service.db.all("SELECT * FROM reconciliations")) == 1
+
+
+@pytest.mark.parametrize("changes", [{"outcome": "delivered"}, {"outcome": "read"}, {"outcome": "payment"},
+                                    {"evidence": "   "}, {"evidence": "x" * 2001}, {"retry": True},
+                                    {"account_id": ""}, {"idempotency_key": "x"}])
+def test_reconciliation_input_cannot_claim_receipts_or_retry(workbench, changes):
+    client, service = workbench
+    action = uncertain_action(client, service)
+    response = client.post(f"/api/actions/{action['id']}/reconciliation", json=reconciliation_body(action, **changes))
+    assert response.status_code == 422
+    assert not service.db.all("SELECT * FROM reconciliations")
+
+
+def test_reconciliation_missing_action_is_404(workbench):
+    client, service = workbench
+    action = uncertain_action(client, service)
+    assert client.post("/api/actions/missing/reconciliation", json=reconciliation_body(action)).status_code == 404
+
+
+def test_reconciliation_and_audit_rollback_together(workbench):
+    client, service = workbench
+    action = uncertain_action(client, service)
+    service.db.execute("CREATE TRIGGER fail_audit BEFORE INSERT ON audit WHEN NEW.event='action.reconciled' "
+                       "BEGIN SELECT RAISE(ABORT, 'test audit failure'); END")
+    from xianyu_workbench.models import ReconciliationIn
+
+    with pytest.raises(Exception, match="test audit failure"):
+        service.reconcile(action["id"], ReconciliationIn(**reconciliation_body(action)), "admin")
+    assert not service.db.all("SELECT * FROM reconciliations")
+    assert client.get(f"/api/actions/{action['id']}").json()["state"] == "unconfirmed"
+
+
+def test_capabilities_distinguish_manual_reconciliation_from_receipts(workbench):
+    client, _ = workbench
+    value = client.get("/api/capabilities").json()
+    assert value["manual_reconciliation"] is True
+    assert value["automatic_receipt_verification"] is False
+    assert value["reconciliation_policy"] == {
+        "write_role": "admin", "agent_read": "outcome_time_only",
+        "eligible_states": ["unconfirmed", "submitted", "blocked"],
+        "outcomes": ["observed", "not_observed", "unresolved"],
+        "immutable": True, "retries_operation": False,
+    }
+    schema = client.get("/api/schema").json()
+    assert "/api/actions/{action_id}/reconciliation" in schema["paths"]
+    assert "ReconciliationIn" in schema["components"]["schemas"]
+
+
+def test_reconciliation_survives_real_restart_without_replay(tmp_path):
+    settings = Settings(tmp_path / "data", ADMIN, AGENT, Fernet.generate_key().decode(),
+                        worker_enabled=False, read_interval=0, write_interval=0)
+    app = create_app(settings)
+    headers = {"Authorization": "Bearer " + ADMIN}
+    with TestClient(app, headers=headers) as client:
+        action = uncertain_action(client, app.state.service)
+        record = client.post(f"/api/actions/{action['id']}/reconciliation", json=reconciliation_body(action)).json()
+    restarted = create_app(settings)
+    with TestClient(restarted, headers=headers) as client:
+        value = client.get(f"/api/actions/{action['id']}").json()
+        assert value["reconciliation"] == record
+        assert value["state"] == "unconfirmed"
+        assert value["result"] == {"mid": "not-a-receipt"}
+        assert not restarted.state.service.run_once()
+        assert len(restarted.state.service.db.all("SELECT * FROM audit WHERE event='action.reconciled'")) == 1
 
 
 def test_demo_provider_never_generates_real_product_links():

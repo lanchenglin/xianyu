@@ -20,18 +20,27 @@ from PIL import Image, ImageOps
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .config import Settings
+from .faq_policy import FAQPolicy, FAQPolicyIn
+from .message_observation import MessageObservation, ObservationIn
 from .models import (
     AccountIn,
     ActionIn,
     ApprovalIn,
     AssistIn,
     CookiesIn,
+    DraftArchiveIn,
+    DraftEditIn,
     DraftIn,
     LLMConfigIn,
     MonitorIn,
+    NotificationConfigIn,
+    NotificationStateIn,
+    ReconciliationIn,
     SearchIn,
 )
 from .provider import Problem, asset_path
+from .publish_executor import PublishProtocol, save_protocol
+from .publish_preview import PublishDefaults, defaults, save_defaults
 from .security import canonical, parse_cookies
 from .service import Service
 
@@ -119,11 +128,63 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def capabilities(current=Depends(role)):
         return {"search": True, "item_detail": True, "existing_chats": True, "message_history": True,
                 "send_with_approval": True, "publish_with_approval": True, "delete_with_explicit_approval": True,
-                "local_drafts": True, "search_monitors": True, "mcp": True,
+                "live_publish": s.live_enabled and s.publish_enabled, "publish_complete_snapshot": False, "local_publish_preview": True,
+                "publish_policy": {"live_executor_enabled": s.live_enabled and s.publish_enabled,
+                                   "executor_implemented": True, "platform_verified": False,
+                                   "source": "admin_verified_protocol_required", "default_enabled": False,
+                                   "preview_uploads": False, "selected_live_execution_only": True},
+                "browser_policy": {"isolated_browsers": ["chrome", "chromium"],
+                                   "cdp_operations": ["search", "orders", "inventory", "messages"], "cdp_writes": False,
+                                   "admin_configuration_only": True, "failure_fallback": False},
+                "local_drafts": True, "local_draft_edit": True, "local_draft_archive": True,
+                "offline_backup_restore_cli": True, "search_monitors": True, "mcp": True,
+                "notification_state": True, "external_notifications": True,
+                "notification_policy": {"default_enabled": False, "configuration_role": "admin",
+                                        "channels": ["webhook", "dingtalk"], "content": "fixed_summary_only",
+                                        "business_retry": False, "max_attempts": 3},
+                "manual_reconciliation": True, "automatic_receipt_verification": False,
+                "reconciliation_policy": {"write_role": "admin", "agent_read": "outcome_time_only",
+                                          "eligible_states": ["unconfirmed", "submitted", "blocked"],
+                                          "outcomes": ["observed", "not_observed", "unresolved"],
+                                          "immutable": True, "retries_operation": False},
                 "first_contact": False, "platform_edit_price": False, "platform_relist": False,
                 "full_inventory_sync": False, "order_sync": False, "autonomous_reply": False,
+                "partial_orders": True, "partial_inventory": True, "partial_messages": True,
+                "message_observation": True,
+                "message_observation_policy": {"default_enabled": False, "minimum_interval_s": 300,
+                                               "coverage": "conversation_last_message_samples",
+                                               "configuration_role": "admin", "send_allowed": False},
+                "message_bodies": True, "message_reply_drafts": True, "message_sample_propose": True,
+                "message_send_policy": {"default_enabled": False, "configuration_role": "admin",
+                                        "allowed_operations": ["message.send"], "selected_execution_only": True,
+                                        "credential_source": "independent_cookie_ws", "pair_source": "cdp_readonly",
+                                        "automatic_acceptance_verified": False, "delivery_verified": False,
+                                        "faq_send_allowed": False, "platform_verified": False},
+                "sample_policy": {"pages": 20, "pagination": True, "all_statuses": False,
+                                  "scopes": ["bought_orders", "self_published"],
+                                  "unsupported_scopes": ["sold_orders", "off_shelf_inventory", "all_status_inventory"],
+                                  "orders_terminal_verified": False, "messages_pagination": False,
+                                  "private_cache_encrypted": True, "platform_verified": False},
                 "payment": False, "refund": False, "confirm_receipt": False,
                 "notice": "False 表示本版本没有开放，不会伪造成功；交易仅在闲鱼人工完成"}
+
+    @app.get('/api/accounts/{account_id}/publish-defaults')
+    def get_publish_defaults(account_id: str, current=Depends(admin)):
+        return defaults(service, account_id)
+
+    @app.put('/api/accounts/{account_id}/publish-defaults')
+    def put_publish_defaults(account_id: str, body: PublishDefaults, current=Depends(admin)):
+        return save_defaults(service, account_id, body)
+
+    @app.put('/api/accounts/{account_id}/publish-protocol')
+    def put_publish_protocol(account_id: str, body: PublishProtocol, current=Depends(admin)):
+        return save_protocol(service, account_id, body)
+
+    @app.post('/api/publish-preview', status_code=201)
+    def publish_preview(body: ActionIn, current=Depends(role)):
+        if body.kind != 'item.publish':
+            raise Problem('invalid_request', '预览仅接受 item.publish', 422)
+        return service.propose(body, current, publish_preview=True)
 
     @app.get("/api/dashboard")
     def dashboard(current=Depends(role)):
@@ -209,25 +270,99 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise Problem("invalid_cid", "会话 ID 无效", 422)
         return service.provider.call(account_id, "history", {"cid": cid, "limit_per_page": 20})
 
+    from .operations_cache import OperationsCache
+    samples = OperationsCache(service)
+
+    from .message_replies import MessageReplies
+    replies = MessageReplies(service)
+
+    @app.post('/api/accounts/{account_id}/messages/{sample_id}/reply-draft')
+    def message_reply_draft(account_id: str, sample_id: str, current=Depends(role)):
+        return replies.generate(account_id, sample_id)
+
+    faq = FAQPolicy(service)
+
+    @app.get('/api/accounts/{account_id}/faq-policy')
+    def faq_status(account_id: str, current=Depends(role)):
+        return faq.read(account_id, current)
+
+    @app.put('/api/accounts/{account_id}/faq-policy')
+    def faq_config(account_id: str, body: FAQPolicyIn, current=Depends(admin)):
+        return faq.configure(account_id, body)
+
+    @app.post('/api/accounts/{account_id}/faq-policy/revoke')
+    def faq_revoke(account_id: str, current=Depends(admin)):
+        return faq.revoke(account_id)
+
+    observation = MessageObservation(service)
+
+    @app.get('/api/accounts/{account_id}/message-observation')
+    def observation_status(account_id: str, current=Depends(role)):
+        return observation.read(account_id)
+
+    @app.put('/api/accounts/{account_id}/message-observation')
+    def observation_config(account_id: str, body: ObservationIn, current=Depends(admin)):
+        return observation.configure(account_id, body)
+
+    @app.post('/api/accounts/{account_id}/message-observation/takeover')
+    def message_takeover(account_id: str, current=Depends(role)):
+        return observation.takeover(account_id, True, current)
+
+    @app.post('/api/accounts/{account_id}/message-observation/release')
+    def message_release(account_id: str, current=Depends(admin)):
+        return observation.takeover(account_id, False, current)
+
+    @app.get('/api/accounts/{account_id}/messages')
+    def messages_cache(account_id: str, current=Depends(role)):
+        return samples.read(account_id, 'messages')
+
+    @app.post('/api/accounts/{account_id}/messages/sync')
+    def messages_sync(account_id: str, current=Depends(role)):
+        return samples.sync(account_id, 'messages')
+
+    @app.get('/api/accounts/{account_id}/orders')
+    def orders_cache(account_id: str, current=Depends(role)):
+        return samples.read(account_id, 'orders')
+
+    @app.post('/api/accounts/{account_id}/orders/sync')
+    def orders_sync(account_id: str, current=Depends(role)):
+        return samples.sync(account_id, 'orders')
+
+    @app.get('/api/accounts/{account_id}/inventory')
+    def inventory_cache(account_id: str, current=Depends(role)):
+        return samples.read(account_id, 'inventory')
+
+    @app.post('/api/accounts/{account_id}/inventory/sync')
+    def inventory_sync(account_id: str, current=Depends(role)):
+        return samples.sync(account_id, 'inventory')
+
     @app.post("/api/actions", status_code=201)
     def propose(body: ActionIn, current=Depends(role)):
         return service.propose(body, current)
 
     @app.get("/api/actions")
     def actions(current=Depends(role)):
-        return service.list_actions()
+        return service.list_actions(current)
 
     @app.get("/api/actions/{action_id}")
     def action(action_id: str, current=Depends(role)):
         row = service.db.one("SELECT * FROM actions WHERE id=?", (action_id,))
         if not row:
             raise Problem("not_found", "操作不存在", 404)
-        return service.action_view(row)
+        return service.action_view(row, current)
+
+    @app.post("/api/actions/{action_id}/reconciliation")
+    def reconcile(action_id: str, body: ReconciliationIn, current=Depends(admin)):
+        return service.reconcile(action_id, body, current)
 
     @app.post("/api/actions/{action_id}/approve")
     def approve(action_id: str, body: ApprovalIn, current=Depends(admin)):
         service.approve(action_id, body.digest)
         return {"ok": True, "state": "approved"}
+
+    @app.post('/api/actions/{action_id}/execute')
+    def execute(action_id: str, body: ApprovalIn, current=Depends(admin)):
+        return service.execute_one(action_id, body.digest)
 
     @app.post("/api/actions/{action_id}/reject")
     def reject(action_id: str, current=Depends(admin)):
@@ -276,7 +411,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         draft_id = uuid.uuid4().hex
         service.db.execute("INSERT INTO drafts(id,account_id,content,updated) VALUES(?,?,?,?)",
                            (draft_id, body.account_id, service.vault.seal(body.model_dump(mode="json")), time.time()))
-        return {"id": draft_id, "notice": "仅保存本地草稿，未上架"}
+        return {"id": draft_id, "revision": 1, "archived": False, "notice": "仅保存本地草稿，未上架"}
+
+    @app.put('/api/drafts/{draft_id}')
+    def edit_draft(draft_id: str, body: DraftEditIn, current=Depends(role)):
+        service.validate_assets(body.account_id, body.images)
+        with service.db.connect() as c:
+            changed = c.execute('UPDATE drafts SET content=?,revision=revision+1,updated=? '
+                                'WHERE id=? AND account_id=? AND revision=? AND archived=0',
+                                (service.vault.seal(body.model_dump(mode='json', exclude={'revision'})),
+                                 time.time(), draft_id, body.account_id, body.revision)).rowcount
+            if not changed:
+                raise Problem('draft_conflict', '草稿已变化、归档或账号不符，请重新载入', 409)
+        return {'id': draft_id, 'revision': body.revision + 1, 'archived': False}
+
+    @app.post('/api/drafts/{draft_id}/archive')
+    def archive_draft(draft_id: str, body: DraftArchiveIn, current=Depends(role)):
+        with service.db.connect() as c:
+            changed = c.execute('UPDATE drafts SET archived=1,revision=revision+1,updated=? '
+                                'WHERE id=? AND account_id=? AND revision=? AND archived=0',
+                                (time.time(), draft_id, body.account_id, body.revision)).rowcount
+            if not changed:
+                raise Problem('draft_conflict', '草稿已变化、归档或账号不符，请重新载入', 409)
+        return {'id': draft_id, 'revision': body.revision + 1, 'archived': True}
 
     @app.get("/api/drafts")
     def drafts(current=Depends(role)):
@@ -306,9 +463,40 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         service.db.audit(current, "monitor.toggled", monitor_id)
         return {"ok": True}
 
+    @app.get('/api/notifications/config')
+    def notification_config(current=Depends(admin)):
+        return service.notifications.status()
+
+    @app.put('/api/notifications/config')
+    def configure_notifications(body: NotificationConfigIn, current=Depends(admin)):
+        try:
+            service.notifications.configure(body)
+        except ValueError:
+            raise Problem('invalid_destination', '通知目标无效：仅允许受限 HTTPS 公网 webhook', 422) from None
+        return service.notifications.status()
+
+    @app.post('/api/notifications/disable')
+    def disable_notifications(current=Depends(admin)):
+        service.notifications.disable()
+        return service.notifications.status()
+
+    @app.get('/api/notifications/deliveries')
+    def notification_deliveries(current=Depends(role)):
+        return service.db.all('SELECT * FROM notification_deliveries ORDER BY updated DESC LIMIT 100')
+
     @app.get("/api/notifications")
-    def notifications(current=Depends(role)):
-        return [{**row, "content": json.loads(row["content"])} for row in service.db.all("SELECT * FROM notifications ORDER BY id DESC LIMIT 100")]
+    def notifications(include_archived: bool = False, current=Depends(role)):
+        return [{**row, "content": json.loads(row["content"])} for row in service.db.all(
+            "SELECT * FROM notifications WHERE (? OR archived=0) ORDER BY id DESC LIMIT 100", (include_archived,))]
+
+    @app.post('/api/notifications/{notification_id}/state')
+    def notification_state(notification_id: int, body: NotificationStateIn, current=Depends(role)):
+        with service.db.connect() as c:
+            changed = c.execute('UPDATE notifications SET read=?,archived=? WHERE id=?',
+                                (body.read, body.archived, notification_id)).rowcount
+            if not changed:
+                raise Problem('not_found', '通知不存在', 404)
+        return {'id': notification_id, **body.model_dump()}
 
     @app.get("/api/audit")
     def audit(current=Depends(admin)):

@@ -76,6 +76,69 @@ def chat_history(account_id: str, cid: str):
 
 
 @mcp.tool()
+def sync_message_sample(account_id: str) -> dict:
+    """按需只读会话末条样本；不是历史/实时消息。仅白名单普通文本可读；未知正文不可回复；发送需独立管理员开关、同账号 Cookie、逐条审批和管理员单条执行。"""
+    from urllib.parse import quote
+    return api('POST', f'/api/accounts/{quote(account_id, safe="")}/messages/sync')
+
+
+@mcp.tool()
+def message_reply_draft(account_id: str, sample_id: str) -> dict:
+    """用户选定 incoming 普通文本后生成本地模板草稿；不调用模型、不提案、不发送，交易/隐私交人工。"""
+    from urllib.parse import quote
+    return api('POST', f'/api/accounts/{quote(account_id, safe="")}/messages/{quote(sample_id, safe="")}/reply-draft')
+
+
+@mcp.tool()
+def message_observation_status(account_id: str) -> dict:
+    """读取低频末条样本采集状态，不是完整历史或发送许可。Agent 无配置/授权权限。"""
+    from urllib.parse import quote
+    return api('GET', f'/api/accounts/{quote(account_id, safe="")}/message-observation')
+
+
+@mcp.tool()
+def message_human_takeover(account_id: str) -> dict:
+    """安全停止该账号消息采集和草稿，转交人工；只有管理员可解除，不发送消息。"""
+    from urllib.parse import quote
+    return api('POST', f'/api/accounts/{quote(account_id, safe="")}/message-observation/takeover')
+
+
+@mcp.tool()
+def cached_messages(account_id: str) -> dict:
+    """读取加密末条消息样本与最后采集状态；旧缓存不是本次成功，自己消息标 outgoing。"""
+    from urllib.parse import quote
+    return api('GET', f'/api/accounts/{quote(account_id, safe="")}/messages')
+
+
+@mcp.tool()
+def sync_order_sample(account_id: str) -> dict:
+    """有界滚动读取本人买到订单概要；返回 scope/pages_read/stop_reason。末页未证仍 partial，不含卖出订单，不执行交易。"""
+    from urllib.parse import quote
+    return api('POST', f'/api/accounts/{quote(account_id, safe="")}/orders/sync')
+
+
+@mcp.tool()
+def cached_orders(account_id: str) -> dict:
+    """读取加密订单概要缓存及最后采集状态；旧缓存不代表本次采集成功。"""
+    from urllib.parse import quote
+    return api('GET', f'/api/accounts/{quote(account_id, safe="")}/orders')
+
+
+@mcp.tool()
+def sync_inventory_sample(account_id: str) -> dict:
+    """有界滚动读取本人发布列表，返回范围/页数/停止原因；仅已证末页 complete，不含下架或全状态库存，不改价或上下架。"""
+    from urllib.parse import quote
+    return api('POST', f'/api/accounts/{quote(account_id, safe="")}/inventory/sync')
+
+
+@mcp.tool()
+def cached_inventory(account_id: str) -> dict:
+    """读取本人商品部分缓存；未出现商品不代表下架或售罄。"""
+    from urllib.parse import quote
+    return api('GET', f'/api/accounts/{quote(account_id, safe="")}/inventory')
+
+
+@mcp.tool()
 def propose_message(account_id: str, cid: str, toid: str, text: str, idempotency_key: str) -> dict:
     """仅提交消息草稿等待人工审批。重试同一内容必须复用幂等键。不得声称已经送达。"""
     return api("POST", "/api/actions", {"account_id": account_id, "kind": "message.send",
@@ -94,6 +157,17 @@ def propose_listing(account_id: str, title: str, desc: str, price: str, images: 
 
 
 @mcp.tool()
+def preview_listing(account_id: str, title: str, desc: str, price: str, images: list[str],
+                    idempotency_key: str, delivery: str = '无需邮寄', post_price: str = '0',
+                    can_self_pickup: bool = True) -> dict:
+    """本地冻结图片hash/管理员类目地区快照并申请审批；不上传平台，真实执行器未开放。地点隐私不返回模型。"""
+    return api('POST', '/api/publish-preview', {'account_id': account_id, 'kind': 'item.publish',
+        'payload': {'title': title, 'desc': desc, 'price': price, 'images': images,
+                    'delivery': delivery, 'post_price': post_price, 'can_self_pickup': can_self_pickup},
+        'idempotency_key': idempotency_key})
+
+
+@mcp.tool()
 def save_listing_draft(account_id: str, title: str, desc: str, price: str = "0", images: list[str] | None = None) -> dict:
     """保存本地商品草稿，不执行发布或改价。"""
     return api("POST", "/api/drafts", {"account_id": account_id, "title": title, "desc": desc,
@@ -102,7 +176,7 @@ def save_listing_draft(account_id: str, title: str, desc: str, price: str = "0",
 
 @mcp.tool()
 def list_actions() -> list[dict]:
-    """读取审批/执行状态。submitted 只表示上游接受，unconfirmed 需人工核对，不能重发。"""
+    """读取原审批/执行状态和人工核对结论/时间（不含证据正文）。核对不是送达/已读回执，不改变原状态，不授权重发。MCP 不能核对或审批。"""
     return api("GET", "/api/actions")
 
 
@@ -121,9 +195,21 @@ def create_search_monitor(account_id: str, query: str, interval_s: int = 900,
 
 
 @mcp.tool()
-def notifications() -> list[dict]:
-    """读取搜索监控发现的新结果。"""
-    return api("GET", "/api/notifications")
+def notifications(include_archived: bool = False) -> list[dict]:
+    """读取站内通知；可包含归档。归档不是删除商品。"""
+    return api("GET", "/api/notifications?include_archived=" + str(include_archived).lower())
+
+
+@mcp.tool()
+def notification_state(notification_id: int, read: bool, archived: bool) -> dict:
+    """仅修改站内通知已读/归档状态，不触发外部发送或平台操作。"""
+    return api('POST', f'/api/notifications/{notification_id}/state', {'read': read, 'archived': archived})
+
+
+@mcp.tool()
+def notification_deliveries() -> list[dict]:
+    """读取脱敏通知投递状态；无目的地、密钥或重试业务的能力。"""
+    return api('GET', '/api/notifications/deliveries')
 
 
 def main():

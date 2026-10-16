@@ -2,7 +2,63 @@
 
 更新日期：2026-10-14。代码核对基线：[`64556d8`](https://github.com/lanchenglin/xianyu/commit/64556d84c7eed63222dd1352daff69293b8b98c0)，版本 v0.1.0。
 
-本文件交给在本地继续开发的人、Codex、Claude Code 或 Hermes。**下列任务是待办与设计建议，不代表功能已经实现。** 本次交接只更新文档，不新增平台操作、不调整权限、不修复依赖锁文件。
+本文件交给在本地继续开发的人、Codex、Claude Code 或 Hermes。**下列任务是待办与设计建议，不代表功能已经实现。** 原始交接只更新文档；2026-10-14 续开发在 `feat/local-next` 完成 P0-ENV 本地修复、P2-04 迁移必要基础及 P1-02 人工核对，以下各节标注当前实现与未验收边界，不新增平台动作。
+
+## 2026-10-16 受控发布执行器（最新）
+
+已实现独立受控上传/完整冻结模板发布/同 UID itemId 回读，默认关闭，仅管理员指定队列 action；不是继续只扩 candidate。阶段和上传回执加密保存、变化阻断、unknown 不重试，旧隐式 publish 仍禁用。管理员 HTTP/UI 录入已核验协议；MCP 仅预览/读取脱敏结果。见 [执行契约及精确取证清单](PUBLISH_EXECUTOR.md)。平台真实验收未做，由父助手负责；本批不 push/部署。
+
+## 2026-10-16 发布本地冻结链（历史）
+
+用户报告cea21b7 P0复审PASS、push且CI38868085093五绿，真实消息发送仍未开ACK未核实。本批实现本地发布预览/加密地点与类目输入/图片hash冻结/审批/指定action校验及HTTP/UI/MCP隔离。真实发布与自动回验未开，改价/非删除上下架未实现，具体取证门槛见 [PUBLISH_PREVIEW](PUBLISH_PREVIEW.md)。所有live action排除worker领取，旧live delete关闭。schema v10不变。不改分页、不访问真实实例、不push/部署。
+
+## 2026-10-16 P0 修复（历史）
+
+75b6f98 独立审查 FAIL：旧无CDP真实消息绕过开关并可被worker领取。本次所有live消息统一默认关闭、无CDP拒绝；历史approved也永不自动领取，仅管理员指定execute；Provider独立检查一次性队列授权/绑定/digest/时效。旧无CDP直发明确关闭，演示自动行为保留。双Python含隔离浏览器全量各460 passed，详见 TEST_REPORT；待独立复审，不push不部署，不代表真实账号验收。
+
+## 2026-10-16 单条安全消息增量（历史）
+
+默认关闭的管理员开关仅放行 message.send；CDP 只读 peer/CID 校验 + 明确独立绑定 Cookie/WS，冻结来源与正文 digest，人工审批后管理员 HTTP/UI 只执行指定一条，其他历史 approved 不被启动。FAQ、首次联系、商品写链路、实际 Hermes 接入、完整订单仍未完成。发送后只读辅助核对已接，但缺少可靠发送 ACK 关联，不能实现 accepted 自动判定，始终保留 unconfirmed；父助手最小取证见 [MESSAGE_SEND](MESSAGE_SEND.md)。本批不 push/部署。
+
+用户报告 b8ea112 已部署，CI38857758684 五作业绿；真实 inventory 2 页40条 self_published complete，orders13页130条因25秒 limit partial。不再重复分页修复，下方待复测为历史记录。
+
+## 2026-10-16 任务页 focus emulation（历史）
+
+父助手真实单变量 probe 证明同 no_defaults=True 任务页启用 focus emulation 后 root/body 1241→3729，hidden=false/hasFocus=true 未变，不能归因为仅 document.hidden。经批准只对 orders/inventory 新任务页导航前启用，task_page 可选参数默认 false，search/messages 不变。保留借用 context 默认、原页、前后 UID 校验、root几何/750ms节流/预算；失败或取消清理 session 和新页。脚本/初轮诊断测试一并保留，详见 CDP_DEFAULTS_DIAGNOSIS / TEST_REPORT。代码本地验证不代表真实 API 分页通过，待父助手验收；无部署/push，无真实实例连接。
+
+## 2026-10-16 分页滚动几何修复
+
+父助手报告 27298e5 部署后仍一页/time_limit，确认真实 root 的 clientHeight 比 innerHeight 少 15px，旧算法停在假底端。隔离 HTML 横向溢出/15px 滚动条已在双 Python 复现首屏不翻页 RED；最小修复统一 scrollingElement 的高度稳定检测及 scrollHeight/clientHeight/scrollTop 底端计算，不增加 selector，保留 750ms/loading/资源 deadline/身份清理。父助手一次滚到真实底端后 2.5 秒仍未增卡，因此几何缺陷不宣称唯一根因；真实 API 仍待父助手复测。本轮不连接 8099/9235，不读取真实 .env/data/profile，不 push/部署。测试证据见 TEST_REPORT。
+
+## 2026-10-16 分页时序修复
+
+父助手报告部署 1ef2c3f 的 inventory/orders API 都止于一页 time_limit，直接页面延后滚动却可继续。隔离 Chromium 延迟 DOM/hook fixture 先复现 RED 后修复：750ms tick、loading 暂停、高度稳定后滚动、已到底时分 tick 回退再到底；总 deadline 与全部范围/预算/归属边界不变。只修页面时序，无 schema/能力扩展；不触碰运行的 8099/9235 或真实数据。真实工作台复测由父助手完成，详情及证据见 TEST_REPORT / OPERATION_PAGINATION。
+
+## 2026-10-16 有界分页
+
+买到订单固定页面滚动读取、稳定 ID 去重、重复游标/页停止、字节/页数/条数/时长限制及 v10 进度迁移已接入；订单末页未证仍 partial。本人发布列表也已接同一多页路径，必须 self=true，bool false 才完成该范围；卖出订单、下架列表、全状态库存未实现。API/UI/MCP 回读边界与父助手必须补证字段见 [OPERATION_PAGINATION](OPERATION_PAGINATION.md)。无真实平台验收，不 push/部署；此前“仅单页”是历史状态，不代表完整订单已实现。
+
+## 2026-10-16 低频采集 / 人工接管
+
+v9 增加账号默认关闭的低频消息采集，统一 worker、持久去重、失败退避与恢复暂停；API/UI/MCP 已接入。有限 FAQ 策略只由管理员配置/撤销，商品+会话范围/模板/有效期/频率加密保存；未实现发送执行器，永远 send_allowed=false，不能自动回复。详见 [MESSAGE_OBSERVATION](MESSAGE_OBSERVATION.md)。完整分页、真实写操作、首次联系和实际 Hermes 注册仍未完成，下一证据断点见 [OPERATIONS_NEXT](OPERATIONS_NEXT.md)。不 push/部署，真实商品仍待用户内容/价格/目标确认。
+
+## 2026-10-15 消息编码修正与本地草稿（历史）
+
+基线 da3e2ad；新增父助手只读证据支持 opaque messageId、严格普通文本解码和 pair 核验。HTTP/UI/MCP 按需生成加密 local_template 草稿，不调模型、不提案、不发送；v8 迁移，恢复无重放，完整边界见 [MESSAGES](MESSAGES.md)。真实平台本轮未验收，不部署/push，自动监听/FAQ 与 CDP 写入仍关闭。
+
+## 2026-10-15 消息样本增量（历史）
+
+基线 b0e84fe；新增 partial_messages 的末条元数据采集/加密去重/HTTP/UI/MCP，v7 索引迁移，契约和剩余编码/收件人证据见 [MESSAGES](MESSAGES.md)。正文不可用，不开放样本草稿/提案；自动监听/FAQ 未实现。已做隔离本地 WS/Chromium 与真实 MCP stdio 验证，非真实闲鱼验收。不部署、不 push，不访问真实数据或 8099/9235。
+
+## 2026-10-15 运营第二批（历史）
+
+基线 465f898，已根据父助手真实只读结构证据实现 orders/inventory 的 CDP 单页样本、v6 加密缓存与按账号 API/UI/MCP。完整字段/限制见 [OPERATIONS_SAMPLES](OPERATIONS_SAMPLES.md)。partial_orders/partial_inventory 可用；order_sync/full_inventory_sync 仍 false。消息稳定 ID 结构已有证据，编码未知，解析与采集留作独立单元；不得再以旧上游 history 裁剪数据断言没有 ID。真实平台、实际 Hermes connector 仍未验收。无 push/部署，Windows 暂停不变。
+
+## 2026-10-15 运营续开发第一批（历史）
+
+起点 121f3c8，仍在 feat/local-next，无 push/部署。已交付站内通知已读/归档、管理员默认关闭的钉钉/受限 webhook 摘要通知（HTTP/schema/capabilities/UI/MCP）、真实 MCP stdio 集成验证；详情 [NOTIFICATIONS](NOTIFICATIONS.md)。v4/v5 迁移保留旧数据，恢复关闭通知防重放。功能提交 `07fb1a2`；随后补 HTTPResponse 清理，最终双 Python 全量各 232 passed，真实隔离 TLS/Chromium 通过；证据范围见 TEST_REPORT，不是实际平台/钉钉/Hermes 验收。
+
+**其余完整需求仍待继续，不因本批完成勾选。** [OPERATIONS_NEXT](OPERATIONS_NEXT.md) 包含逐项矩阵、底层适配建议、Hermes 只读取证字段。下一优先：取得稳定消息 ID 同记录与本人库存分页/归属证据，再实现公共有界只读 adapter 与持久游标；发布预览须解决类目推荐前上传的审批边界，地点私密快照必须加密、变化重审批。无真实页面证据不猜 endpoint/DOM，不启用 live_publish/first_contact/order_sync/autonomous_reply。此次未实现无人值守授权策略，逐条平台审批不变。
 
 ## 1. 从哪里开始
 
@@ -29,7 +85,7 @@ FastAPI + SQLite 单实例工作台；中文响应式页面；管理员/Agent �
 
 ### 2.2 尚未实现或未开放
 
-首次联系陌生卖家；可靠消息送达核验；不确定操作的核对闭环；平台修改价格/描述；普通下架/重新上架；全量本人商品同步；实时消息监听与无人值守客服；订单只读同步；外部通知推送；批量运营和更完整的草稿管理；数据库版本迁移及自动备份恢复。
+首次联系陌生卖家；可靠消息送达自动核验；平台修改价格/描述；普通下架/重新上架；全量本人商品同步；实时消息监听与无人值守客服；订单只读同步；外部通知推送；批量运营和更完整的草稿管理；自动备份恢复/保留策略。数据库显式迁移基础和管理员人工核对闭环已在本轮实现，详见 P2-04 / P1-02；不等于可靠自动回执。
 
 `GET /api/capabilities` 中的 `false` 必须保留到相应能力真正接入。该接口是粗粒度能力声明，不是账号授权或端到端验收证明。某些增强事项没有独立 capability 字段，不能因为字段不存在就认为已实现。
 
@@ -41,7 +97,9 @@ FastAPI + SQLite 单实例工作台；中文响应式页面；管理员/Agent �
 
 ## 3. 已知阻塞与验收状态
 
-### P0-ENV：Python 3.11 开发依赖安装失败（已复现于 CI，未修复）
+### P0-ENV：Python 3.11 开发依赖（已修复，基线双平台 CI 成功）
+
+2026-10-14 续开发：保留 3.11；显式以 `--python-version 3.11 --universal` 解析两个锁文件，Playwright 1.64 条件选择 pyee 13.0.1/14.0.0。Linux 3.11.16 与 3.12.14 干净安装、pip check、ruff 以及含固定 live 的基线均通过（各 69 passed）。CI 保留 Windows/Ubuntu 3.11/3.12，增加 pip check，并将 live 契约扩展为两版本。以下 CI 失败是历史记录，不代表当前锁；新 Windows CI 尚未运行。
 
 首轮 [GitHub CI #1](https://github.com/lanchenglin/xianyu/actions/runs/38535793804) 对应上述代码基线：
 
@@ -56,13 +114,13 @@ FastAPI + SQLite 单实例工作台；中文响应式页面；管理员/Agent �
 
 Windows 3.11 作业日志明确显示 `pyee==14.0.0` 要求 `Python >=3.12`，而 `requirements-dev.lock` 将其无条件固定。`requirements.lock` 不包含 pyee；不要由此断言所有 Python 3.11 基础演示安装都会失败，也不要声称完整 3.11 开发/live 组合已通过。
 
-**本地续开发先用独立 Python 3.12 虚拟环境。** `pyproject.toml` 仍声明 `>=3.11`，这与完整开发依赖的已验证范围存在差异。
+**本轮已在独立 3.11/3.12 环境完成 Linux 验证。** `pyproject.toml` 保留 `>=3.11`；Windows 新矩阵结果仍待远端 CI。
 
 待办与验收：
 
-- [ ] 决定并明确项目是否继续完整支持 3.11；需要支持时，重新解析兼容的 Playwright / pyee 组合和条件依赖，而不是只随手降低一个包版本。
-- [ ] 同步 `pyproject.toml`、运行/开发锁文件、CI 矩阵与文档；需要排除 3.11 时明确记录支持范围变更，不能只删除失败测试来伪装修复。
-- [ ] 在干净 Ubuntu/Windows 虚拟环境验证安装、`pip check`、基础测试及适用的 live 契约测试；记录每个版本的结果。
+- [x] 保留 3.11，重新解析兼容的 Playwright / pyee 条件依赖，并真实安装验证。
+- [x] 同步 `pyproject.toml`、运行/开发锁文件、CI 矩阵与文档，未删除失败矩阵。
+- [x] 基线 4d2aadc 的 CI run 38566392741 全部 7 作业成功，含 Ubuntu/Windows 3.11/3.12、双版本 live 契约、UI；本轮新增提交尚待远端 CI。
 
 代码入口：[pyproject.toml](../pyproject.toml)、[开发锁文件](../requirements-dev.lock)、[运行锁文件](../requirements.lock)、[CI](../.github/workflows/ci.yml)、[上游契约测试](../tests/test_upstream_contract.py)。
 
@@ -99,7 +157,9 @@ Windows 3.11 作业日志明确显示 `pyee==14.0.0` 要求 `Python >=3.12`，�
 
 ### P1-02 消息回执与不确定操作的核对闭环
 
-**现状：** 真实 `message.send` 即使返回 `mid`，也保存为 `unconfirmed`；发布有有效商品 ID 时为 `submitted`，不是“上架已展示”。没有独立的操作核对页面/API 来附证据并结案。
+**本轮实现：** 真实 `message.send` 仍为 `unconfirmed`，发布 `submitted` 仍不等于展示。新增管理员专用 POST `/api/actions/{id}/reconciliation` 与中文核对表单；记录结论、服务端时间、加密证据摘要和原子审计。独立 v2 表，不改原执行状态/结果。Agent 只读结论/时间，无证据正文、核对或审批权。没有可靠自动上游回执，**自动送达/已读核验仍未实现**。
+
+允许状态 `unconfirmed/submitted/blocked`；每操作一次不可覆盖记录，同账号键唯一；相同请求幂等返回原时间，冲突/并发不同请求 409；不重新入队、不调用上游、不解除暂停。`observed` 仅人工观察、`not_observed` 不证明未发生、`unresolved` 仍无法判断。详细契约见 MCP 文档。
 
 **代码入口：** [service.py](../xianyu_workbench/service.py) 的 `run_once` / `recover` / `action_view`；[db.py](../xianyu_workbench/db.py) 的 `actions` / `audit`；[app.py](../xianyu_workbench/app.py) 的 actions 路由；[前端](../xianyu_workbench/static/app.js)。
 
@@ -107,10 +167,11 @@ Windows 3.11 作业日志明确显示 `pyee==14.0.0` 要求 `Python >=3.12`，�
 
 **验收：**
 
-- [ ] 区分“本地发出”“上游接受”“平台记录可见”“对方已读”；无证据不得混为一谈。
-- [ ] 核对记录绑定原账号与原操作；不会通过新的幂等键自动重发不确定写入。
-- [ ] 重启、重复核对、并发核对不导致写操作再次执行。
-- [ ] 交易仍只能在闲鱼人工完成；核对接口不含任何付款、退款或成交提交。
+- [x] 区分原执行状态与人工观察，不将人工核对冒充自动平台记录、送达或已读。
+- [x] 核对绑定原账号/操作，不通过新幂等键重发；证据加密且不向 Agent 提供。
+- [x] 重启、重复核对、并发核对不导致再次执行（临时数据自动测试）。
+- [x] 核对无交易提交，无上游调用；交易仍永久人工。
+- [ ] 真实账号人工证据验收、可靠自动回执验证（本轮未执行/未实现）。
 
 ### P1-03 全量本人商品同步
 
@@ -234,7 +295,7 @@ Windows 3.11 作业日志明确显示 `pyee==14.0.0` 要求 `Python >=3.12`，�
 
 ### P2-04 数据迁移、备份恢复与长期运行
 
-**现状：** SQLite 建表使用 `CREATE TABLE IF NOT EXISTS`；有人工停机备份说明，无数据库版本迁移、自动备份/恢复演练、数据保留与清理策略。只支持单实例。
+**本轮必要基础已完成：** 显式 `user_version`、v0→v1 无损升级、整笔事务回滚、未来版本拒绝、升级前含 WAL 的一致性快照、迁移持有单实例锁、错误密钥启动前校验。测试使用独立旧库与注入失败。**仍未实现：** 恢复 CLI、自动定时备份、保留/清理策略、完整恢复演练；这些不因迁移基础完成而勾选。只支持单实例。
 
 **代码入口：** [db.py](../xianyu_workbench/db.py)、[config.py](../xianyu_workbench/config.py)、[cli.py](../xianyu_workbench/cli.py)、[Dockerfile](../Dockerfile)、[compose.yaml](../compose.yaml)。
 
@@ -370,7 +431,7 @@ Linux 可能还需要 Playwright 提示的系统依赖，由本机管理员安�
 docs/DEPLOYMENT.md、docs/MCP.md、docs/SECURITY.md、docs/TEST_REPORT.md。
 
 先核对当前代码和 Git 状态，不覆盖我的未提交改动。
-本地完整开发先用 Python 3.12；P0-ENV 的 3.11 依赖问题尚未修复。
+本地使用独立 Python 3.11/3.12；P0-ENV 已本地修复，Windows 新 CI 待验证。
 按 P0-ENV / P0-LIVE → P1-01～P1-07 → P2 的优先级逐项完成，
 库存同步、迁移和消息回执等依赖应先于相应写操作闭环。
 先跑演示及测试，真实登录和写操作仅在我明确授权并人工审批后验证。
@@ -385,6 +446,15 @@ docs/DEPLOYMENT.md、docs/MCP.md、docs/SECURITY.md、docs/TEST_REPORT.md。
 分别说明“代码已完成”“自动测试结果”“真实账号验收结果”，
 并列出剩余事项和本地启动命令。
 ```
+
+## 本轮最终交接（2026-10-14）
+
+- 分支 `feat/local-next`，原始 HEAD `2ea8d3b`；已提交 P0-ENV `80afd54`、迁移基础 `8ab9533`；人工核对及连接关闭修复提交与本节一起交付，提交主题 `feat: add admin-only manual reconciliation without replay`。未 push，由 Hermes 审查后推送。
+- 最终 WSL/Linux Python 3.12.14：`pip check` / `ruff check .` 通过；`107 passed, 1 warning in 12.94s`。
+- 最终独立 Python 3.11.16：`pip check` / `ruff check .` 通过；`107 passed, 1 warning in 13.40s`。两者包含固定 live 的 10 项子进程契约；无真实平台访问。
+- 系统 Chromium 155 + 全新临时 profile 的演示 UI 冒烟实际通过，含人工核对、移动端、证据 XSS 安全与 Agent 隔离。官方浏览器包下载未完成/直接下载超时，未冒充成功；使用 `XY_TEST_CHROMIUM=/snap/bin/chromium`，独立浏览器缓存设置不变。
+- 自审已完成；SQLite probe/source/target 显式关闭修复有单测试 RED/GREEN。详细命令、证据和阶段结果见 [TEST_REPORT](TEST_REPORT.md)。
+- **代码完成，不等于真实账号已验收。** Windows 新 CI、真实账号、实际客户端和 Docker 尚未新增验证。P2-04 仅必要基础完成，不勾选自动备份/恢复/保留策略；P1-02 仅人工核对，不声称自动送达/已读验证。
 
 ## 8. 后续维护记录模板
 
@@ -401,3 +471,27 @@ docs/DEPLOYMENT.md、docs/MCP.md、docs/SECURITY.md、docs/TEST_REPORT.md。
 ```
 
 本文件的基线和 CI 记录是历史事实。后续开发新增记录并更新勾选状态，不要删掉失败结果伪装成全程通过。
+
+## 2026-10-15 续开发状态更新
+
+基线 `4d2aadc` 的 [CI run 38566392741](https://github.com/lanchenglin/xianyu/actions/runs/38566392741) 全部 7 作业成功：Ubuntu/Windows 3.11/3.12、双版本固定 live 契约及 UI。上文“新 CI 待验证”为此前历史状态，现已解决；不代表真实账号验收。本轮新增提交尚未 push，CI 待 Hermes 审查后验证。
+
+固定上游五项核实见 [静态可行性报告](UPSTREAM_FEASIBILITY.md)。真实发布因不能冻结类目/地点暂时禁用（live_publish=false）；本地草稿、演示发布和审批申请保留。禁止用默认值变化后的上游发布代替完整审批。
+
+### P2-04 本地离线恢复增量（2026-10-15）
+
+已提供管理员离线 `backup` / `restore --offline` CLI：一致性数据库+素材、密钥/manifest/hash 校验、受限解包、活动实例拒绝、异常回滚和中断启动保护。恢复暂停账号/监控，pending/approved 失效、running 转不确定，旧任务不重放。无 HTTP/MCP 恢复能力，Agent 不可操作任意文件。详见 [备份说明](BACKUP.md)。此前“无恢复 CLI”为历史状态；定时/保留策略仍未实现。
+
+### P2-02 单条草稿管理（2026-10-15）
+
+已实现单条原位编辑、revision 乐观并发保护和归档 UI；显式 v2→v3 迁移增加 revision=1 / archived=0，保留原内容。PUT `/api/drafts/{id}` 接受原 account_id、revision 和完整草稿字段；POST `/api/drafts/{id}/archive` 接受 account_id、revision。账号/旧版本/已归档冲突返回 409，不另建副本；归档非平台删除，修改不会改变已冻结审批。管理员和 Agent 均可操作安全本地草稿，无新增管理员权限或任意文件操作。未增加 MCP 编辑工具（HTTP/UI 可用），既有 MCP 保存工具保持新建语义。没有素材删除接口，所有引用图片保留。批量发布、素材回收、取消归档尚未实现。
+
+## 2026-10-15 最终交接（优先于前述历史状态）
+
+- A：固定上游静态核实完成，五项缺少完整可靠契约继续阻塞；真实发布 fail-closed，演示/本地申请仍可用。见 UPSTREAM_FEASIBILITY。
+- B：本地离线备份/恢复 CLI 已实现并测试，schema 1～3 可验证迁移；恢复默认暂停且旧授权失效。定时/保留策略未做。
+- C：单条草稿编辑、并发 revision、归档、UI 已实现并实测；批量发布/素材回收未做，不提供图片删除。
+- D：已继续静态核查，正文与最小消息 ID 没有可靠关联，采集/去重/客服待办尚未实现，详见 UPSTREAM_FEASIBILITY。
+- 提交：801995b（A）、ad524eb（B）、739cb20（C）、11fdee9（安全自审修复）。无 push，无合并。
+- 最终 Python 3.12.14 / 3.11.16：各 pip check、ruff、全量 131 passed，均 1 条既有 Starlette 弃用警告；各含固定上游 10 项。node --check、git diff --check、系统 Chromium 全新临时 profile UI 均通过。
+- 真实账号、主人 Windows 实际部署、Docker、真实模型/客户端仍未验收；本轮新提交远端 CI 待 Hermes 审查后推送验证。

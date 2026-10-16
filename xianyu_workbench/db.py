@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import os
 import sqlite3
 import time
-from contextlib import contextmanager
+import uuid
+from contextlib import closing, contextmanager
 from pathlib import Path
 from typing import Any
 
-from .security import canonical, redact
+from cryptography.fernet import InvalidToken
+from filelock import FileLock
+
+from .security import Vault, canonical, redact
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS accounts (
@@ -55,14 +60,151 @@ CREATE INDEX IF NOT EXISTS monitor_due ON monitors(enabled,next_run);
 """
 
 
+def initial_schema(conn):
+    for statement in SCHEMA.split(";"):
+        if statement.strip():
+            conn.execute(statement)
+
+
+def reconciliation_schema(conn):
+    conn.execute("""CREATE TABLE reconciliations (
+        action_id TEXT PRIMARY KEY REFERENCES actions(id),
+        account_id TEXT NOT NULL REFERENCES accounts(id),
+        outcome TEXT NOT NULL, evidence TEXT NOT NULL, recorded_at REAL NOT NULL,
+        idem TEXT NOT NULL, UNIQUE(account_id, idem)
+    )""")
+
+
+def draft_revision_schema(conn):
+    conn.execute('ALTER TABLE drafts ADD COLUMN revision INTEGER NOT NULL DEFAULT 1')
+    conn.execute('ALTER TABLE drafts ADD COLUMN archived INTEGER NOT NULL DEFAULT 0')
+
+
+def notification_state_schema(conn):
+    conn.execute('ALTER TABLE notifications ADD COLUMN archived INTEGER NOT NULL DEFAULT 0')
+
+
+def notification_delivery_schema(conn):
+    conn.execute('''CREATE TABLE notification_deliveries (
+        id TEXT PRIMARY KEY, notification_id INTEGER NOT NULL UNIQUE REFERENCES notifications(id),
+        state TEXT NOT NULL, attempts INTEGER NOT NULL, next_attempt REAL NOT NULL,
+        updated REAL NOT NULL, error TEXT
+    )''')
+
+
+def operations_schema(conn):
+    conn.execute('''CREATE TABLE operation_records (
+        account_id TEXT NOT NULL REFERENCES accounts(id), kind TEXT NOT NULL,
+        record_key TEXT NOT NULL, payload TEXT NOT NULL, source TEXT NOT NULL,
+        fetched_at REAL NOT NULL, PRIMARY KEY(account_id, kind, record_key)
+    )''')
+    conn.execute('''CREATE TABLE operation_syncs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, account_id TEXT NOT NULL REFERENCES accounts(id),
+        kind TEXT NOT NULL, source TEXT NOT NULL, fetched_at REAL NOT NULL,
+        state TEXT NOT NULL, partial INTEGER NOT NULL, completion TEXT NOT NULL,
+        cursor_error TEXT, error TEXT, item_count INTEGER NOT NULL,
+        has_more INTEGER, reported_total INTEGER
+    )''')
+    conn.execute('CREATE INDEX operation_sync_account ON operation_syncs(account_id,kind,id)')
+
+
+def message_samples_schema(conn):
+    # Existing encrypted sample envelope already stores all private message fields.
+    # Version the new kind explicitly; indexed reads stay bounded across accounts.
+    conn.execute('CREATE INDEX operation_record_recent ON operation_records(account_id,kind,fetched_at DESC)')
+
+
+def message_reply_schema(conn):
+    conn.execute('''CREATE TABLE message_reply_drafts (
+        id TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES accounts(id),
+        sample_id TEXT NOT NULL, payload TEXT NOT NULL, created REAL NOT NULL,
+        UNIQUE(account_id, sample_id)
+    )''')
+
+
+def message_observation_schema(conn):
+    conn.execute('''CREATE TABLE message_observation (
+        account_id TEXT PRIMARY KEY REFERENCES accounts(id),
+        enabled INTEGER NOT NULL DEFAULT 0, interval_s INTEGER NOT NULL DEFAULT 900,
+        takeover INTEGER NOT NULL DEFAULT 0, next_run REAL NOT NULL DEFAULT 0,
+        failures INTEGER NOT NULL DEFAULT 0, last_error TEXT,
+        last_run REAL, revision INTEGER NOT NULL DEFAULT 1
+    )''')
+
+
+def operation_progress_schema(conn):
+    conn.execute("ALTER TABLE operation_syncs ADD COLUMN scope TEXT NOT NULL DEFAULT 'legacy_samples'")
+    conn.execute('ALTER TABLE operation_syncs ADD COLUMN pages_read INTEGER NOT NULL DEFAULT 0')
+    conn.execute('ALTER TABLE operation_syncs ADD COLUMN stop_reason TEXT')
+
+
+MIGRATIONS = (initial_schema, reconciliation_schema, draft_revision_schema,
+              notification_state_schema, notification_delivery_schema, operations_schema, message_samples_schema, message_reply_schema, message_observation_schema,
+              operation_progress_schema)
+
+
 class DB:
-    def __init__(self, directory: Path):
+    def __init__(self, directory: Path, vault: Vault | None = None):
+        if (directory / 'restore-in-progress').exists():
+            raise ValueError('上次恢复未完成，拒绝启动；请离线检查回滚副本并重新恢复')
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         directory.chmod(0o700)
         self.path = directory / "workbench.db"
-        with self.connect() as conn:
-            conn.executescript(SCHEMA)
+        with FileLock(str(directory / "server.lock"), timeout=0):
+            self.migrate(vault)
         self.path.chmod(0o600)
+
+    def migrate(self, vault: Vault | None):
+        with closing(sqlite3.connect(self.path)) as probe:
+            if probe.execute("PRAGMA user_version").fetchone()[0] > len(MIGRATIONS):
+                raise ValueError("数据库为未知未来版本，拒绝启动；请使用匹配版本程序")
+            if vault:
+                self.validate_key(probe, vault)
+        with self.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            version = conn.execute("PRAGMA user_version").fetchone()[0]
+            existing = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchone()
+            if existing and version < len(MIGRATIONS):
+                self.backup(version)
+            for index in range(version, len(MIGRATIONS)):
+                MIGRATIONS[index](conn)
+                conn.execute(f"PRAGMA user_version={index + 1}")
+        self.path.chmod(0o600)
+
+    @staticmethod
+    def validate_key(conn, vault: Vault):
+        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        encrypted = {"accounts": ("secret",), "actions": ("payload", "result"),
+                     "drafts": ("content",), "settings": ("value",),
+                     "reconciliations": ("evidence",), "operation_records": ("payload",),
+                     "message_reply_drafts": ("payload",)}
+        try:
+            for table, columns in encrypted.items():
+                if table not in tables:
+                    continue
+                for column in columns:
+                    for row in conn.execute(f"SELECT {column} FROM {table} WHERE {column} IS NOT NULL"):
+                        vault.open(row[0])
+        except (InvalidToken, ValueError, TypeError):
+            raise ValueError("密钥不匹配或加密数据损坏，拒绝启动；原数据未修改") from None
+
+    def backup(self, version: int) -> Path:
+        directory = self.path.parent / "backups"
+        directory.mkdir(exist_ok=True, mode=0o700)
+        directory.chmod(0o700)
+        path = directory / f"before-v{version}-{uuid.uuid4().hex}.db"
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        os.close(fd)
+        try:
+            # A separate reader sees committed WAL data while the migration holds the writer lock.
+            with closing(sqlite3.connect(self.path)) as source, closing(sqlite3.connect(path)) as target:
+                source.backup(target)
+                if target.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+                    raise ValueError("迁移前备份校验失败，停止升级")
+        except BaseException:
+            path.unlink(missing_ok=True)
+            raise
+        return path
 
     @contextmanager
     def connect(self):
