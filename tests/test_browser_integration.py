@@ -61,6 +61,41 @@ def test_doctor_is_offline_and_redacted(monkeypatch, capsys):
     assert value['browser']['mode'] == 'isolated'
 
 
+def test_doctor_cdp_reports_exact_readonly_scope(monkeypatch, capsys):
+    from xianyu_workbench.browser_adapter import validate_operation
+    from xianyu_workbench.browser_config import BrowserError
+    from xianyu_workbench.cli import main
+
+    monkeypatch.setattr('sys.argv', ['cli', 'doctor'])
+    monkeypatch.setenv('XY_BROWSER_CDP_ENDPOINT', 'http://127.0.0.1:9999')
+    monkeypatch.setenv('XY_BROWSER_CDP_ACCOUNT_ID', 'doctor-test-account')
+    monkeypatch.setenv('XY_BROWSER_CDP_UID', '123456789')
+    monkeypatch.setenv('XY_OPERATION_ACCOUNT_ID', 'doctor-test-account')
+    monkeypatch.setenv('XY_OPERATION_UID', '123456789')
+
+    def forbidden(*args, **kwargs):
+        pytest.fail('doctor must not load settings or connect to CDP')
+
+    monkeypatch.setattr('xianyu_workbench.config.Settings.load', forbidden)
+    monkeypatch.setattr('xianyu_workbench.cdp.websocket_url', forbidden)
+    monkeypatch.setattr('socket.socket.connect', forbidden)
+    main()
+    output = capsys.readouterr().out
+    browser = json.loads(output)['browser']
+    assert browser['supported_operations'] == ['search', 'orders', 'inventory', 'messages']
+    assert browser['mode'] == 'cdp'
+    assert browser['selected'] == 'existing_browser'
+    assert browser['reason'] is None
+    assert browser['connection_checked'] is False
+    for secret in ('127.0.0.1:9999', 'doctor-test-account', '123456789'):
+        assert secret not in output
+    for operation in browser['supported_operations']:
+        validate_operation(operation)
+    for operation in ('item', 'chats', 'history', 'message.send', 'item.publish', 'item.delete', 'unknown'):
+        with pytest.raises(BrowserError, match='cdp_search_only'):
+            validate_operation(operation)
+
+
 def test_browser_failure_diagnostic_is_actionable(tmp_path, monkeypatch):
     settings = Settings(tmp_path, 'a'*40, 'b'*40, Fernet.generate_key().decode())
     vault = Vault(settings.vault_key)

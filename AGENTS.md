@@ -4,7 +4,7 @@
 
 ## 浏览器适配增量（2026-10-15）
 
-项目管理 Chrome/Chromium 发现及 bridge 页面适配，不改固定上游/site-packages。管理员可选固定账号 loopback CDP，**仅 search、orders/inventory 单页部分样本，以及 messages 会话末条元数据样本（[限制](docs/MESSAGES.md)）**，其余操作 fail closed（[样本契约](docs/OPERATIONS_SAMPLES.md)；全量能力仍 false）；不得注入 Cookie、关闭借用浏览器/context、导航已有页或失败后换浏览器。所有权/重定向/隔离设计及配置见 [BROWSER.md](docs/BROWSER.md)。不要将真实 Chromium 本地 HTML 验收写成真实平台或 Chrome 验收；上线和真实只读验证交 Hermes。
+项目管理 Chrome/Chromium 发现及 bridge 页面适配，不改固定上游/site-packages。管理员可选固定账号 loopback CDP，**仅 search、orders 买到订单有界分页（未知末页保持 partial）、inventory 本人发布列表有界分页（仅 self_published 页面范围可 complete，不等同全状态库存），以及 messages 会话末条样本（[限制](docs/MESSAGES.md)）**，其余操作 fail closed（[样本契约](docs/OPERATIONS_SAMPLES.md)；全量能力仍 false）；不得注入 Cookie、关闭借用浏览器/context、导航已有页或失败后换浏览器。所有权/重定向/隔离设计及配置见 [BROWSER.md](docs/BROWSER.md)。不要将真实 Chromium 本地 HTML 验收写成真实平台或 Chrome 验收；上线和真实只读验证交 Hermes。
 
 ## 先读开发交接
 
@@ -22,7 +22,7 @@
 
 ## 2026-10-16 低频消息观察增量
 
-默认关闭的账号低频末条采集已接现有单 worker，v9 状态迁移、退避、接管与 API/UI/MCP 见 [MESSAGE_OBSERVATION](docs/MESSAGE_OBSERVATION.md)。管理员 FAQ 只保存加密有限策略，不具备发送适配或限额执行器，effective/send_allowed 永远 false；autonomous_reply 保持 false。Agent 只可读取摘要/请求接管，不能配置、解除或授权。恢复关闭采集、接管并撤销策略。分页、首次联系与真实商品写链路仍未交付，本批不 push/部署。
+默认关闭的账号低频末条采集已接现有单 worker，状态表始于 v9（当前 schema v10），退避、接管与 API/UI/MCP 见 [MESSAGE_OBSERVATION](docs/MESSAGE_OBSERVATION.md)。管理员 FAQ 只保存加密有限策略，不具备发送适配或限额执行器，effective/send_allowed 永远 false；autonomous_reply 保持 false。Agent 只可读取摘要/请求接管，不能配置、解除或授权。恢复关闭采集、接管并撤销策略。完整订单/全状态库存同步、首次联系与真实商品写链路仍未交付；CDP 所有写操作禁用，本批不 push/部署。
 
 ## 2026-10-16 有界分页增量
 

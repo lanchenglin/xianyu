@@ -8,7 +8,7 @@ import tempfile
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from .browser_config import BrowserError, discover
+from .browser_config import CDP_OPERATIONS, BrowserError, discover
 from .cancellation import cancellation_scope
 from .cdp import endpoint, guarded_websocket, task_page, websocket_url
 
@@ -26,7 +26,7 @@ def validate_operation(operation: str):
         endpoint(address)
     except ValueError:
         raise BrowserError('cdp_config_invalid') from None
-    if operation not in {'search', 'orders', 'inventory', 'messages'}:
+    if operation not in CDP_OPERATIONS:
         raise BrowserError('cdp_search_only')
     if (not os.environ.get('XY_BROWSER_CDP_ACCOUNT_ID') or
             os.environ.get('XY_BROWSER_CDP_ACCOUNT_ID') != os.environ.get('XY_OPERATION_ACCOUNT_ID') or

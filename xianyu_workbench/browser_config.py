@@ -7,6 +7,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+CDP_OPERATIONS = ('search', 'orders', 'inventory', 'messages')
+
 
 class BrowserError(Exception):
     def __init__(self, code: str):
@@ -66,7 +68,7 @@ def diagnostic() -> dict:
             if not os.environ.get('XY_BROWSER_CDP_ACCOUNT_ID') or not os.environ.get('XY_BROWSER_CDP_UID', '').isdecimal():
                 raise BrowserError('cdp_binding_required')
             result['selected'] = 'existing_browser'
-            result['supported_operations'] = ['search']
+            result['supported_operations'] = list(CDP_OPERATIONS)
         else:
             result['selected'] = discover(os.environ.get('XY_BROWSER', 'auto'), os.environ.get('XY_BROWSER_EXECUTABLE', '')).kind
     except (BrowserError, ValueError) as exc:

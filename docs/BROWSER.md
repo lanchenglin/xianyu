@@ -5,7 +5,7 @@
 固定上游仍为 `c2d5a02ad83b18863514389cedf7afbd993b683d`，不修改 site-packages。API/MCP 进程只使用配置与发现代码；bridge 在导入上游命令前显式替换 `core.browser.goofish_page`。所有操作保留既有 live 开关、账号暂停、审批、单实例队列、限流、幂等和不确定结果不重放。真实发布继续禁用。
 
 - **隔离启动（默认）**：系统 Google Chrome 或 Chromium，可用于既有上游路径；不是平台业务已验收声明。
-- **CDP（可选）**：新增 `messages` 末条元数据样本，固定自建 `/im` 页被动 server-frame 观察，普通文本严格受限解码、pair 核验，按需本地草稿但禁止样本提案/发送，见 [MESSAGES](MESSAGES.md)。保留 `search`、`orders`、`inventory`；后两项仅本人单页部分样本（见 [只读样本契约](OPERATIONS_SAMPLES.md)），不遍历分页。`item`、chats、history 和所有写操作均 fail closed，不回退 mtop、其他浏览器或其他账号。详情当前走独立 mtop 契约，本版不冒充 CDP item 支持。
+- **CDP（可选）**：新增 `messages` 末条元数据样本，固定自建 `/im` 页被动 server-frame 观察，普通文本严格受限解码、pair 核验，按需本地草稿但禁止样本提案/发送，见 [MESSAGES](MESSAGES.md)。保留 `search`、`orders`、`inventory`；orders 为买到订单有界分页，未知末页保持 partial；inventory 为本人发布列表有界分页，仅 `head.self=true` 且已证 `nextPage` 布尔 false 才能将 `self_published` 页面范围标为 complete，不等同全状态库存。当前 schema v10 持久化范围/页数/停止原因，历史缓存不是完整快照，完整订单/库存同步能力仍 false（见 [分页契约](OPERATION_PAGINATION.md)）。`item`、chats、history 和所有写操作均 fail closed，不回退 mtop、其他浏览器或其他账号。详情当前走独立 mtop 契约，本版不冒充 CDP item 支持。
 - 不提供通用 URL、JS、命令、浏览器路径、端点或 profile 的 HTTP/MCP 参数。只有可信本机部署管理员配置环境。
 
 ## 管理员配置
@@ -67,8 +67,10 @@ CDP 端口相当于浏览器控制权限，必须由管理员在专用非默认 
 
 ## doctor 与失败诊断
 
-`python -m xianyu_workbench.cli doctor` 不读 `.env`/数据/profile、不连接 CDP。管理员须先在进程环境显式提供需要诊断的配置。输出发现的浏览器种类、选择结果、模式、reason 和 `connection_checked=false`；不输出路径、端点、uid 或 Cookie。CDP 的 existing_browser 表示配置选择而非已验证在线；隔离 selected 表示启动前选择，不承诺启动成功。Chrome/Chromium 缺失和显式路径失效有明确脱敏提示。
+`python -m xianyu_workbench.cli doctor` 不读 `.env`/数据/profile、不连接 CDP。管理员须先在进程环境显式提供需要诊断的配置。输出发现的浏览器种类、选择结果、模式、reason 和 `connection_checked=false`；不输出路径、端点、uid 或 Cookie。有效 CDP 配置的 `supported_operations` 为 `search/orders/inventory/messages`，与操作校验共享明确白名单；这是允许的操作名称，不承诺完整同步、写入授权或业务验收。CDP 的 existing_browser 表示配置选择而非已验证在线；隔离 selected 表示启动前选择，不承诺启动成功。Chrome/Chromium 缺失和显式路径失效有明确脱敏提示。
 
 ## 验收边界
 
-单元模拟覆盖发现、Windows 路径、配置、账号绑定、端点拒绝、重定向和对象所有权。`tests/test_browser_real.py` 是 opt-in：只启动独立 headless Chromium、随机 CDP 端口、假 unb、本地 HTML/about:blank，不访问闲鱼；fixture 可注入假 Cookie，生产 CDP 适配不得注入。Google Chrome、Windows 可见窗口、真实网站/登录态和真实 CDP 均由 Hermes 后续独立验证，不以模拟测试冒充实测。
+单元模拟覆盖发现、Windows 路径、配置、账号绑定、端点拒绝、重定向和对象所有权。`tests/test_browser_real.py` 是 opt-in：只启动独立 headless Chromium、随机 CDP 端口、假 unb、本地 HTML/about:blank，不访问闲鱼；fixture 可注入假 Cookie，生产 CDP 适配不得注入。Google Chrome、Windows 可见窗口与工作台真实 CDP 链路仍需独立验收，不以模拟测试或浏览器取证冒充工作台 API 实测。
+
+2026-10-16 父助手报告的真实只读浏览器证据：`scratch/xianyu-readonly/pagination-live-bought.json` 记录滚动第 1～5 页各 10 条，`nextPage` 均为字符串 `"true"`，请求包含 `pageNumber/offsetRow`，未证订单末页；`pagination-live-personal.json` 记录 `self=true`、两页各 20 条，第 2 页 `nextPage` 为布尔 false。当前复审工作区不存在这两个文件，以上仅转述父助手摘要，未独立复核原件，也未提交原始取证。该证据仅支持浏览器页面分页观察，**工作台分页 API 未验收**；不能据此宣称完整订单或全状态库存同步通过。

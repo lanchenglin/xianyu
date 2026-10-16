@@ -4,7 +4,7 @@
 
 ## 2026-10-16 分页迁移注意
 
-有界订单/本人发布列表增量使用 schema v10，启动持单实例锁执行显式迁移并生成 before-v9 一致性备份；保留原 vault key 和旧库，旧同步不追认为完整。部署前按既有离线备份流程保存数据，不在运行中换库。此轮仅本地测试，未部署；真实滚动触发与订单末页必须由账号主人/父助手只读取证，见 [分页契约](OPERATION_PAGINATION.md)。无需新增 endpoint/浏览器配置，仍禁止备用浏览器/账号回退。
+有界订单/本人发布列表增量使用 schema v10，启动持单实例锁执行显式迁移并生成 before-v9 一致性备份；保留原 vault key 和旧库，旧同步不追认为完整。部署前按既有离线备份流程保存数据，不在运行中换库。此轮仅本地测试，未部署，工作台分页 API 尚未真实验收；父助手报告已取得浏览器滚动分页证据，但订单末页仍未知，证据范围与限制见 [浏览器验收边界](BROWSER.md#验收边界) 及 [分页契约](OPERATION_PAGINATION.md)。无需新增 endpoint/浏览器配置，仍禁止备用浏览器/账号回退。
 
 ## 1. 推荐落地方式
 
@@ -40,11 +40,11 @@
 
 安装系统 Google Chrome 或 Chromium 和 Node.js，并确保 Node 可在服务 PATH 中运行。项目管理的适配在 bridge 子进程安装，不修改固定上游。auto 启动前优先 Chrome、否则 Chromium；显式选择/路径失效不回退，运行失败不启动另一个浏览器。doctor 检查 PATH 及标准安装目录，仅读取已导出的环境配置，不读取 .env、不连接 CDP 或登录态。
 
-浏览器管理员变量：`XY_BROWSER=auto|chrome|chromium`、`XY_BROWSER_EXECUTABLE`（可选绝对路径）；可选 `XY_BROWSER_CDP_ENDPOINT` + `XY_BROWSER_CDP_ACCOUNT_ID` + `XY_BROWSER_CDP_UID` 三项绑定唯一账号。CDP 仅 loopback 且仅 search，其余操作拒绝，不注入 Cookie、不关闭用户浏览器。完整配置示例、隔离/清理、WSLg 和 snap 限制、CDP 端口安全见 [浏览器适配约束](BROWSER.md)。这些变量不是 Agent/MCP 参数。
+浏览器管理员变量：`XY_BROWSER=auto|chrome|chromium`、`XY_BROWSER_EXECUTABLE`（可选绝对路径）；可选 `XY_BROWSER_CDP_ENDPOINT` + `XY_BROWSER_CDP_ACCOUNT_ID` + `XY_BROWSER_CDP_UID` 三项绑定唯一账号。CDP 仅 loopback，明确白名单为 search、orders、inventory、messages：买到订单有界分页但未知末页保持 partial；本人发布列表仅 `self_published` 页面范围可 complete，不等同全状态库存；messages 仅会话末条样本，非完整历史或实时聊天。item/chats/history 和所有 CDP 写操作禁用；不注入 Cookie、不关闭用户浏览器。完整配置示例、隔离/清理、WSLg 和 snap 限制、CDP 端口安全见 [浏览器适配约束](BROWSER.md)。这些变量不是 Agent/MCP 参数。
 
 首次登录由账号主人自己在浏览器完成。导入对象应是本人闲鱼登录态的 JSON：可以是 name/value 数组，也可以是键值对象；需要 unb 与 _m_h5_tk。数组包含域名时只接受 goofish.com / taobao.com 的相关域。不要使用来历不明的登录态导出扩展。工作台不会自动扫描本机浏览器。
 
-在设置 `XY_LIVE_ENABLED=true` 并重启后，新增真实账号并导入。验证顺序：一次搜索 → 一次商品详情 → 会话列表 → 已有会话历史 → 审批一条低风险咨询 → 人工在闲鱼核对 → 最后单条商品发布。
+在设置 `XY_LIVE_ENABLED=true` 并重启后，新增真实账号并导入。CDP 模式只按 search / orders / inventory / messages 白名单逐项做只读验收，不验证 item、chats、history 或写入。隔离模式可另行验证一次搜索、商品详情、已有会话及历史；已有会话咨询仍需逐条人工审批并人工核对，不等于可靠送达。真实商品发布继续禁用，不作为当前验收步骤。
 
 上游发消息目前不能证明送达。没有会话时先在闲鱼人工联系，不要使用伪造 cid。删除可能永久生效，不应拿重要商品测试。平台要求验证码/验证时立即停，不提供绕过或频繁重试逻辑。
 
@@ -83,11 +83,11 @@ docker compose down
 
 备份前正常停止工作台，再分别备份 `.env` 与完整数据卷/目录。只复制正在写入的 workbench.db 而忽略 WAL 不保证一致性。丢失 XY_VAULT_KEY 后无法恢复加密内容。
 
-升级前正常停机并完整备份，运行测试，再启动单实例。数据库现以 `PRAGMA user_version` 显式版本化；旧版无版本数据库视为 v0，按顺序升级 v1 基础表、v2 人工核对表。迁移与服务使用同一个 `server.lock`；未知未来版本拒绝打开。已有数据库升级前在 `data/backups/before-v*-<随机ID>.db` 创建 SQLite backup API 一致性快照（包含已提交 WAL），备份失败停止升级，迁移结构/数据/版本号在同一事务中回滚。没有版本变化时不重复备份。
+升级前正常停机并完整备份，运行测试，再启动单实例。数据库现以 `PRAGMA user_version` 显式版本化；旧版无版本数据库视为 v0，按顺序执行显式迁移至当前 schema v10（包括人工核对、草稿版本、通知、加密只读样本、消息观察与分页进度）。迁移与服务使用同一个 `server.lock`；未知未来版本拒绝打开。已有数据库升级前在 `data/backups/before-v*-<随机ID>.db` 创建 SQLite backup API 一致性快照（包含已提交 WAL），备份失败停止升级，迁移结构/数据/版本号在同一事务中回滚。没有版本变化时不重复备份。
 
 启动在迁移前校验已有加密字段；密钥不匹配或密文损坏明确失败，不清空数据。没有任何加密记录的旧空库无法证明历史密钥身份。快照只包含数据库，不包含素材、配置、密钥或运行目录，不是完整灾备；仍需停机备份完整 data，并将原 `XY_VAULT_KEY` 离线分开保护。POSIX 数据目录 0700、数据库与快照 0600；Windows 需另配 ACL。备份含未加密的审计/商品等元数据，需要与原数据同等级保护。
 
-本轮**没有恢复 CLI、自动定时备份、保留/清理策略**。不要热替换数据库或只覆盖 db 而保留旧 WAL。恢复需停机、保留现状副本、在隔离目录使用原密钥验收，人工复核旧 `approved` 待执行任务后再启动工作队列；不要将历史快照当作可自动重放的任务源。正在执行的写操作在服务重启后标记 unconfirmed，不会自动重放。
+已有管理员离线 `backup` / `restore --offline` CLI，见 [备份说明](BACKUP.md)；**没有自动定时备份、保留/清理策略**。不要热替换数据库或只覆盖 db 而保留旧 WAL。恢复需停机、保留现状副本并使用原密钥；恢复会暂停账号/监控/消息观察并撤销 FAQ 策略，使旧 pending/approved 失效、running 转不确定，旧任务不重放。正在执行的写操作在服务重启后标记 unconfirmed，不会自动重放。
 
 账号暂停只阻止后续操作，不能撤销已在网络上发出的请求。结果不确定时先在闲鱼确认，不要重新建一个同内容操作来碰运气。
 
