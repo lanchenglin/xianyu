@@ -114,12 +114,22 @@ async def check_identity(browser, uid: str):
 
 
 @asynccontextmanager
-async def task_page(browser, uid: str):
+async def task_page(browser, uid: str, *, focus_emulation=False):
     context = await check_identity(browser, uid)
     page = await context.new_page()
+    session = None
     try:
+        if focus_emulation:
+            # Only our new target; never apply defaults to borrowed pages/context.
+            session = await context.new_cdp_session(page)
+            await session.send('Emulation.setFocusEmulationEnabled', {'enabled': True})
         yield page
         await check_identity(browser, uid)
     finally:
-        with suppress(Exception):
-            await page.close()
+        try:
+            if session is not None:
+                with suppress(Exception):
+                    await session.detach()
+        finally:
+            with suppress(Exception):
+                await page.close()

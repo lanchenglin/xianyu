@@ -50,7 +50,8 @@ def test_collection_preserves_safe_failure_code(monkeypatch):
 
     from xianyu_workbench.browser_config import BrowserError
     @asynccontextmanager
-    async def boundary():
+    async def boundary(*, focus_emulation=False):
+        assert focus_emulation is False
         try:
             yield Page([])
         except ValueError:

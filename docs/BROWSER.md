@@ -59,7 +59,7 @@ snap 的文件权限/隐藏目录/HOME 限制可能因发行版而异。本次�
 2. `/json/version` 使用关闭环境代理、关闭重定向的 HTTP 客户端，5 秒超时、64 KiB 上限；WebSocket 地址必须同协议对应、同 IP、同端口、固定 `/devtools/browser/标识` 路径。
 3. Playwright 1.64 内部 WebSocket 连接默认跟随重定向，因此使用短生命周期 loopback TCP 转发门：只连接预先验证的目标，只有 HTTP 101 升级响应才传回；302 等不传给 Playwright。该门不是通用代理，无用户参数，不支持任意目标，退出即关闭。
 4. `connect_over_cdp(..., no_defaults=True)`；只接受唯一 context，读取适用于 `https://www.goofish.com/` 的 Cookie 并检查平台域 unb。操作前及成功返回前均校验 uid；缺失、冲突、多 context 都拒绝。不调用 add_cookies，不刷新/替换现有登录态。
-5. 创建新任务页，不导航/关闭已有页。结束只关闭任务页。**不调用 browser.close 或 context.close**。退出 Playwright context manager 停止 driver 连接；已对当前固定 Playwright 实测原浏览器与 tab 存活。连接/站点异常无浏览器重试。
+5. 创建新任务页，不导航/关闭已有页。仅 orders/inventory 在导航前为新页建立 CDP session 并启用 `Emulation.setFocusEmulationEnabled`，不向已有页/Browser 发 emulation 命令，不改借用 context 默认；search/messages 不启用。结束（含失败/取消）detach 自建 session 并只关闭任务页。**不调用 browser.close 或 context.close**。退出 Playwright context manager 停止 driver 连接；已对当前固定 Playwright 实测原浏览器与 tab 存活。连接/站点异常无浏览器重试。
 6. 正常 operation timeout 先在账号私有运行目录创建单次随机取消标记，bridge CDP 协程每 50ms 检查并只取消一次当前任务，让 task_page finally 关闭自建页、再断开传输。Linux/Windows 共用文件通知，不依赖控制台信号；`XY_BRIDGE_CANCEL_FILE` 由 provider 内部生成，不是管理员/Agent 配置。父进程最多等待 8 秒清理，随后 Linux SIGKILL 进程组或 Windows taskkill /T /F（该命令最多 10 秒），最后回收等待最多 5 秒。超时始终返回 timeout，写操作 uncertain，不接受清理期间的成功结果、不重放。
 7. 若事件循环阻塞、浏览器/CDP 断线、清理超过宽限时间、外部强杀或系统断电，不能保证任务 tab 消失；此时只强杀 bridge 进程树，不扫描/关闭可能属于用户的页，管理员人工检查残留。不会向用户浏览器发送 Browser.close。正常超时路径已用独立系统 Chromium 实测，不把强杀兜底宣称为可靠清理。
 

@@ -20,7 +20,7 @@
 
 ## 2026-10-16 有界页面读取
 
-买到订单与本人发布列表支持固定任务页有界滚动、多页去重和持久进度；订单末页字符串仍未获证，保持 partial。本人发布列表仅在已证布尔末页时 complete；卖出订单、下架列表、全状态库存未实现。历史缓存不冒充完整快照。响应早于 DOM/hook 的时序改用 750ms 有界等待/滚动，加载中不滚动；高度与底端统一按 document.scrollingElement 计算，避免横向滚动条使滚动停在真实底端之前。真实工作台 API 修复效果待父助手复测，不扩大能力范围。迁移与取证需求见 [分页边界](docs/OPERATION_PAGINATION.md)。
+买到订单与本人发布列表支持固定任务页有界滚动、多页去重和持久进度；订单末页字符串仍未获证，保持 partial。本人发布列表仅在已证布尔末页时 complete；卖出订单、下架列表、全状态库存未实现。历史缓存不冒充完整快照。响应早于 DOM/hook 的时序改用 750ms 有界等待/滚动，加载中不滚动；高度与底端统一按 document.scrollingElement 计算，避免横向滚动条使滚动停在真实底端之前。保留 no_defaults=True，仅 orders/inventory 新任务页启用 focus emulation，不改借用 context 默认或用户原页，search/messages 不变；依据父助手真实几何对照，不将原因简化为 document.hidden。真实工作台 API 修复效果待父助手复测，不扩大能力范围。迁移与取证需求见 [分页边界](docs/OPERATION_PAGINATION.md)。
 
 ## 能力与边界
 

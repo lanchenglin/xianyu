@@ -28,6 +28,10 @@
 
 订单已接固定 bought 任务页有界滚动，v10 持久范围/页数/停止原因；仅字符串 true 已证，false 不猜，完整订单能力仍 false。本人发布列表已接同一路径，head.self=true 且 bool false 才完成该页面范围；卖出订单/下架列表/全状态库存未实现。商品和其他范围以 [分页边界](docs/OPERATION_PAGINATION.md) 为准。历史缓存不是快照，不清历史。页面时序使用 750ms 有界 tick，loading 暂停、scrollingElement 高度稳定后滚动，底端使用同一 root 的 scrollHeight/clientHeight/scrollTop（不能混用 innerHeight），已到底分 tick 回退/到底；不得改回单次滚动无限等或高频刷请求。真实页面取证由父助手负责，本地测试禁止访问真实实例。
 
+## 2026-10-16 任务页布局隔离修复
+
+保留 no_defaults=True，仅 orders/inventory 新建 task page 在导航前启用 CDP focus emulation；task_page/goofish_page 参数默认 false，search/messages 不变。不得向原页或 Browser 发 emulation 命令，不得改借用 context 默认；前后 UID 核验和失败/取消 session/page 清理保留。父助手真实 probe 证实几何1241→3729且 hidden/focus不变，不可解释为仅document.hidden；应用分页仍待父助手验收，详见 CDP_DEFAULTS_DIAGNOSIS。
+
 ## 不可破坏的边界
 
 - 付款、下单、退款、确认收货和其他交易由人完成，不增加自主交易工具。

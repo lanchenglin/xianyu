@@ -72,7 +72,8 @@ def test_no_default_cookie_loading(tmp_path, monkeypatch):
     chromium.launch_persistent_context.assert_not_called()
 
 
-def test_cdp_connection_does_not_apply_browser_defaults(tmp_path, monkeypatch):
+@pytest.mark.parametrize('operation', ['search', 'orders', 'inventory', 'messages'])
+def test_cdp_connection_does_not_apply_browser_defaults(tmp_path, monkeypatch, operation):
     a, chromium, context = runtime(tmp_path, monkeypatch)
     for key, value in {'XY_BROWSER_CDP_ENDPOINT': 'http://127.0.0.1:9999',
                        'XY_BROWSER_CDP_ACCOUNT_ID': 'fake', 'XY_OPERATION_ACCOUNT_ID': 'fake',
@@ -86,10 +87,24 @@ def test_cdp_connection_does_not_apply_browser_defaults(tmp_path, monkeypatch):
     context.cookies = AsyncMock(return_value=[{'name': 'unb', 'value': '12345', 'domain': '.goofish.com'}])
     context.new_page.return_value = MagicMock(close=AsyncMock())
     chromium.connect_over_cdp = AsyncMock(return_value=MagicMock(contexts=[context]))
-    async def run():
-        async with a.goofish_page(cookies={'unb': 'wrong'}):
-            pass
-    asyncio.run(run())
+    session = MagicMock(send=AsyncMock(), detach=AsyncMock())
+    context.new_cdp_session = AsyncMock(return_value=session)
+    if operation == 'search':
+        async def run():
+            async with a.goofish_page(cookies={'unb': 'wrong'}):
+                pass
+        asyncio.run(run())
+    else:
+        from xianyu_workbench import operations_browser as ops
+        monkeypatch.setattr(ops, 'capture', AsyncMock(return_value={'items': []}))
+        monkeypatch.setattr(ops, 'capture_messages', AsyncMock(return_value={'items': []}))
+        assert ops.collect(operation) == {'items': []}
+    if operation in ('orders', 'inventory'):
+        context.new_cdp_session.assert_awaited_once_with(context.new_page.return_value)
+        session.send.assert_awaited_once_with('Emulation.setFocusEmulationEnabled', {'enabled': True})
+        session.detach.assert_awaited_once()
+    else:
+        context.new_cdp_session.assert_not_called()
     assert chromium.connect_over_cdp.call_args.kwargs['no_defaults'] is True
     context.add_cookies.assert_not_called()
     context.close.assert_not_called()

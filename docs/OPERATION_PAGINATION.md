@@ -20,6 +20,10 @@ v9→v10 显式迁移给 operation_syncs 增加 scope、pages_read、stop_reason
 
 缓存是最多 500 条的历史并集，不是最近完整快照，始终 partial/cached_samples；即使某次范围读取完整，也不表示历史混合缓存完整或最新。完整/部分/失败均不清除缺席记录、不标售罄，不动本地草稿。失败写独立安全错误状态，历史不清。
 
+## 3bb8734 后连接默认设置差异
+
+父助手报告 3bb8734 API 仍一页/time_limit，且同浏览器 no_defaults=True 的任务页高度 1241、普通连接高度 3729，相同 inner 尺寸，单改 viewport 无改善。后续父助手同任务页控制实验：baseline 3秒再4秒、bring_to_front 后2500ms均1241；只对任务 target 启用 focus emulation 后3秒3729，hidden=false/hasFocus=true、图片93/93decoded、媒体布尔值均不变。列表父容器 maxHeight 480→3060px，是实际几何变化，不是仅 document.hidden 的原因。经授权仅 orders/inventory 新任务页在导航前启用 focus emulation；保留 no_defaults、geometry、节流与UID校验，不改借用context默认或原页，失败/取消 detach session 并关闭新页。search/messages不启用。完整证据与诊断脚本见 [CDP_DEFAULTS_DIAGNOSIS.md](CDP_DEFAULTS_DIAGNOSIS.md)。**真实应用分页尚待父助手验收**，不宣称已修复真实 API。
+
 ## 需要父助手补证
 
 - 订单真实终页 nextPage 原始类型和值及其页面语义；不能仅给字符串类型。

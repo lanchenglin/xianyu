@@ -4,6 +4,17 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
+## 2026-10-16 仅任务 target focus emulation
+
+基线 `3bb8734`，保留并提交已有未提交诊断脚本/文档/tests，scratch 原有文件不覆盖、不提交。父助手真实控制实验原件已读取：`/home/lan/.hermes/cache/scratch/xianyu-layout-probe.json`。同一 no_defaults=True `/personal` 页 baseline/置前均 height1241，只对任务页启用 focus emulation 后3729；hidden=false/hasFocus=true、图片93/93decoded与媒体布尔值不变，列表父容器 maxHeight480→3060px。此为真实几何恢复证据，**不是仅 document.hidden 原因，也不是工作台分页 API 验收**。具体阶段/限制见 CDP_DEFAULTS_DIAGNOSIS。
+
+- TDD：先写 task target/session 生命周期用例，8项因缺少参数 RED；实现后32项CDP测试通过。再扩展真实 collect→adapter 边界，orders/inventory 两项因未发 focus 命令 RED（45 passed），仅这两种操作显式启用后 GREEN。保留正常前后 UID 校验；覆盖 attach/send失败、send/body取消、任务异常、后置身份改变、detach失败仍关闭page，默认关闭以及不关闭借用context/browser/原页。
+- 专用 Chromium 回归补充：真实 task_page session目标记录、原页仍background/未导航未关闭、正常/真实task.cancel退出后仅剩原页、session已detach。该两项为后补集成回归，不冒称先RED。初轮只读probe和focus characterization原样保留（虚构visibility布局不是站点实现）。双Python专项各 **52 passed**（3.12 8.78s；3.11 9.01s）。既有root几何/延迟hook/750ms节流/loading/预算回归沿用。
+- 首次双版本全量各 **415 passed / 1 failed / 1 warning**（3.12 156.88s；3.11 156.41s）：旧消息测试boundary替身未接受新增参数，TypeError。更新替身签名并断言focus_emulation=False，不改生产消息行为。失败日志 `/tmp/xianyu-focus-full{311,312}.log` 保留。
+- 最终串行全量启用隔离浏览器、无skip：**Python 3.12.14：416 passed / 149.39s；Python 3.11.16：416 passed / 151.06s**，各1条既有Starlette/httpx弃用警告。日志 `/tmp/xianyu-focus-final{311,312}.log`。双版本独立 `scripts/smoke_ui.py` 均通过，日志 `/tmp/xianyu-focus-ui{311,312}.log`。
+- 双环境pip check、ruff通过；probe和UI JS的node --check、git diff --check通过。浏览器为专用chromium-1248下载包，新临时profile、随机loopback端口、虚构数据；PLAYWRIGHT_BROWSERS_PATH为项目独立目录，SKIP_BROWSER_GC=1，清除PYTHONPATH。
+- 未读取真实.env/data/profile，未连接9235/8099，无部署/push，无能力/schema扩展。session清理遵循既有取消宽限机制，断线/强杀仍不能承诺远端tab消失（见BROWSER）。**本地实现及回归完成，真实应用orders/inventory分页待父助手验收。**
+
 ## 2026-10-16 横向滚动条 / scroll root 几何修复
 
 基线 `27298e5`。父助手报告 API inventory20/orders10、均页1/time_limit；相同 guarded_websocket/no_defaults/task_page/capture 路径下 body/root.scrollHeight=1241、innerHeight=931、root.clientHeight=916。旧算法目标310，但真实最大scrollY=325，导致回退246/到底310循环。父助手一次 scrollTo(body.scrollHeight) 达到325后2.5秒仍20卡，故本轮仅修确证几何缺陷，**不宣称唯一根因或真实 API 已恢复**。

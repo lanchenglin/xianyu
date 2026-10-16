@@ -256,7 +256,7 @@ def collect(kind: str) -> dict:
     validate_operation(kind)
 
     async def run():
-        async with goofish_page() as page:
+        async with goofish_page(focus_emulation=kind in ('orders', 'inventory')) as page:
             try:
                 if kind == 'messages':
                     return await capture_messages(page, os.environ['XY_OPERATION_UID'])

@@ -93,6 +93,63 @@ def test_cdp_identity_fails_before_new_page(cookies, count):
     browser.close.assert_not_called()
 
 
+@pytest.mark.parametrize('failure', ['none', 'attach', 'send', 'cancel_send', 'body', 'cancel_body', 'identity', 'detach'])
+def test_task_focus_target_and_cleanup(failure):
+    from xianyu_workbench.cdp import task_page
+    browser, context = fake_browser([cookie()])
+    original = MagicMock(close=AsyncMock())
+    context.pages = [original]
+    page = context.new_page.return_value
+    session = MagicMock(send=AsyncMock(), detach=AsyncMock())
+    context.new_cdp_session = AsyncMock(return_value=session)
+    if failure == 'attach':
+        context.new_cdp_session.side_effect = RuntimeError('attach')
+    if failure in ('send', 'cancel_send'):
+        session.send.side_effect = asyncio.CancelledError() if failure == 'cancel_send' else RuntimeError('send')
+    if failure == 'detach':
+        session.detach.side_effect = RuntimeError('detach')
+    if failure == 'identity':
+        context.cookies.side_effect = [[cookie()], [cookie('999')]]
+
+    async def run():
+        async with task_page(browser, '12345', focus_emulation=True) as owned:
+            assert owned is page
+            session.send.assert_awaited_once_with('Emulation.setFocusEmulationEnabled', {'enabled': True})
+            if failure == 'body':
+                raise RuntimeError('body')
+            if failure == 'cancel_body':
+                raise asyncio.CancelledError()
+
+    error = (asyncio.CancelledError if failure.startswith('cancel') else
+             ValueError if failure == 'identity' else RuntimeError)
+    if failure in ('none', 'detach'):
+        asyncio.run(run())
+    else:
+        with pytest.raises(error):
+            asyncio.run(run())
+    context.new_cdp_session.assert_awaited_once_with(page)
+    if failure != 'attach':
+        session.detach.assert_awaited_once()
+    page.close.assert_awaited_once()
+    original.close.assert_not_called()
+    browser.new_browser_cdp_session.assert_not_called()
+    browser.close.assert_not_called()
+    context.close.assert_not_called()
+    context.add_cookies.assert_not_called()
+    if failure == 'none':
+        assert context.cookies.await_count == 2
+
+
+def test_task_focus_default_off():
+    from xianyu_workbench.cdp import task_page
+    browser, context = fake_browser([cookie()])
+    async def run():
+        async with task_page(browser, '12345'):
+            pass
+    asyncio.run(run())
+    context.new_cdp_session.assert_not_called()
+
+
 def test_only_own_page_closed_on_failure():
     from xianyu_workbench.cdp import task_page
     browser, context = fake_browser([cookie()])

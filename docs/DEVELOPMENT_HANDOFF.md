@@ -4,7 +4,11 @@
 
 本文件交给在本地继续开发的人、Codex、Claude Code 或 Hermes。**下列任务是待办与设计建议，不代表功能已经实现。** 原始交接只更新文档；2026-10-14 续开发在 `feat/local-next` 完成 P0-ENV 本地修复、P2-04 迁移必要基础及 P1-02 人工核对，以下各节标注当前实现与未验收边界，不新增平台动作。
 
-## 2026-10-16 分页滚动几何修复（最新）
+## 2026-10-16 任务页 focus emulation（最新）
+
+父助手真实单变量 probe 证明同 no_defaults=True 任务页启用 focus emulation 后 root/body 1241→3729，hidden=false/hasFocus=true 未变，不能归因为仅 document.hidden。经批准只对 orders/inventory 新任务页导航前启用，task_page 可选参数默认 false，search/messages 不变。保留借用 context 默认、原页、前后 UID 校验、root几何/750ms节流/预算；失败或取消清理 session 和新页。脚本/初轮诊断测试一并保留，详见 CDP_DEFAULTS_DIAGNOSIS / TEST_REPORT。代码本地验证不代表真实 API 分页通过，待父助手验收；无部署/push，无真实实例连接。
+
+## 2026-10-16 分页滚动几何修复
 
 父助手报告 27298e5 部署后仍一页/time_limit，确认真实 root 的 clientHeight 比 innerHeight 少 15px，旧算法停在假底端。隔离 HTML 横向溢出/15px 滚动条已在双 Python 复现首屏不翻页 RED；最小修复统一 scrollingElement 的高度稳定检测及 scrollHeight/clientHeight/scrollTop 底端计算，不增加 selector，保留 750ms/loading/资源 deadline/身份清理。父助手一次滚到真实底端后 2.5 秒仍未增卡，因此几何缺陷不宣称唯一根因；真实 API 仍待父助手复测。本轮不连接 8099/9235，不读取真实 .env/data/profile，不 push/部署。测试证据见 TEST_REPORT。
 

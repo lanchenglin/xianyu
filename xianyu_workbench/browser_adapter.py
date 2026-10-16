@@ -36,7 +36,7 @@ def validate_operation(operation: str):
 
 
 @asynccontextmanager
-async def goofish_page(*, headless=None, viewport=(1440, 900), cookies=None):
+async def goofish_page(*, headless=None, viewport=(1440, 900), cookies=None, focus_emulation=False):
     address = os.environ.get('XY_BROWSER_CDP_ENDPOINT', '')
     if address:
         validate_operation('search')
@@ -45,7 +45,7 @@ async def goofish_page(*, headless=None, viewport=(1440, 900), cookies=None):
             async with cancellation_scope(), guarded_websocket(ws) as guarded, playwright() as pw:
                 browser = await pw.chromium.connect_over_cdp(guarded, timeout=10000, no_defaults=True)
                 # Stopping Playwright disconnects its transport. Never Browser.close/context.close.
-                async with task_page(browser, os.environ['XY_OPERATION_UID']) as page:
+                async with task_page(browser, os.environ['XY_OPERATION_UID'], focus_emulation=focus_emulation) as page:
                     yield page
         except ValueError as exc:
             raise BrowserError(str(exc) if str(exc).startswith('cdp_') else 'cdp_unavailable') from None
