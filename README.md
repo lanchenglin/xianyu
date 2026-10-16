@@ -18,6 +18,10 @@
 
 **默认支持 Linux / WSL，Python 3.11 / 3.12，本地示例使用 3.12；Windows 原生支持暂停。** `53400f8` 的 [CI run 38727928186](https://github.com/lanchenglin/xianyu/actions/runs/38727928186) 中 Linux 双版本、双版本 upstream-contract 和 browser-smoke 通过，Windows 3.11/3.12 失败。Windows 快照保存在独立分支 `work/windows-support-53400f8`（`53400f82f1ce4f1b1322f184b4b15e2e2c949e97`）；当前分支仅保留 Linux CI 门槛，不删除跨平台源码或回归。后续 Linux 全绿不代表 Windows 支持恢复；历史成功与失败见[测试报告](docs/TEST_REPORT.md)。
 
+## 2026-10-16 有界页面读取
+
+买到订单支持固定任务页有界滚动、多页去重和持久进度；订单末页字符串仍未获证，保持 partial，卖出订单不支持。历史缓存不冒充完整快照。迁移与取证需求见 [分页边界](docs/OPERATION_PAGINATION.md)。
+
 ## 能力与边界
 
 | 功能 | 本版实现 |

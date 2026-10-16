@@ -24,6 +24,10 @@
 
 默认关闭的账号低频末条采集已接现有单 worker，v9 状态迁移、退避、接管与 API/UI/MCP 见 [MESSAGE_OBSERVATION](docs/MESSAGE_OBSERVATION.md)。管理员 FAQ 只保存加密有限策略，不具备发送适配或限额执行器，effective/send_allowed 永远 false；autonomous_reply 保持 false。Agent 只可读取摘要/请求接管，不能配置、解除或授权。恢复关闭采集、接管并撤销策略。分页、首次联系与真实商品写链路仍未交付，本批不 push/部署。
 
+## 2026-10-16 有界分页增量
+
+订单已接固定 bought 任务页有界滚动，v10 持久范围/页数/停止原因；仅字符串 true 已证，false 不猜，完整订单能力仍 false。商品和其他范围以 [分页边界](docs/OPERATION_PAGINATION.md) 为准。历史缓存不是快照，不清历史。真实页面取证由父助手负责，本地测试禁止访问真实实例。
+
 ## 不可破坏的边界
 
 - 付款、下单、退款、确认收货和其他交易由人完成，不增加自主交易工具。

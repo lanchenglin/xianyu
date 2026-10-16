@@ -29,6 +29,25 @@ def test_sync_encrypted_idempotent_account_scoped_and_restart(workbench, kind):
     assert '900001' not in json.dumps(rows)  # order ID also encrypted, lookup key is HMAC
 
 
+def test_traversal_progress_survives_cache_read(workbench, monkeypatch):
+    from test_operation_pagination import order_page
+
+    from xianyu_workbench.operation_pagination import Traversal
+    client, service = workbench
+    ident = account(client)
+    state = Traversal('orders')
+    state.add(order_page())
+    state.stop('time_limit')
+    monkeypatch.setattr(service.provider, 'call', lambda *args: state.result())
+    path = f'/api/accounts/{ident}/orders'
+    assert client.post(path + '/sync').status_code == 200
+    result = client.get(path).json()
+    assert result['last_sync']['scope'] == 'bought_orders'
+    assert result['last_sync']['pages_read'] == 1
+    assert result['last_sync']['stop_reason'] == 'time_limit'
+    assert result['partial']  # historical union is not a snapshot
+
+
 def test_restart_deduplicates(tmp_path):
     from cryptography.fernet import Fernet
     from fastapi.testclient import TestClient

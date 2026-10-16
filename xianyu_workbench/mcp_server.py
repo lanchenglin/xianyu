@@ -112,7 +112,7 @@ def cached_messages(account_id: str) -> dict:
 
 @mcp.tool()
 def sync_order_sample(account_id: str) -> dict:
-    """按需采集本人买到订单一页概要；部分样本，分页语义未知不代表完整，不执行交易。"""
+    """有界滚动读取本人买到订单概要；返回 scope/pages_read/stop_reason。末页未证仍 partial，不含卖出订单，不执行交易。"""
     from urllib.parse import quote
     return api('POST', f'/api/accounts/{quote(account_id, safe="")}/orders/sync')
 

@@ -55,7 +55,10 @@ class OperationsCache:
                              'payload=excluded.payload,source=excluded.source,fetched_at=excluded.fetched_at',
                              (account_id, kind, key, self.vault.seal(item), source, fetched))
             conn.execute('INSERT INTO operation_syncs(account_id,kind,source,fetched_at,state,partial,'
-                         'completion,cursor_error,item_count,has_more,reported_total) VALUES(?,?,?,?,?,1,?,?,?,?,?)',
-                         (account_id, kind, source, fetched, 'partial', result['completion'],
-                          result['cursor_error'], len(result['items']), result['has_more'], result['reported_total']))
+                         'completion,cursor_error,item_count,has_more,reported_total,scope,pages_read,stop_reason) '
+                         'VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                         (account_id, kind, source, fetched, 'partial' if result['partial'] else 'complete',
+                          int(result['partial']), result['completion'], result['cursor_error'], len(result['items']),
+                          result['has_more'], result['reported_total'], result.get('scope', 'legacy_samples'),
+                          result.get('pages_read', 1), result.get('stop_reason')))
         return {**result, 'source': source, 'fetched_at': fetched, 'demo': account['mode'] == 'demo'}

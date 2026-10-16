@@ -1,0 +1,24 @@
+# 有界页面读取（2026-10-16）
+
+## 买到订单
+
+固定自建 `/bought` 页观察 allowlisted MTOP，不回放请求、不猜页码/POST 参数、不点击订单动作。首屏后仅执行固定 `window.scrollTo(0, document.body.scrollHeight)`。这是固定上游 `core/browser.py:148–153` 已使用的通用页面滚动方式，不代表真实 bought 页滚动容器已验收；没有新响应时返回 partial/time_limit。UID 前后核验、原页不导航、借用 context 不关闭保持不变。
+
+结构来源：父助手 `/home/lan/.hermes/cache/scratch/xianyu-readonly/order-pagination-observation.json` 和 ORDER-PAGINATION-NOTE.md。仅严格字符串 `"true"` 已证。`"false"`、空值、布尔值等仍未知，不能推断订单末页。因此 order_sync 完整能力仍 false。本次范围仅 bought_orders，**卖出订单不支持**。
+
+上限：每响应 1 MB、累计 5 MB、每页 100 条、最多 20 页/500 个稳定 ID、采集 25 秒（外层操作超时更短时可能直接失败）。达到限制或未证末页为 partial；重复游标/重复 ID 页立即停止，无重放循环。不同页相同 ID 同内容合并；内容冲突 fail closed，缓存不覆盖。原始 lastEndRow 仅在本次内存作重复检测，不持久化、不输出。
+
+## 持久与接口
+
+v9→v10 显式迁移给 operation_syncs 增加 scope、pages_read、stop_reason。迁移前备份，旧记录标记 legacy_samples/0 页，不追认完整。API sync 返回本次进度；GET 的 last_sync 保留该边界；MCP 现有名称兼容，透传相同结果。UI 展示范围、页数、停止原因。
+
+缓存是最多 500 条的历史并集，不是最近完整快照，始终 partial/cached_samples；即使某次范围读取完整，也不表示历史混合缓存完整或最新。完整/部分/失败均不清除缺席记录、不标售罄，不动本地草稿。失败写独立安全错误状态，历史不清。
+
+## 需要父助手补证
+
+- 订单真实终页 nextPage 原始类型和值及其页面语义；不能仅给字符串类型。
+- 第一页→下一页→末页 POST body 的字段名和脱敏分页字段变化：尤其 lastEndRow、页码、页大小、状态筛选（若存在）。此前 URL query 没有 data 不代表 POST 无参数。
+- 页面滚动容器 DOM 选择器；若使用按钮，提供只读加载更多选择器、禁用/末页选择器及触发请求的对应关系。
+- 本人商品默认激活标签/筛选、head.self=true 与分页请求归属、分页字段和 bool false 终页；不能由“我发布的”标题推出下架/已售全覆盖。
+
+本地 fixture 验证不是真实平台验收。发布、首次联系、改价/上下架、FAQ 执行与实际 Hermes 接入仍未完成。不 push、不部署。

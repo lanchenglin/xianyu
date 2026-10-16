@@ -52,7 +52,7 @@ def test_real_cdp_network_listener_identity_and_cleanup(tmp_path, monkeypatch):
                 original = context.pages[0]
                 await original.set_content('<title>original fixture</title>')
                 await context.add_cookies([{'name': 'unb', 'value': '12345', 'domain': '.goofish.com', 'path': '/'}])
-                state = {'self': True, 'switch': False}
+                state = {'self': True, 'switch': False, 'paginate': False, 'requests': 0}
                 async def route(request):
                     url = request.request.url
                     if url == 'https://www.goofish.com/im':
@@ -62,9 +62,17 @@ def test_real_cdp_network_listener_identity_and_cleanup(tmp_path, monkeypatch):
                         apis = ['mtop.idle.web.trade.bought.list'] if url.endswith('bought') else [
                             'mtop.idle.web.user.page.head', 'mtop.idle.web.xyh.item.list']
                         script = ';'.join(f"fetch('https://h5api.m.goofish.com/h5/{api}/1.0/')" for api in apis)
-                        await request.fulfill(status=200, content_type='text/html', body=f'<script>{script}</script>')
+                        if state['paginate'] and url.endswith('bought'):
+                            script += ";window.addEventListener('scroll',()=>{fetch('https://h5api.m.goofish.com/h5/mtop.idle.web.trade.bought.list/1.0/')},{once:true})"
+                        await request.fulfill(status=200, content_type='text/html', body=f'<body style="height:4000px"><script>{script}</script></body>')
                     elif '/h5/' in url:
                         value = orders() if 'bought.list' in url else inventory()
+                        if state['paginate'] and 'bought.list' in url:
+                            from test_operation_pagination import order_page
+                            state['requests'] += 1
+                            value = order_page(str(9000 + state['requests']), str(state['requests']))
+                            if state['requests'] == 2:
+                                value['data']['nextPage'] = 'false'  # still unverified, not complete
                         if 'page.head' in url:
                             value = {'ret': ['SUCCESS::OK'], 'data': {'baseInfo': {'self': state['self']}}}
                         if state['switch']:
@@ -79,6 +87,13 @@ def test_real_cdp_network_listener_identity_and_cleanup(tmp_path, monkeypatch):
                     assert result['partial'] and len(result['items']) == 1
                     assert len(context.pages) == 1
                     assert await original.title() == 'original fixture'
+                state['paginate'] = True
+                result = await asyncio.to_thread(collect, 'orders')
+                assert [item['order_id'] for item in result['items']] == ['9001', '9002']
+                assert result['pages_read'] == 2 and result['partial']
+                assert result['stop_reason'] == 'pagination_semantics_unknown'
+                assert len(context.pages) == 1
+                state['paginate'] = False
                 # Full provider → real bridge subprocess → random local CDP → normalized output.
                 from cryptography.fernet import Fernet
 

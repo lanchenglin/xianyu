@@ -4,6 +4,15 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
+## 2026-10-16 买到订单有界分页
+
+起点 0f766ab，未 push/部署。双 Python RED 覆盖 known true、去重/重复游标、真实 capture 滚动、累计响应预算、缓存进度；UI 新进度断言先 RED 再 GREEN。首次全量失败（SQL 占位符数量、旧测试 schema v9）已修复，保留 scratch 日志。
+
+- Python 3.12 / 3.11 全量各 **377 passed, 4 skipped**（浏览器 opt-in），各 1 条既有 Starlette warning；含 stdio MCP 与固定上游契约。
+- Python 3.12 隔离 Chromium + UI + stdio MCP + 状态/缓存专项 **33 passed**（随后新增预算测试双版本各 7 passed）。假 bought 页真实 scroll→第二响应验证；订单字符串 false 仍 partial。
+- 双 Python pip check、ruff、node --check、git diff --check 通过。
+- 证据绝对路径：`/home/lan/.hermes/cache/scratch/pagination-{red311,red312,ui-red2,focused-green,orders-full312-final,orders-full311-final}.log`。真实平台与实际 Hermes 未验收。
+
 ## 2026-10-16 低频消息观察与有限 FAQ 策略
 
 基线 4d5db8e；用户报告基线已部署 43 条/32 文本、350 tests / CI 五项绿。本增量未 push、未部署、未运行远端 CI，也未连接真实平台。

@@ -9,13 +9,14 @@ from urllib.parse import urlsplit
 
 from .browser_adapter import goofish_page, validate_operation
 from .browser_config import BrowserError
+from .operation_pagination import Traversal
 from .operations import MAX_BODY, SOURCES, normalize, success_data
 
 HEAD = 'mtop.idle.web.user.page.head'
 PAGES = {'orders': 'https://www.goofish.com/bought', 'inventory': 'https://www.goofish.com/personal'}
 
 
-async def capture(page, kind: str, *, timeout=25) -> dict:
+async def capture(page, kind: str, *, timeout=25, max_bytes=5_000_000) -> dict:
     if kind not in PAGES:
         raise ValueError('operation_not_allowed')
     session = await page.context.new_cdp_session(page)
@@ -50,15 +51,23 @@ async def capture(page, kind: str, *, timeout=25) -> dict:
 
     session.on('Network.responseReceived', response)
     session.on('Network.loadingFinished', finished)
+    traversal = Traversal(kind) if kind == 'orders' else None
+    result, own = None, kind == 'orders'
+    total_bytes = 0
     try:
         async with asyncio.timeout(timeout):
             await session.send('Network.enable', {'maxTotalBufferSize': MAX_BODY * 2,
                                                   'maxResourceBufferSize': MAX_BODY})
             await page.goto(PAGES[kind], wait_until='domcontentloaded', timeout=int(timeout * 1000))
-            result, own = None, kind == 'orders'
-            while result is None or not own or not observed.empty():
+            while True:
+                if page.url.split('?', 1)[0].rstrip('/') != PAGES[kind]:
+                    raise ValueError('page_redirected')
                 if overflow:
                     raise ValueError('response_limit')
+                if result is not None and own and observed.empty():
+                    if traversal is None or traversal.stop_reason:
+                        break
+                    await page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
                 key, target, status, size = await observed.get()
                 if status != 200:
                     continue
@@ -71,6 +80,13 @@ async def capture(page, kind: str, *, timeout=25) -> dict:
                 raw = base64.b64decode(raw, validate=True) if body.get('base64Encoded') else raw.encode('utf-8')
                 if len(raw) > MAX_BODY:
                     raise ValueError('response_too_large')
+                total_bytes += max(len(raw), size)
+                if total_bytes > max_bytes:
+                    if traversal is not None and result is not None and own:
+                        traversal.stop('byte_limit')
+                        result = traversal.result()
+                        break
+                    raise ValueError('response_limit')
                 try:
                     value = json.loads(raw)
                     data = success_data(value)
@@ -80,12 +96,20 @@ async def capture(page, kind: str, *, timeout=25) -> dict:
                     if data.get('baseInfo', {}).get('self') is not True:
                         raise ValueError('cdp_identity_mismatch')
                     own = True
+                elif traversal is not None:
+                    traversal.add(value)
+                    result = traversal.result()
                 elif result is None:
                     result = normalize(kind, value)
             if page.url.split('?', 1)[0].rstrip('/') != PAGES[kind]:
                 raise ValueError('page_redirected')
             return result
     except TimeoutError:
+        if page.url.split('?', 1)[0].rstrip('/') != PAGES[kind]:
+            raise ValueError('page_redirected') from None
+        if traversal is not None and result is not None and own and not overflow:
+            traversal.stop('time_limit')
+            return traversal.result()
         raise ValueError('response_timeout') from None
     finally:
         await session.detach()

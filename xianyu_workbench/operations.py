@@ -124,8 +124,8 @@ def normalize(kind: str, value: dict) -> dict:
         raise ValueError('field_invalid') from None
     more = data.get('nextPage')
     if kind == 'orders':
-        error = 'pagination_semantics_unknown' if isinstance(more, str) else 'pagination_type_invalid'
-        more = None
+        error = (None if more == 'true' else 'pagination_semantics_unknown') if isinstance(more, str) else 'pagination_type_invalid'
+        more = True if more == 'true' else None
     else:
         error = None if type(more) is bool else 'pagination_type_invalid'
         more = more if type(more) is bool else None
