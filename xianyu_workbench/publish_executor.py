@@ -12,6 +12,7 @@ from pydantic import Field, StrictInt, StrictStr, model_validator
 
 from .models import Model
 from .provider import Problem
+from .publish_preview import TextMode
 from .security import canonical, digest
 
 
@@ -39,6 +40,7 @@ class ReadbackContent(Model):
 
 
 class PublishProtocol(Model):
+    text_mode: TextMode = 'separate'
     template: dict
     success_ret: list[str] = Field(min_length=1, max_length=4)
     readback_success_ret: list[str] = Field(min_length=1, max_length=4)
@@ -80,6 +82,8 @@ def freeze(service, account, snapshot):
         PublishProtocol.model_validate({k: v for k, v in protocol.items() if k != 'revision'})
     except ValueError:
         raise Problem('publish_readback_contract_required', '缺少已取证的回读精确 ret 和状态契约，请重新录入审批', 409)
+    if protocol.get('text_mode', 'separate') != snapshot.get('text_mode', 'separate'):
+        raise Problem('publish_protocol_mismatch', '协议与默认文本模式不同，请重新配置审批', 409)
     template = protocol['template']
     if 'onlyTakeSelf' in template:
         raise Problem('publish_protocol_mismatch', '已取证请求不含顶层 onlyTakeSelf，请使用配送 DTO', 409)

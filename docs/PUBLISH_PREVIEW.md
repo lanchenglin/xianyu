@@ -14,9 +14,12 @@
 {
   "category": {"cat_id":"1","cat_name":"虚构类目","channel_cat_id":"2","tb_cat_id":"3"},
   "location": {"divisionId":123,"prov":"测试省","city":"测试市","area":"测试区","gps":"120.1,30.2","poiId":"fictional","poiName":"测试地点"},
-  "region_summary":"测试市"
+  "region_summary":"测试市",
+  "text_mode":"separate"
 }
 ```
+
+`text_mode` 默认 `separate` 保留旧请求兼容（未真实取证），管理员可显式选 `web_combined`：请求title/desc均等于冻结完整desc，false分离标志；回读仍匹配短标题与完整desc。protocol必须同模式；未知值拒绝，变化要求重新审批和每日授权，详见 PUBLISH_EXECUTOR。
 
 `region_summary` 是允许 Agent 读取的摘要，管理员不得填入详细地址。完整 location 仅管理员读取，Fernet 加密存储，不进入审计、通知或商品台账。每次保存产生新的 revision，即使值改回也要求重新预览。此输入来源明确标为 `admin_local_unverified`，不假称从平台采集。
 

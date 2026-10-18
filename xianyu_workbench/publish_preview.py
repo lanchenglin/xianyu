@@ -1,6 +1,7 @@
 """Local-only publish snapshots. No upload, recommendation or platform transport."""
 import uuid
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import Field
 
@@ -26,7 +27,11 @@ class Location(Model):
     poiName: str = Field(min_length=1, max_length=200)
 
 
+TextMode = Literal['separate', 'web_combined']
+
+
 class PublishDefaults(Model):
+    text_mode: TextMode = 'separate'
     category: Category
     location: Location
     region_summary: str = Field(min_length=1, max_length=80)
@@ -52,6 +57,9 @@ def save_defaults(service, account_id, body):
 
 def freeze(service, account, payload):
     config = defaults(service, account['id'])
+    mode = config.get('text_mode', 'separate')
+    if mode not in ('separate', 'web_combined'):
+        raise Problem('invalid_text_mode', '未知发布文本模式，请管理员重新配置', 409)
     service.validate_assets(account['id'], payload['images'])
     images = [service.db.one('SELECT id,sha256 FROM assets WHERE id=? AND account_id=?',
                              (image, account['id'])) for image in payload['images']]
@@ -62,7 +70,8 @@ def freeze(service, account, payload):
         fee['templateId'] = '0'
         fee['postPriceInCent'] = str(int(Decimal(payload['post_price']) * 100))
     return {**config, 'uid': account['uid'], 'images': images,
-            'candidate': {'itemTextDTO': {'title': payload['title'], 'desc': payload['desc'], 'titleDescSeparate': True},
+            'candidate': {'itemTextDTO': {'title': payload['desc'] if mode == 'web_combined' else payload['title'],
+                                          'desc': payload['desc'], 'titleDescSeparate': mode == 'separate'},
                           'itemPriceDTO': {'priceInCent': str(int(Decimal(payload['price']) * 100))},
                           'itemPostFeeDTO': fee, 'itemAddrDTO': config['location'],
                           'itemCatDTO': dict(zip(('catId', 'catName', 'channelCatId', 'tbCatId'),

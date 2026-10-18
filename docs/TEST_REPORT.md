@@ -4,6 +4,14 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
+## 2026-10-19 网页组合文本契约最小增量
+
+父助手报告53df5c3已部署且线上只读通过；本编码端未访问、读取或重启线上。仅读取指定脱敏publish-observed-contract及用户补充精确构造，不读真实.env/data/profile/私有快照、不发帖、不commit/push。
+
+新增管理员defaults/protocol text_mode枚举separate/web_combined；默认旧模式兼容但不称已证。web_combined按冻结完整desc构造请求title/desc且false分离标志；回读仍比较冻结payload短标题与完整desc。模式随revision/digest/每日快照冻结，旧审批/每日授权变化阻断，严格candidate比较保留。
+
+RED **4 failed, 1 passed**（缺少text_mode配置支持）；实现后双模式/多行与原执行器26 passed，新增模式不匹配/未知/请求短标题拒绝、每日生成新码仍保持网页文本及模式变化阻断专项9 passed。发布ACK仍缺，不以编辑ACK或fixture代替。最终全量 **601 passed, 1 warning in 252.34s，退出0，无skipped**，日志 `/home/lan/.hermes/cache/scratch/xianyu-text-mode-final.log`。唯一warning为既有Starlette/httpx弃用提示。隔离UI smoke通过；ruff All checks passed、pip check No broken requirements found、node --check与git diff --check均退出0。全部使用指定.venv、env -u PYTHONPATH、TMPDIR及独立Chromium缓存/profile。
+
 ## 2026-10-19 独立审查P1：历史账本阻断一致性
 
 读取父助手指定审查摘要，未访问真实实例/凭据，未commit/push。P0生成方式保持不变。最小修复将配置/tick共用LEFT JOIN历史检查：任一非submitted或缺失action均阻止enabled配置（409 daily_unresolved）与tick；状态增加effective/blocked_reason，避免已存enabled显示成有效授权。关闭配置不清除日期账本，不允许重放。

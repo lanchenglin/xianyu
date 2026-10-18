@@ -6,6 +6,16 @@
 
 **默认关闭，未真实平台验收。** `XY_LIVE_ENABLED=true` 与 `XY_PUBLISH_ENABLED=true` 同时开启才可执行。capabilities 的 `publish_policy.executor_implemented=true`，`live_executor_enabled` 与顶层 `live_publish` 均等于两个开关的逻辑与，表示运行启用而不是账号授权或平台验收；`platform_verified=false`、`publish_complete_snapshot=false` 继续明确未做真实验收。默认或仅单个开关开启时运行启用为 false。这不是普通重新上架，不修改旧商品。通过状态核验仅表示命中了管理员已取证的允许值（可能含审核中），不必然等于在售，当前还必须通过独立精确内容契约；图片只核验数量，不证明像素等价。每日持久管理员授权见 [DAILY_PUBLISH](DAILY_PUBLISH.md)，默认关闭。
 
+## 2026-10-19 已证网页文本模式
+
+管理员 defaults 与 protocol 均新增显式 `text_mode`，只接受 `separate` / `web_combined`；省略时兼容旧 `separate`，**旧模式未真实取证，不宣称已验证**。两处模式必须一致，保存均产生新 revision，进入审批 digest 和每日冻结快照。变化后旧action执行失败、每日策略effective=false并在tick撤销，必须重新录入协议/预览审批/授权；不自动转换旧授权。
+
+- `separate`：请求title=冻结payload.title、desc=冻结payload.desc、titleDescSeparate=true。
+- `web_combined`：请求title与desc都逐字等于冻结payload.desc（短标题＋换行＋咨询句），titleDescSeparate=false；不额外拼接、不trim、不改变换行。
+- 两种模式回读仍严格比较 **payload.title短标题** 和 **payload.desc完整描述**，绝不拿请求title作为回读标题期望。完整candidate逐字段严格匹配不放宽，每日生成模式仍仅允许uniqueCode变化。
+
+父助手报告正常网页复制发布已回读本人/新ID/在线/2200/1图且title、desc与来源逐字一致；这是网页模式证据，非工作台发布验收。上传响应观察为success=true/status=0/object含fileId/folderId/url/fileName/size/pix/quality，图片映射字段类型已观察。发布响应读取因立即跳转失败，精确ACK仍未捕获，不猜ret、不以编辑ret替代、不为补ACK重发。
+
 ## 管理员单条流程
 
 1. 独立导入本人 Cookie（UID 必须匹配），不从 CDP 导出。先保存本地图片和草稿、类目/地点 defaults。
