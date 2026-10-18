@@ -1,9 +1,10 @@
 """Local-only publish snapshots. No upload, recommendation or platform transport."""
+import re
 import uuid
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from .models import Model
 from .provider import Problem
@@ -22,7 +23,18 @@ class Location(Model):
     prov: str = Field(min_length=1, max_length=100)
     city: str = Field(min_length=1, max_length=100)
     area: str = Field(min_length=1, max_length=100)
-    gps: str = Field(min_length=3, max_length=80, pattern=r'^-?\d{1,3}(\.\d+)?,\-?\d{1,2}(\.\d+)?$')
+    gps: str = Field(min_length=3, max_length=80)
+
+    @field_validator('gps', mode='before')
+    @classmethod
+    def latitude_longitude(cls, value):
+        # Validate before Model's whitespace stripping; the wire string is immutable.
+        if not isinstance(value, str) or not re.fullmatch(r'-?[0-9]{1,2}(?:\.[0-9]+)?,-?[0-9]{1,3}(?:\.[0-9]+)?', value):
+            raise ValueError('gps requires latitude,longitude decimal strings')
+        latitude, longitude = map(Decimal, value.split(','))
+        if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+            raise ValueError('gps latitude/longitude out of range')
+        return value
     poiId: str = Field(min_length=1, max_length=200)
     poiName: str = Field(min_length=1, max_length=200)
 
@@ -42,7 +54,12 @@ def defaults(service, account_id):
     row = service.db.one('SELECT value FROM settings WHERE key=?', ('publish-defaults:' + account_id,))
     if not row:
         raise Problem('publish_defaults_missing', '请管理员先录入本地类目/地点快照；不自动上传或推荐', 409)
-    return service.vault.open(row['value'])
+    config = service.vault.open(row['value'])
+    try:
+        Location.model_validate(config.get('location', {}))
+    except ValueError:
+        raise Problem('publish_location_reapproval_required', '地点需按纬度,经度重新核验录入审批；不自动交换坐标', 409)
+    return config
 
 
 def save_defaults(service, account_id, body):

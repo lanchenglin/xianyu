@@ -4,6 +4,16 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
+## 2026-10-19 GPS 纬度/经度方向修复
+
+父助手报告bc605b3部署后publish-defaults返回422 location.gps string_pattern_mismatch，已证网页格式为纬度在前、经度在后。仅用虚构坐标复现，未读取私有GPS、来源快照、.env/data/profile或真实实例，未部署/重启/commit/push。
+
+原正则前3位后2位方向错误且没有数值范围检查，Model还会自动strip空白。新增before字段验证：ASCII十进制格式，纬度[-90,90]前1～2位，经度[-180,180]后1～3位；拒绝非有限数/指数/空白/加号/超范围/错误位数。Decimal只用于校验，返回原字符串，不交换或归一；旧持久化Location也在预览/执行前复验，拒绝非法旧配置并要求重录审批。未添加lonlat兼容猜测。
+
+RED **12 failed,12 passed**，覆盖真实形状虚构坐标被拒、反向/超范围/空白/Unicode数字被错误接受、旧存储未复验；修复后相关 **61 passed,1 warning /14.41s**。另补API冻结原串与旧配置上传前阻断回归。共享fixture和文档示例改为虚构latlon，其他地点路径没有独立GPS正则。
+
+最终全量 **627 passed,1 warning in 254.71s，退出0，无skipped**，完整日志 `/home/lan/.hermes/cache/scratch/xianyu-gps-final.log`。唯一warning仍为Starlette/httpx弃用提醒。UI smoke通过；ruff首次发现新增测试导入排序错误，修正后All checks passed；pip check No broken requirements found、node --check及git diff --check通过。使用指定.venv、env -u PYTHONPATH、临时TMPDIR、独立Chromium缓存与profile；未做真实API/平台验收。
+
 ## 2026-10-19 网页组合文本契约最小增量
 
 父助手报告53df5c3已部署且线上只读通过；本编码端未访问、读取或重启线上。仅读取指定脱敏publish-observed-contract及用户补充精确构造，不读真实.env/data/profile/私有快照、不发帖、不commit/push。

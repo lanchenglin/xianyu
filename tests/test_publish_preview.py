@@ -8,7 +8,7 @@ from tests.test_workbench import workbench as workbench
 
 DEFAULTS = {'category': {'cat_id': '1', 'cat_name': '测试类目', 'channel_cat_id': '2', 'tb_cat_id': '3'},
             'location': {'divisionId': 123, 'prov': '测试省', 'city': '测试市', 'area': '测试区',
-                         'gps': '120.1,30.2', 'poiId': 'private-poi', 'poiName': '私密地点'},
+                         'gps': '30.2,120.1', 'poiId': 'private-poi', 'poiName': '私密地点'},
             'region_summary': '测试市'}
 
 

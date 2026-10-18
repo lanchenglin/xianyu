@@ -13,11 +13,13 @@
 ```json
 {
   "category": {"cat_id":"1","cat_name":"虚构类目","channel_cat_id":"2","tb_cat_id":"3"},
-  "location": {"divisionId":123,"prov":"测试省","city":"测试市","area":"测试区","gps":"120.1,30.2","poiId":"fictional","poiName":"测试地点"},
+  "location": {"divisionId":123,"prov":"测试省","city":"测试市","area":"测试区","gps":"30.2,120.1","poiId":"fictional","poiName":"测试地点"},
   "region_summary":"测试市",
   "text_mode":"separate"
 }
 ```
+
+`location.gps` 仅接受已证 **纬度,经度（lat,lon）**：纬度[-90,90]且整数部分1～2位，经度[-180,180]且整数部分1～3位，可有负号及十进制小数。只接受ASCII数字与半角逗号，不接受空白、指数、加号、NaN/Infinity或超范围值。原字符串原样冻结，保留负零、尾随零，不交换、不归一。旧存储地点在预览/执行前重新校验，错误方向或非法值返回publish_location_reapproval_required，需管理员重录并重新审批；不兼容lonlat模式。两数均落入纬度范围时不能从数值判断历史意图，管理员须按已证latlon核验，程序不猜。
 
 `text_mode` 默认 `separate` 保留旧请求兼容（未真实取证），管理员可显式选 `web_combined`：请求title/desc均等于冻结完整desc，false分离标志；回读仍匹配短标题与完整desc。protocol必须同模式；未知值拒绝，变化要求重新审批和每日授权，详见 PUBLISH_EXECUTOR。
 
