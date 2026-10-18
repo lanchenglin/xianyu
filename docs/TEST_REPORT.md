@@ -4,6 +4,32 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
+## 2026-10-19 独立审查P1：历史账本阻断一致性
+
+读取父助手指定审查摘要，未访问真实实例/凭据，未commit/push。P0生成方式保持不变。最小修复将配置/tick共用LEFT JOIN历史检查：任一非submitted或缺失action均阻止enabled配置（409 daily_unresolved）与tick；状态增加effective/blocked_reason，避免已存enabled显示成有效授权。关闭配置不清除日期账本，不允许重放。
+
+参数化RED **10 failed**：failed/blocked/rejected/expired与缺失action曾允许启用，其他状态及submitted对照缺effective状态。修复后历史/生成/实际CLI子进程→临时API/隔离Chromium状态与tick专项 **18 passed, 1 warning in 18.19s**。原生成重启三例仅阻塞原因由date_used/previous_not_verified统一成daily_unresolved，冻结码/抽取次数/不重发断言保留。没有扩大重构、schema变化或新平台能力。
+
+最终全量 **592 passed, 1 warning in 243.13s，退出0，无skipped**；日志 `/home/lan/.hermes/cache/scratch/xianyu-p1-final.log`。warning为既有Starlette/httpx弃用提醒。隔离UI smoke通过；ruff All checks passed、pip check No broken requirements found、node --check、git diff --check均退出0。使用指定.venv、env -u PYTHONPATH、TMPDIR、独立浏览器缓存与临时profile；真实平台默认关闭，未验收声明不变。
+
+## 2026-10-19 uniqueCode 官方生成规则修正
+
+父助手提供指定公开JS证据及脱敏同ID网页编辑记录，仅读取这两份授权文件。原 unique_code_reuse_verified 控制面错误，已删除；改显式 generation_mode（disabled/timestamp_random_v1），默认关闭，旧授权不自动升级。新每日action在事务内按毫秒拼接0～999整数生成一次，冻结payload/digest并保存加密占用；碰撞拒绝且不重抽、不外部写。仅受证动态字段可归一比较，其余整个payload严格相等。schema仍v13，无自动新增授权迁移。
+
+先修改每日模式/冻结断言，RED **11 failed, 2 passed**（缺generation_mode）；实现后 **13 passed**。补充生成0/7/999不补位、进程重启不换码、已有日期不重抽、非uniqueCode篡改拒绝、码篡改拒绝、旧reuse策略撤销、占用碰撞与离线恢复回归，专项23 passed。历史action碰撞补充测试首轮误选不含executor的预览夹具导致KeyError，已修正为明确源action，不是生产缺陷。
+
+真实网页编辑证据只写入OPERATIONS_NEXT，不新增编辑接口、不把edit ACK当publish ACK。未部署、未commit/push、未访问真实账号；最终全量 **582 passed, 1 warning in 239.96s，退出0，无skipped**，日志 `/home/lan/.hermes/cache/scratch/xianyu-generation-final.log`；中间全量581 passed/1 warning/247.54s。唯一warning仍为Starlette/httpx弃用提示。隔离UI smoke通过；ruff All checks passed、pip check No broken requirements found、node --check、git diff --check均退出0。继续使用指定 .venv、env -u PYTHONPATH、临时TMPDIR、独立Chromium profile及浏览器缓存，不运行真实实例。
+
+## 2026-10-18 8df62e7 后发布内容与每日授权（隔离编码）
+
+未 commit/push/部署，未读真实 .env/data/profile/私有快照，未访问真实8099/9235或真实平台，原 scratch 未动。父助手提供的真实请求/详情结构用于构造虚构 fixture；不把父助手网页发布成功写成工作台 API 验收。发布 ACK 仍缺，真实启用关闭。
+
+RED 实测：结构/内容首轮2 failed（强加顶层 onlyTakeSelf、内容不同仍 submitted）；每日授权首轮6 failed（无路由/模块）；UI/CLI入口1 failed；严格数字/配送2 failed；详情整数身份2 failed；暂停/接管持久撤销2 failed；重复已有itemId1 failed；回读金额与冻结金额不同1 failed。对应修复后专项通过。并发、恢复、CLI临时服务与新增内容反例为补充回归，部分首次即通过，不冒称 RED。
+
+首轮发布专项84 passed/1 failed：UI旧fixture缺新增 readback_content，补齐虚构协议后通过。首轮全量565 passed/3 failed/1 warning，226.52s：历史v2恢复fixture残留新v13表、两处旧schema12断言；修正fixture和断言，没有放宽生产迁移。修复后相关49 passed/1 warning，16.34s。真实 CLI子进程→临时API及隔离Chromium每日状态/tick/撤销/Agent隐藏2 passed/1 warning，8.40s。
+
+中间完整修复轮570 passed/1 warning，238.55s；后追加CLI集成与内容反例，最终全量 **576 passed, 1 warning in 238.65s，退出0，无 skipped**，完整日志 `/home/lan/.hermes/cache/scratch/xianyu-daily-final-all.log`。唯一 warning 为既有 Starlette/httpx 弃用提醒。最终页面UI smoke输出 `UI smoke passed`，退出0；ruff `All checks passed!`、pip check `No broken requirements found.`、node --check 和 git diff --check 均退出0。所有测试使用项目 .venv、env -u PYTHONPATH、TMPDIR=/home/lan/.hermes/cache/scratch、XY_TEST_CHROMIUM=/snap/bin/chromium、独立PLAYWRIGHT_BROWSERS_PATH和PLAYWRIGHT_SKIP_BROWSER_GC=1。尚未运行Python3.11、Windows、远端CI或本批Docker，不借用历史通过结果。
+
 ## 2026-10-18 a9cbb50 后 Docker 隔离演示与恢复修复
 
 基线 `a9cbb50`，保留工作树交父助手审查，未 commit/push。未读真实 .env/data/profile，未连接宿主8099/9235，不动仓库 scratch，不改宿主配置/镜像源，不真实发送/上传/发布，不改变 FAQ 授权。所有应用数据、令牌/密钥均本批虚构。

@@ -162,9 +162,17 @@ def draft_import_schema(conn):
     )''')
 
 
+def daily_publish_schema(conn):
+    conn.execute('''CREATE TABLE daily_publish_dates (
+        account_id TEXT NOT NULL REFERENCES accounts(id), local_date TEXT NOT NULL,
+        action_id TEXT NOT NULL UNIQUE REFERENCES actions(id), revision TEXT NOT NULL,
+        PRIMARY KEY(account_id,local_date)
+    )''')
+
+
 MIGRATIONS = (initial_schema, reconciliation_schema, draft_revision_schema,
               notification_state_schema, notification_delivery_schema, operations_schema, message_samples_schema, message_reply_schema, message_observation_schema,
-              operation_progress_schema, price_history_schema, draft_import_schema)
+              operation_progress_schema, price_history_schema, draft_import_schema, daily_publish_schema)
 
 
 class DB:

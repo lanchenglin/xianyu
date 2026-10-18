@@ -20,6 +20,7 @@ from PIL import Image, ImageOps
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .config import Settings
+from .daily_publish import DailyPublish, DailyPublishIn
 from .faq_policy import FAQPolicy, FAQPolicyIn
 from .message_observation import MessageObservation, ObservationIn
 from .models import (
@@ -134,6 +135,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "live_publish": s.live_enabled and s.publish_enabled, "publish_complete_snapshot": False, "local_publish_preview": True,
                 "publish_policy": {"live_executor_enabled": s.live_enabled and s.publish_enabled,
                                    "executor_implemented": True, "platform_verified": False,
+                                   "exact_content_readback": True, "daily_admin_policy": True,
+                                   "daily_default_enabled": False, "daily_platform_verified": False,
                                    "source": "admin_verified_protocol_required", "default_enabled": False,
                                    "preview_uploads": False, "selected_live_execution_only": True},
                 "browser_policy": {"isolated_browsers": ["chrome", "chromium"],
@@ -189,6 +192,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.put('/api/accounts/{account_id}/publish-protocol')
     def put_publish_protocol(account_id: str, body: PublishProtocol, current=Depends(admin)):
         return save_protocol(service, account_id, body)
+
+    daily_publish = DailyPublish(service)
+
+    @app.get('/api/accounts/{account_id}/daily-publish')
+    def daily_publish_status(account_id: str, current=Depends(admin)):
+        return daily_publish.read(account_id)
+
+    @app.put('/api/accounts/{account_id}/daily-publish')
+    def daily_publish_config(account_id: str, body: DailyPublishIn, current=Depends(admin)):
+        return daily_publish.configure(account_id, body)
+
+    @app.post('/api/accounts/{account_id}/daily-publish/revoke')
+    def daily_publish_revoke(account_id: str, current=Depends(admin)):
+        return daily_publish.revoke(account_id)
+
+    @app.post('/api/accounts/{account_id}/daily-publish/tick')
+    def daily_publish_tick(account_id: str, current=Depends(admin)):
+        return daily_publish.tick(account_id)
 
     @app.post('/api/publish-preview', status_code=201)
     def publish_preview(body: ActionIn, current=Depends(role)):
@@ -246,6 +267,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def pause(account_id: str, current=Depends(admin)):
         service.provider.account(account_id)
         service.db.execute("UPDATE accounts SET paused=1,pause_reason='人工暂停' WHERE id=?", (account_id,))
+        daily_publish.revoke(account_id, 'account_paused')
         service.db.audit(current, "account.paused", account_id)
         return {"ok": True}
 
@@ -316,7 +338,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post('/api/accounts/{account_id}/message-observation/takeover')
     def message_takeover(account_id: str, current=Depends(role)):
-        return observation.takeover(account_id, True, current)
+        result = observation.takeover(account_id, True, current)
+        daily_publish.revoke(account_id, 'human_takeover')
+        return result
 
     @app.post('/api/accounts/{account_id}/message-observation/release')
     def message_release(account_id: str, current=Depends(admin)):

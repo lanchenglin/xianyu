@@ -12,7 +12,8 @@
 | autonomous_reply=false | 有限 FAQ 仅加密策略存储 | FAQ 权限/撤销/恢复回归 | 未验收、未开放执行 | item/cid 证据、限额账本及单独授权决策 |
 | local_publish_preview/publish_with_approval=true | 本地 hash/类目/配送/私密地点冻结，预览不上传 | test_publish_preview、test_publish_preview_ui、MCP stdio | 本地输入不是平台核验 | candidate 不是完整协议 |
 | publish_policy.executor_implemented=true | publish_executor：上传→显式提交→精确 ret/同 ID UID/类型状态回读 | test_publish_executor/review/transport/backup | **未验收**，platform_verified=false | 完整 schema/uniqueCode/图片/配送/状态语义需真实证据 |
-| live_publish=live_enabled AND publish_enabled | 双开关默认 false，管理员指定 action；旧隐式 publish 关闭 | 四种开关组合回归 | 开启也不表示验收 | publish_complete_snapshot=false；verified 不保证内容价格等价或在售 |
+| publish_policy.daily_admin_policy/exact_content_readback=true | 固定已验收快照每日授权、API/UI/CLI tick；严格内容与身份回读 | test_daily_publish/test_publish_content；日期并发唯一、未知停用、撤销、恢复 | **未验收**，daily_platform_verified=false | ACK及工作台真实闭环待父助手；已证毫秒+随机整数生成，显式generation_mode默认关闭，旧reuse策略不迁移授权 |
+| live_publish=live_enabled AND publish_enabled | 双开关默认 false，管理员指定 action；旧隐式 publish 关闭 | 四种开关组合回归 | 开启也不表示验收 | publish_complete_snapshot=false；verified 包含精确文本/价格/运费/图片数，不保证图片像素等价或所有用户可见 |
 | delete_with_explicit_approval=true | 演示删除申请/确认/归属链；旧 live delete 阻断 | test_workbench、test_publish_safety | 无真实删除验收 | 此粗粒度 true **不代表 live 删除开放**，不等于普通下架 |
 | partial_orders/partial_inventory=true | bought_orders/self_published 有界滚动、缓存/进度 | test_operation_pagination、test_operations_*、隔离 Chromium | 用户报告 b8ea112：库存2页40条范围完整；订单13页130条时限 partial | 本批未复测；orders_terminal_verified=false；缓存历史并集非快照 |
 | order_sync/full_inventory_sync=false | 没有全范围同步 | 范围/partial/失败不清库回归 | 无完整验收 | 卖出/下架/全状态未实现；sample_policy.platform_verified=false |

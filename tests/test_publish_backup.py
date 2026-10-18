@@ -27,6 +27,10 @@ def test_publish_restore_preserves_private_stage_without_replay(tmp_path, monkey
         state = 'submitted' if stage == 'verified' else 'running'
         service.db.execute('UPDATE actions SET state=?,result=? WHERE id=?',
                            (state, service.vault.seal(result), action['id']))
+        service.db.execute('INSERT INTO settings(key,value) VALUES(?,?)',
+                           ('daily-publish:' + aid, service.vault.seal({'enabled': True, 'revision': 'fictional'})))
+        service.db.execute('INSERT INTO daily_publish_dates VALUES(?,?,?,?)', (aid, '2026-10-18', action['id'], 'fictional'))
+        service.db.execute('INSERT INTO settings VALUES(?,?)', ('publish-code:fictional-hash', service.vault.seal({'account_id': aid, 'action_id': action['id']})))
         settings, vault = service.s, service.vault
     archive = tmp_path / 'publish-backup.zip'
     create_backup(settings.data_dir, archive, vault)
@@ -36,6 +40,8 @@ def test_publish_restore_preserves_private_stage_without_replay(tmp_path, monkey
     try:
         row = restored.db.one('SELECT * FROM actions WHERE id=?', (action['id'],))
         assert row['state'] == ('submitted' if stage == 'verified' else 'unconfirmed')
+        reservation = restored.db.one("SELECT value FROM settings WHERE key='publish-code:fictional-hash'")
+        assert vault.open(reservation['value']) == {'account_id': aid, 'action_id': action['id']}
         assert vault.open(row['payload']) == frozen
         assert vault.open(row['result']) == result
         protocol = restored.db.one('SELECT value FROM settings WHERE key=?', ('publish-protocol:' + aid,))
@@ -43,6 +49,10 @@ def test_publish_restore_preserves_private_stage_without_replay(tmp_path, monkey
         public = canonical(restored.action_view(row, 'agent'))
         for private in ('private-fixture.png', 'private-poi', 'credential_digest', 'fictional-once'):
             assert private not in public
+        policy = restored.db.one('SELECT value FROM settings WHERE key=?', ('daily-publish:' + aid,))
+        assert vault.open(policy['value'])['enabled'] is False
+        assert vault.open(policy['value'])['blocked_reason'] == 'restored'
+        assert restored.db.one('SELECT local_date FROM daily_publish_dates WHERE account_id=?', (aid,))['local_date'] == '2026-10-18'
         assert restored.provider.account(aid)['paused'] == 1
         assert not restored.db.one("SELECT id FROM actions WHERE state IN ('pending','approved','running')")
         monkeypatch.setattr(restored.provider, '_live', lambda *a, **k: pytest.fail('recovery must not transmit'))

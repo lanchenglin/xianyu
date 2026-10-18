@@ -2,6 +2,10 @@
 
 这是账号主人自用的闲鱼工作台，不是无条件全自动交易系统。当前真实能力和未实现事项以 README、[能力矩阵](docs/CAPABILITY_MATRIX.md) / `/api/capabilities` 为准，禁止把占位接口或演示数据写成已完成。
 
+## 2026-10-18 每日管理员发布授权
+
+父助手批准受限每日策略，不是删除审批：默认关闭，固定已验收快照、Asia/Shanghai 计划分钟、账号+日期永久去重，只有策略新建 action 可获授权；沿用唯一队列/operations.lock，Agent 无配置/执行权。未知停止后续日期，暂停/接管撤销、变更重审、恢复撤销但保留日期账本；schema v13。API/UI/CLI 单次 tick 见 DAILY_PUBLISH。发布新增严格整数身份、精确标题/描述/金额/图片数回读契约，不强迫顶层 onlyTakeSelf。父助手报告网页发布及在线回读不等于工作台验收；发布 ACK 尚缺；2026-10-19 已证官方 YG 每次以毫秒拼接0～999整数生成 uniqueCode，已改显式 generation_mode（默认disabled），新action原子冻结一次、碰撞拒绝、只允许该单字段动态比较；旧reuse授权不自动升级，禁止用 fixture 启用生产。历史“本批禁止部署”不限制父助手后来获得的部署授权；当前隔离编码端仍不访问真实实例、不部署、不 commit/push。
+
 ## 2026-10-18 Docker 隔离灾备验收
 
 基线 a9cbb50 后本机 Docker 演示构建/非 root 启动/重启持久化/离线恢复已实测，非生产或平台验收。恢复暂存 `.restore-*` 与 `restore-rollback-*` 改放目标 data 内部，保证挂载根可写且同卷 rename；不能改回父目录或通过 root/放宽 /app 权限规避。保留 server.lock、中断标记、旧授权失效与不重放；回滚副本不自动打包/清理。证据见 TEST_REPORT，后续 Docker 测试继续独立项目/临时虚构数据，禁止操作真实部署。

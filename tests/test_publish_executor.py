@@ -19,6 +19,11 @@ def ready(client, service):
                 'readback_success_ret': ['SUCCESS::readback-fixture'],
                 'readback_status': {'path': ['data', 'itemDO', 'fixtureStatus'], 'value_type': 'string',
                                     'allowed_values': ['FICTIONAL_LISTED', 'FICTIONAL_REVIEW']},
+                'readback_content': {'title': ['data', 'itemDO', 'title'], 'desc': ['data', 'itemDO', 'desc'],
+                                     'price': ['data', 'itemDO', 'soldPrice'],
+                                     'transport_fee': ['data', 'itemDO', 'transportFee'],
+                                     'images': ['data', 'itemDO', 'imageInfos'],
+                                     'expected_price': '12.30', 'expected_transport_fee': '1.23'},
                 'evidence': 'Fictional isolated fixture only',
                 'upload_authorized': True}
     response = client.put(f'/api/accounts/{aid}/publish-protocol', json=protocol)
@@ -46,7 +51,7 @@ def transport(events, fail=None):
             assert len(payload['imageInfoDOList']) == 1
             return {'ret': ['SUCCESS::fixture'], 'data': {'itemId': '777'}}
         if operation == 'publish.readback':
-            return {'ret': ['SUCCESS::readback-fixture'], 'data': {'itemDO': {'itemId': '777', 'fixtureStatus': 'FICTIONAL_LISTED'}, 'sellerDO': {'sellerId': '12345'}}}
+            return {'ret': ['SUCCESS::readback-fixture'], 'data': {'itemDO': {'itemId': 777, 'fixtureStatus': 'FICTIONAL_LISTED', 'title': '测试商品', 'desc': '虚构说明', 'soldPrice': '12.30', 'transportFee': '1.23', 'imageInfos': [{}]}, 'sellerDO': {'sellerId': 12345}}}
         pytest.fail(operation)
     return call
 

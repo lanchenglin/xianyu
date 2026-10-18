@@ -13,7 +13,7 @@
 ```json
 {
   "category": {"cat_id":"1","cat_name":"虚构类目","channel_cat_id":"2","tb_cat_id":"3"},
-  "location": {"divisionId":"123","prov":"测试省","city":"测试市","area":"测试区","gps":"120.1,30.2","poiId":"fictional","poiName":"测试地点"},
+  "location": {"divisionId":123,"prov":"测试省","city":"测试市","area":"测试区","gps":"120.1,30.2","poiId":"fictional","poiName":"测试地点"},
   "region_summary":"测试市"
 }
 ```
@@ -26,11 +26,11 @@
 
 ## 存储及恢复
 
-没有新增数据库列/表：使用既有加密 settings（命名空间 `publish-defaults:<account_id>`）和加密 actions.payload 的版本化快照字段。该功能最初保持 schema v10；当前离线运营迁移到 v12，但发布仍复用原字段；既有 key 校验、备份恢复加密验证覆盖这两类字段。恢复会按既有规则使 pending/approved 失效，running 不确定，不能重放。
+没有新增数据库列/表：使用既有加密 settings（命名空间 `publish-defaults:<account_id>`）和加密 actions.payload 的版本化快照字段。该功能最初保持 schema v10；当前迁移到 v13（每日授权日期账本），单条发布快照仍复用原字段；既有 key 校验、备份恢复加密验证覆盖这两类字段。恢复会按既有规则使 pending/approved 失效，running 不确定，不能重放。
 
 ## 固定上游证据与父助手最小取证
 
-固定 `c2d5a02ad83b18863514389cedf7afbd993b683d` 的 `commands/item/publish.py`：39–49 行先上传，再推荐类目，再读取默认地点；84–174 行 builder 接受显式 cat_info/location。配送双层 onlyTakeSelf 与固定 uniqueCode 只有源码行为证据，不能当作正确业务含义或幂等保证。项目候选 DTO 用 Decimal 精确到分，不导入上游业务模块，不修改 site-packages。
+固定 `c2d5a02ad83b18863514389cedf7afbd993b683d` 的 `commands/item/publish.py`：39–49 行先上传，再推荐类目，再读取默认地点；84–174 行 builder 接受显式 cat_info/location。上游配送双层 onlyTakeSelf 与固定 uniqueCode 只有源码行为证据，不能当作正确业务含义或幂等保证；当前 candidate 已按父助手请求结构去掉顶层 onlyTakeSelf，无需邮寄仅保留三项配送布尔值。项目候选 DTO 用 Decimal 精确到分，不导入上游业务模块，不修改 site-packages。
 
 父助手可先在**本人正常出售商品的编辑/发布页面**手工打开开发者工具。只读阶段不上传、不点击提交或状态确认；不导出 HAR/Cookie/Authorization，不向 Agent 回传地址原值。最小可交付证据：
 

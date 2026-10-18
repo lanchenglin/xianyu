@@ -51,7 +51,39 @@ def main():
     schedule.add_argument('--interval', type=int, default=86400)
     schedule.add_argument('--keep', type=int, default=7)
     schedule.add_argument('--watch', action='store_true', help='每60秒检查到期；活动服务跳过')
+    daily = sub.add_parser('daily-publish', help='管理员 HTTP 每日授权入口；不启动第二 worker，不读取 .env')
+    daily.add_argument('operation', choices=('status', 'configure', 'revoke', 'tick'))
+    daily.add_argument('--url', required=True, help='固定工作台 URL，拒绝重定向')
+    daily.add_argument('--account-id', required=True)
+    daily.add_argument('--config', type=Path, help='configure 使用的管理员 JSON 文件')
     args = parser.parse_args()
+    if args.command == 'daily-publish':
+        from urllib.parse import quote, urlsplit
+
+        import httpx
+        try:
+            url = urlsplit(args.url)
+            if url.username or url.password or url.query or url.fragment or url.path not in ('', '/'):
+                raise ValueError('invalid endpoint')
+            if url.scheme != 'https' and not (url.scheme == 'http' and url.hostname in ('127.0.0.1', 'localhost', '::1')):
+                raise ValueError('insecure endpoint')
+            token = os.environ.get('XY_ADMIN_TOKEN', '')
+            if not token:
+                raise ValueError('admin token required')
+            endpoint = args.url.rstrip('/') + '/api/accounts/' + quote(args.account_id, safe='') + '/daily-publish'
+            method, body = 'GET', None
+            if args.operation == 'configure':
+                method = 'PUT'
+                body = json.loads(args.config.read_text(encoding='utf-8'))
+            elif args.operation in ('revoke', 'tick'):
+                method, endpoint = 'POST', endpoint + '/' + args.operation
+            with httpx.Client(follow_redirects=False, trust_env=False, timeout=300) as client:
+                response = client.request(method, endpoint, json=body, headers={'Authorization': 'Bearer ' + token})
+                response.raise_for_status()
+                print(json.dumps(response.json(), ensure_ascii=False))
+        except Exception:
+            parser.exit(1, '每日发布请求失败；不自动重试，请在管理员队列核对结果。\n')
+        return
     if args.command == "init":
         try:
             path = initialize(Path.cwd())

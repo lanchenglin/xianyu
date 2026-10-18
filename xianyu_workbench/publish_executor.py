@@ -3,6 +3,7 @@ import copy
 import re
 import time
 import uuid
+from decimal import Decimal, InvalidOperation
 from typing import Literal
 from urllib.parse import urlsplit
 
@@ -27,11 +28,22 @@ class ReadbackStatus(Model):
         return self
 
 
+class ReadbackContent(Model):
+    title: list[StrictStr] = Field(min_length=1, max_length=10)
+    desc: list[StrictStr] = Field(min_length=1, max_length=10)
+    price: list[StrictStr] = Field(min_length=1, max_length=10)
+    transport_fee: list[StrictStr] = Field(min_length=1, max_length=10)
+    images: list[StrictStr] = Field(min_length=1, max_length=10)
+    expected_price: StrictStr
+    expected_transport_fee: StrictStr
+
+
 class PublishProtocol(Model):
     template: dict
     success_ret: list[str] = Field(min_length=1, max_length=4)
     readback_success_ret: list[str] = Field(min_length=1, max_length=4)
     readback_status: ReadbackStatus
+    readback_content: ReadbackContent
     evidence: str = Field(min_length=10, max_length=2000)
     upload_authorized: bool
 
@@ -69,12 +81,25 @@ def freeze(service, account, snapshot):
     except ValueError:
         raise Problem('publish_readback_contract_required', '缺少已取证的回读精确 ret 和状态契约，请重新录入审批', 409)
     template = protocol['template']
+    if 'onlyTakeSelf' in template:
+        raise Problem('publish_protocol_mismatch', '已取证请求不含顶层 onlyTakeSelf，请使用配送 DTO', 409)
     for key, value in snapshot['candidate'].items():
         actual = template.get(key)
         if key == 'itemCatDTO' and isinstance(actual, dict):
             actual = {k: actual.get(k) for k in value}
         if canonical(actual) != canonical(value):
             raise Problem('publish_protocol_mismatch', '已核验模板与草稿/类目/地点不一致，请重新录入', 409)
+    content = protocol['readback_content']
+    try:
+        price = Decimal(content['expected_price'])
+        fee = Decimal(content['expected_transport_fee'])
+        candidate = snapshot['candidate']
+        if (not price.is_finite() or not fee.is_finite()
+                or price * 100 != Decimal(candidate['itemPriceDTO']['priceInCent'])
+                or fee * 100 != Decimal(candidate['itemPostFeeDTO'].get('postPriceInCent', '0'))):
+            raise ValueError('readback amount differs')
+    except (InvalidOperation, ValueError):
+        raise Problem('publish_protocol_mismatch', '回读价格/运费契约必须与冻结金额一致', 409)
     return {**protocol, 'binding': binding(service, account)}
 
 
@@ -103,6 +128,9 @@ def _execute_locked(service, action_id):
     account = provider.account(row['account_id'])
 
     def guard():
+        from .daily_publish import DailyPublish
+        DailyPublish(service).guard(row['account_id'], action_id)
+        service.observation.guard(row['account_id'])
         current = provider.account(row['account_id'])
         if not service.s.live_enabled or not service.s.publish_enabled:
             raise Problem('publish_disabled', '发布开关关闭，需管理员核验证据并启用', 409)
@@ -110,7 +138,8 @@ def _execute_locked(service, action_id):
             raise Problem('publish_stopped', '账号暂停、模式变化或审批过期', 409)
         if digest({'account_id': current['id'], 'kind': row['kind'], 'payload': payload, 'mode': current['mode']}) != row['digest']:
             raise Problem('integrity_error', '发布审批内容改变', 409)
-        preflight(service, current, payload, executing=True)
+        compared = DailyPublish(service).comparison_payload(row['account_id'], action_id, payload)
+        preflight(service, current, compared, executing=True)
         return current
 
     def transport(operation, request, *, write):
@@ -162,11 +191,15 @@ def _execute_locked(service, action_id):
             raise ValueError('unverified publish response')
         result.update(stage='verifying', item_id=item_id)
         checkpoint(service, action_id, result)
+        from .daily_publish import DailyPublish
+        DailyPublish(service).verify_new_item(account['id'], action_id, item_id)
         account = guard()
         raw = transport('publish.readback', {'itemId': item_id}, write=False)
         data = raw.get('data', {})
         ret = raw.get('ret')
         if (ret != frozen['readback_success_ret']
+                or type(data.get('itemDO', {}).get('itemId')) is not int
+                or type(data.get('sellerDO', {}).get('sellerId')) is not int
                 or str(data.get('itemDO', {}).get('itemId', '')) != item_id
                 or str(data.get('sellerDO', {}).get('sellerId', '')) != account['uid']):
             raise ValueError('ownership readback failed')
@@ -179,8 +212,26 @@ def _execute_locked(service, action_id):
         expected_type = str if status_contract['value_type'] == 'string' else int
         if type(observed) is not expected_type or observed not in status_contract['allowed_values']:
             raise ValueError('readback status unknown')
+        content = frozen['readback_content']
+        expected = {'title': payload['title'], 'desc': payload['desc'],
+                    'price': content['expected_price'], 'transport_fee': content['expected_transport_fee']}
+        for field, wanted in expected.items():
+            observed = raw
+            for key in content[field]:
+                if not isinstance(observed, dict) or key not in observed:
+                    raise ValueError('readback content missing')
+                observed = observed[key]
+            if type(observed) is not str or observed != wanted:
+                raise ValueError('readback content differs')
+        observed = raw
+        for key in content['images']:
+            if not isinstance(observed, dict) or key not in observed:
+                raise ValueError('readback images missing')
+            observed = observed[key]
+        if type(observed) is not list or len(observed) != len(images):
+            raise ValueError('readback image count differs')
         guard()
-        result.update(stage='verified', ownership_verified=True, status_verified=True, ok=True)
+        result.update(stage='verified', ownership_verified=True, status_verified=True, content_verified=True, ok=True)
         return result
     except Exception:
         result['notice'] = '上传或发布已尝试，结果不确定；禁止自动重试，请人工核对。'

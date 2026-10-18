@@ -8,6 +8,18 @@
 
 已有默认关闭的管理员单条消息执行与发布执行器；二者均走唯一审批队列，worker 不领取 live。消息只读同文观察不是 ACK；发布完整协议由管理员取证录入，回读必须精确 ret、同 ID UID、严格类型状态允许值。旧隐式 publish 和 live delete 关闭。发布与消息真实写均未验收，不自动启用。
 
+## 2026-10-18 已衔接父助手的新证据
+
+父助手报告真实网页已新建目标商品并回读在线；已提供请求字段类型（无顶层 onlyTakeSelf、divisionId 整数）及详情 ret=['SUCCESS::调用成功']、整数 itemId/sellerId/itemStatus=0、title/desc/soldPrice/transportFee 字符串、imageInfos 数组。本地执行器已接精确内容契约及这些结构；不是工作台平台验收。发布 ACK 未采得，不以回读 ret 顶替。
+
+每日授权离线闭环已实现（DAILY_PUBLISH）：API/UI/CLI、计划分钟、日期唯一、撤销、未知停止、恢复撤销。仍默认关闭，需工作台真实成功 action、管理员证据与显式 timestamp_random_v1 生成模式授权才可启用（旧复用模式已移除，不自动迁移授权）。父助手负责真实账号/API/部署/调度验收；编码端不访问真实实例。无需等待其他平台证据才可完成此离线实现。
+
+## 2026-10-19 公开生成规则与真实网页同 ID 编辑证据
+
+父助手提供官方公开 JS 0.0.178 模块18200 YG：毫秒字符串拼接 floor(1000*Math.random())，发布/编辑每次新生成。每日策略已改为管理员显式生成模式，每个新action创建时仅生成并冻结一次，单字段授权比较与碰撞防护，不再要求证明平台未采用的长期复用。
+
+父助手报告在限定的新测试商品正常网页 `/publish?scene=xyPcMainPublish&itemId=<existing-id>` 修正正文：editDetail 与 edit 均返回精确 ret=['SUCCESS::调用成功']，edit 的 data.itemId 为 string 且同ID；独立详情回读标题/含换行描述逐字一致、soldPrice='2200'、itemStatus=0/在线、imageInfos长度1。未改价、未删帖、未重发。请求route拦截未触发，未获得完整编辑request。**仅文档记录：工作台编辑仍未实现，不能据此声称改价/上下架或把编辑ACK当发布ACK。** 消息read API仅报告当前用户已读，不是对方送达/已读证明。
+
 ## 下一步门槛
 
 | 工作 | 下一份必要证据/决策 | 本地可做与不可做 |

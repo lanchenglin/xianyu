@@ -17,7 +17,7 @@ class Category(Model):
 
 
 class Location(Model):
-    divisionId: str = Field(pattern=r'^\d{1,30}$')
+    divisionId: int = Field(ge=1, strict=True)
     prov: str = Field(min_length=1, max_length=100)
     city: str = Field(min_length=1, max_length=100)
     area: str = Field(min_length=1, max_length=100)
@@ -56,18 +56,17 @@ def freeze(service, account, payload):
     images = [service.db.one('SELECT id,sha256 FROM assets WHERE id=? AND account_id=?',
                              (image, account['id'])) for image in payload['images']]
     fee = {'canFreeShipping': payload['delivery'] == '包邮',
-           'supportFreight': payload['delivery'] in ('包邮', '一口价'), 'onlyTakeSelf': False}
-    if payload['delivery'] != '包邮':
-        fee['templateId'] = '0'
+           'supportFreight': payload['delivery'] in ('包邮', '一口价'),
+           'onlyTakeSelf': payload['delivery'] == '无需邮寄' and payload['can_self_pickup']}
     if payload['delivery'] == '一口价':
+        fee['templateId'] = '0'
         fee['postPriceInCent'] = str(int(Decimal(payload['post_price']) * 100))
     return {**config, 'uid': account['uid'], 'images': images,
             'candidate': {'itemTextDTO': {'title': payload['title'], 'desc': payload['desc'], 'titleDescSeparate': True},
                           'itemPriceDTO': {'priceInCent': str(int(Decimal(payload['price']) * 100))},
                           'itemPostFeeDTO': fee, 'itemAddrDTO': config['location'],
                           'itemCatDTO': dict(zip(('catId', 'catName', 'channelCatId', 'tbCatId'),
-                                                (config['category'][k] for k in ('cat_id', 'cat_name', 'channel_cat_id', 'tb_cat_id')))),
-                          'onlyTakeSelf': payload['can_self_pickup']},
+                                                (config['category'][k] for k in ('cat_id', 'cat_name', 'channel_cat_id', 'tb_cat_id'))))},
             'protocol_complete': False, 'live_executor_enabled': False}
 
 

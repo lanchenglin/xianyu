@@ -200,6 +200,10 @@ def restore_backup(directory: Path, archive_path: Path, vault: Vault) -> Path:
                     value = vault.open(policy['value'])
                     value.update(enabled=False, revision=value.get('revision', 0) + 1)
                     c.execute('UPDATE settings SET value=? WHERE key=?', (vault.seal(value), policy['key']))
+                for policy in c.execute("SELECT key,value FROM settings WHERE key LIKE 'daily-publish:%'").fetchall():
+                    value = vault.open(policy['value'])
+                    value.update(enabled=False, revision=uuid.uuid4().hex, blocked_reason='restored')
+                    c.execute('UPDATE settings SET value=? WHERE key=?', (vault.seal(value), policy['key']))
                 notification_config = c.execute("SELECT value FROM settings WHERE key='notifications'").fetchone()
                 if notification_config:
                     value = vault.open(notification_config['value'])
