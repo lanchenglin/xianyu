@@ -3,10 +3,11 @@ import asyncio
 import json
 import os
 import subprocess
-import time
 from pathlib import Path
 
 import pytest
+
+from tests.cdp_startup import wait_for_cdp_port
 
 PROBE = Path(__file__).resolve().parents[1] / 'scripts' / 'page_state_probe.js'
 pytestmark = pytest.mark.skipif(not os.getenv('XY_TEST_CHROMIUM'), reason='isolated Chromium opt-in')
@@ -23,13 +24,7 @@ def isolated_cdp(tmp_path):
     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         env={k: v for k, v in os.environ.items() if k in ('PATH', 'LANG', 'TMPDIR')})
     try:
-        port_file = profile / 'DevToolsActivePort'
-        for _ in range(150):
-            if port_file.exists() or process.poll() is not None:
-                break
-            time.sleep(.1)
-        assert port_file.exists(), 'isolated Chromium failed to start'
-        port = int(port_file.read_text().splitlines()[0])
+        port = wait_for_cdp_port(process, profile)
         assert port not in (9235, 8099)
         yield f'http://127.0.0.1:{port}'
     finally:

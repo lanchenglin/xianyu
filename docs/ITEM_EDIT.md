@@ -2,9 +2,57 @@
 
 ## 已批准范围
 
-默认关闭；仅管理员对已有在线本人商品提出并指定执行一条标题/正文/价格编辑。不能发布替代、不能改图片/配送/库存/SKU/状态，支付退款等永久人工。公开前端已证 editDetail/edit 入口；父助手同 ID 正文编辑成功，完整请求未采集、改价未验收。此实现不得作为平台契约证据。
+默认关闭；仅管理员对已有在线本人商品提出并指定执行一条标题/正文/价格编辑。不能发布替代、不能改图片/配送/库存/SKU/状态，支付退款等永久人工。公开前端已证 editDetail/edit 入口；父助手同 ID 正文编辑成功，并已拦截取消实际完整请求、提供公开 shape；具体映射尚未完整交付开发端，改价未验收。此实现不得作为平台契约证据。
 
-## 协议设计
+## 2026-10-19 新增 bounded_snapshot（默认不启用）
+
+原 v2 `version_required` 原封保留其版本/分离字段/完整映射门槛。新 v3 必须显式 `concurrency_mode=bounded_snapshot`、`external_race_acknowledged=true`，不自动升级旧协议。仍需 XY_LIVE_ENABLED / XY_EDIT_ENABLED，均未在生产开启。以下旧 v2 章节只描述版本模式，不将其版本要求套用到 v3。
+
+已读取父助手提供的三份脱敏公开证据：真实 Request-stage 编辑请求已拦截并取消，完整 shape 已获得，无 version/CAS，组合正文 title=desc、titleDescSeparate=false；editDetail.userId 不具有已证 seller 语义。未读取任何私有原件。shape 不是具体值映射证据，不能直接启用。
+
+### v3 有界协议与执行
+
+- `before={detail: <普通 detail 完整 data>, edit: <editDetail 完整 data>}`，不裁剪未知字段。`before_content_hash=digest(before)` 使用项目 typed-canonical SHA-256；**内容 hash 不是平台版本，不是 CAS**。完整类型/值精确比较，额外字段、数组顺序、空容器和 userId 都冻结，但后者不当作身份。
+- `identity_paths.uid` 固定 `detail/sellerDO/sellerId`，`item_id` 固定 `detail/itemDO/itemId`；edit_item_id 为已证 edit 商品路径。只接受严格字符串/整数 ID，比较后仍保留原类型，回读必须原类型全等。
+- `status_path` 必须明确指向普通 detail 已取证状态（非空字符串或严格整数），与身份/内容路径不重叠；原状态逐类型冻结，不以猜测 ONLINE 枚举代替证据。
+- `before_values` 为原 item_id/title/desc/两位小数元价格。`content_mappings` 只允许对象路径和 field=title/desc/price；编码仅 identity（文字）、yuan_string/cent_string（金额）。必须独立覆盖普通 detail 三项及 edit 正文/价格；互不重叠。不支持表达式、JS、任意 URL/API。
+- 请求文字严格固定 `itemTextDTO={title: before.desc, desc: before.desc, titleDescSeparate:false}`，价格严格固定 `itemPriceDTO={priceInCent: 分整数字符串}`。实际提交只替换这两个正文叶子和价格；**独立改短标题尚缺转换证据，申请时拒绝任何 title 变化**。新正文仍要求普通 detail 短标题保持原值；若平台改变它，则 unknown，不能猜截断后宣称 verified。
+- `original_request == template` 全等。其余请求叶子须 `invariant_mappings` 从完整 edit 快照逐类型精确映射；图片目前仅完整数组精确相等（有限 identity），不推导/补默认图片字段，不支持缺证的数组转换。变化内容不能成为固定字段来源。
+- 例外仅 `fixed_constants` 中逐字冻结的 sourceId/bizcode/publishScene（后两者须 pcMainPublish）；sourceId 具体值仍须管理员取证。unique_code_mode 必须 timestamp_random，原始 uniqueCode 保留，申请时按毫秒拼接0～999整数生成一次并冻结到 action/digest；同账号历史碰撞在申请事务内拒绝，不自动重抽。它不是版本、幂等或 CAS 保证。
+- `api_version/detail_api_version` 分别绑定固定 editDetail/edit 与普通 detail；三个精确 success ret 独立冻结。双读完整 before 匹配→构造→再次双读完整匹配→重验授权→持久化提交阶段→单次 edit→精确 ACK→双读完整 after。共享 operations.lock；提交后任何异常仍 unknown，不重试。
+- 三层未知阻断保留：保存协议、新申请的 IMMEDIATE 事务及执行历史检查。verified 后允许新 revision / 完整新 before（必须等于最近 after）及逐条重新审批；不要求伪造新版本，执行前两轮双读都必须匹配。SQL schema 仍 v13，恢复删除协议、撤销旧审批。
+
+### 显式 observational_projection（2026-10-19）
+
+父助手同目标两轮只读证据仅观察到以下三条值变化，editDetail 完全相同。v3 默认 `comparison_mode=full_snapshot`、`observational_fields=[]`，旧协议不自动切换。管理员可在协议 JSON 显式选择 `comparison_mode=observational_projection`，并选择以下非空、无重复枚举子集：
+
+| observational_fields 枚举 | 原始响应路径 | 严格类型 |
+|---|---|---|
+| browse_count | detail.data.itemDO.browseCnt | int（不含 bool） |
+| server_time | detail.data.serverTime | str |
+| commerce_subtitle | detail.data.commerceDO.idleItemDetailFloatInfo.subTitleTextInfo.text | str |
+
+路径内置，不接受自定义路径、通配符、父层删除或自动发现易变字段。协议快照中的 `detail` 已是 response.data，不再嵌套 data。每次比较均先验证选中叶子存在及严格类型，再仅在副本归一化其值；所有父对象、兄弟叶子、数组、editDetail 仍完整精确比较。任何选中路径与身份/内容/金额/状态/请求不变量源路径相等或祖先/后代重叠，一律拒绝配置。原请求映射门槛不变。
+
+选择进入协议 revision、action payload/digest；模式或选择变化需要新申请审批。保存协议与提案事务内、执行历史检查、提交前两轮双读、after 均使用同一投影规则。涉及投影的 verified 后续 before 必须同时通过新旧两份契约与上次 after 比较，不允许通过扩大排除范围掩盖历史差异；新 before 仍是完整原始数据，并与当前两轮回读匹配。
+
+`before_content_hash` 仍验证完整原始 before；执行结果加密保留 `preflight_snapshots` 两轮原始 data 和原始 `after`（含写后不匹配数据），另记 `before_projection_hash/after_projection_hash` 及选择。投影 hash 只用于内容一致性证据，**不是平台版本或 CAS**，不能消除外部并发窗口。未知三层阻断不变。其他真实请求映射仍待父助手，编辑默认关闭。
+
+非管理员结果投影采用默认拒绝的字段白名单，仅公开 `stage/item_id/ownership_verified/status_verified/content_verified/verified_at/notice`。HTTP列表、详情及MCP共享此边界；完整 before/after/preflight、协议、hash、任何未来新增字段均不公开。白名单值也严格投影：阶段仅submitting/verifying/verified，ID为与动作目标匹配的1～30位ASCII数字字符串，验证结论仅bool，时间仅有限非负int/float且不含bool，notice仅现有固定不确定提示。错型、容器、未知字符串直接丢弃，不隐式str()转换。管理员完整审计不受影响。该边界经父助手复审FAIL后修复，历史失败与验证见TEST_REPORT。
+
+### 父助手最小补充结构（不是请求私有原件）
+
+请继续只给脱敏结构和逐字段语义证据，不给 cookie、账号或私有快照：
+
+1. 同次普通 detail / editDetail 完整 `data` 的逐叶路径、类型及一一对应关系，尤其状态、图片完整数组、运费/配送、类目、SKU/库存和 edit 商品 ID；标明所有动态只读字段。当前全快照不提供任意忽略字段逃生口。
+2. 对捕获请求每个固定叶子，提供 `request_path -> editDetail data path` 的精确类型/值转换规则。图片若补 extraInfo/status/type/templateIndex 等，请逐项列出固定默认值、源字段和触发条件；在补齐前仅 identity 可用，真实协议可能仍被拒绝。
+3. sourceId/bizcode/publishScene 的已证固定常量；完整 original_request 由管理员在本机私下录入，开发者不读取。当前 shape 不能替代其值。
+4. 普通 detail 的 price/status/title/desc 精确路径与金额编码，edit 的正文/价格路径；三种接口精确 success ret、版本、编辑 ACK 的 itemId 路径及类型。本实现 ACK 仍要求 data.itemId 字符串，不猜别的形状。
+5. 若需独立改标题，给出组合正文与普通 detail 短标题的确定映射规则及前后实例结构；当前拒绝，不将任意预期标题当成已传输标题。
+
+单元/HTTP/UI fixture 都是虚构证据，不可复制到生产。该路径代码已实现不等于真实协议已可启用或已平台验收。
+
+## 原 v2 协议设计
 
 不内置完整 payload 或猜字段。管理员为一个 UID/itemId 录入完整原值模板、证据说明、显式接口版本、精确成功 ret、请求文字/价格字段路径及只读响应语义映射。仅对象键路径，不执行表达式。原值快照包含同 ID、UID、版本、状态、标题、正文、价格以及完整不变量（图片/配送/类目/SKU等由管理员完整取证）；缺字段拒绝。价格单位显式声明为元字符串或分整数字符串，不做模糊比较。仅支持分离标题/正文语义，网页组合文字等未覆盖结构拒绝而非猜测。
 

@@ -17,7 +17,7 @@
 | delete_with_explicit_approval=true | 演示删除申请/确认/归属链；旧 live delete 阻断 | test_workbench、test_publish_safety | 无真实删除验收 | 此粗粒度 true **不代表 live 删除开放**，不等于普通下架 |
 | partial_orders/partial_inventory=true | bought_orders/self_published 有界滚动、缓存/进度 | test_operation_pagination、test_operations_*、隔离 Chromium | 用户报告 b8ea112：库存2页40条范围完整；订单13页130条时限 partial | 本批未复测；orders_terminal_verified=false；缓存历史并集非快照 |
 | order_sync/full_inventory_sync=false | 没有全范围同步 | 范围/partial/失败不清库回归 | 无完整验收 | 卖出/下架/全状态未实现；sample_policy.platform_verified=false |
-| item_edit.executor_implemented=true | 默认关闭管理员单条同 ID 标题/正文/价格编辑，显式完整证据模板；见 ITEM_EDIT | test_item_edit*：队列/原值/权限/恢复/固定传输/UI | 工作台未验收；父助手网页同 ID 正文编辑成功不等于完整 payload 已采集或改价已验收 | Agent 无提案/配置/执行权限；未知不重试；完整请求逐叶取证映射，verified 后仅新版本/before/revision重新逐条审批，unknown 持续锁止；真实协议缺证不得启用 |
+| item_edit.executor_implemented=true | 默认关闭管理员单条同 ID 标题/正文/价格编辑，显式完整证据模板；见 ITEM_EDIT | test_item_edit*：队列/原值/权限/恢复/固定传输/UI | 工作台未验收；父助手已拦截并取消完整真实请求，公开 shape 无 CAS | v2 version_required 保留；显式 v3 bounded_snapshot 双读完整/hash非版本、独立seller、逐叶映射。verified 后新before/revision审批，unknown三层锁止；独立标题与图片转换缺证拒绝，具体协议仍不可直接启用；Agent无配置/申请/执行权 |
 | first_contact/platform_edit_price/platform_relist=false | 通用改价/首次联系/重新上架不开放 | 未知操作/交易拒绝回归 | 无 | 管理员受限编辑单独声明；不猜协议、不用发布替代 |
 | search_monitors/notification_state=true | 最短5分钟、去重、已读/归档 | test_notifications、smoke_ui | 本批未验收真实监控 | search_price_history/search_price_drop_notifications=true；test_price_history；仅新鲜连续搜索样本，非全平台扫描 |
 | external_notifications=true | 默认关闭、admin 配置，钉钉/webhook 固定摘要，独立 outbox | test_external_notifications/notification_transport；本地 TLS | 未投递真实钉钉/webhook | 超时可能重复通知；最多3次仅重试通知、不重试业务 |

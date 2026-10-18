@@ -37,6 +37,7 @@ class InvariantMapping(Model):
 class EditProtocol(Model):
     model_config = ConfigDict(extra='forbid', str_strip_whitespace=False)
     schema_version: Literal[2]
+    concurrency_mode: Literal['version_required'] = 'version_required'
     original_request: dict
     invariant_mappings: list['InvariantMapping'] = Field(min_length=1, max_length=200)
     item_id: str = Field(pattern=r'^\d{1,30}$')
@@ -133,10 +134,17 @@ def save_protocol(service, account_id, body):
     with service.db.connect() as c:
         c.execute('BEGIN IMMEDIATE')
         unknown_guard(service, c, account_id, body.item_id)
+        projection_history_guard(service, c, account_id, value)
         c.execute('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)',
                   ('edit-protocol:' + account_id, service.vault.seal(value)))
     service.db.audit('admin', 'edit.protocol_changed', account_id)
     return {'revision': value['revision']}
+
+
+def parse_protocol(value):
+    from .edit_snapshot import SnapshotProtocol
+    model = SnapshotProtocol if value.get('concurrency_mode') == 'bounded_snapshot' else EditProtocol
+    return model.model_validate({k: v for k, v in value.items() if k != 'revision'})
 
 
 def load_protocol(service, account_id):
@@ -145,7 +153,7 @@ def load_protocol(service, account_id):
         raise Problem('edit_protocol_required', '缺少完整同 ID 编辑证据协议', 409)
     value = service.vault.open(row['value'])
     try:
-        EditProtocol.model_validate({k: v for k, v in value.items() if k != 'revision'})
+        parse_protocol(value)
     except ValueError:
         raise Problem('edit_protocol_invalid', '旧协议或完整映射无效，请重新取证配置审批；尚未提交', 409)
     return value
@@ -155,9 +163,19 @@ def prepare(service, account, payload):
     protocol = load_protocol(service, account['id'])
     if account['mode'] != 'live' or protocol['uid'] != account['uid'] or protocol['item_id'] != payload['item_id']:
         raise Problem('account_mismatch', '协议账号或同 ID 不符', 409)
-    if all(payload[k] == protocol['before'][k] for k in ('title', 'desc', 'price')):
+    bounded = protocol.get('concurrency_mode') == 'bounded_snapshot'
+    before = protocol['before_values'] if bounded else protocol['before']
+    if bounded and payload['title'] != before['title']:
+        raise Problem('edit_title_mapping_required', '组合文本尚无独立标题转换证据，须保持原短标题；未提交', 409)
+    if all(payload[k] == before[k] for k in ('title', 'desc', 'price')):
         raise Problem('edit_no_change', '没有文字或价格变化', 409)
-    return {**payload, '_edit_snapshot': {'protocol': protocol, 'binding': binding(service, account)}}
+    frozen = {'protocol': protocol, 'binding': binding(service, account)}
+    if bounded:
+        from .edit_snapshot import unique_code
+        frozen['unique_code'] = unique_code()
+        if frozen['unique_code'] == protocol['template']['uniqueCode']:
+            raise Problem('edit_code_collision', 'uniqueCode 碰撞，未创建动作', 409)
+    return {**payload, '_edit_snapshot': frozen}
 
 
 def snapshot(response, protocol):
@@ -186,6 +204,29 @@ def unknown_guard(service, connection, account_id, item_id):
                 raise Problem('edit_previous_unknown', '该商品有不确定提交，禁止重录协议或新申请', 409)
 
 
+def projection_history_guard(service, connection, account_id, protocol):
+    """Validate projected re-baselines in the same transaction as save/proposal."""
+    from .edit_snapshot import follows_previous
+    latest = None
+    for row in connection.execute("SELECT payload,result FROM actions WHERE account_id=? AND kind='item.edit'", (account_id,)):
+        previous = service.vault.open(row['payload'])
+        if previous.get('item_id') != protocol['item_id'] or not row['result']:
+            continue
+        result = service.vault.open(row['result'])
+        if result.get('stage') == 'verified' and (latest is None or result['verified_at'] > latest[0]['verified_at']):
+            latest = (result, previous['_edit_snapshot']['protocol'])
+    if latest:
+        result, previous = latest
+        if 'observational_projection' not in (protocol.get('comparison_mode'), previous.get('comparison_mode')):
+            return
+        try:
+            matches = follows_previous(protocol['before'], result['after'], protocol, previous)
+        except (ValueError, KeyError):
+            matches = False
+        if not matches:
+            raise Problem('edit_stale_before', '新快照须按新旧投影契约同时匹配最近 verified after', 409)
+
+
 def history_guard(service, account_id, payload, action_id):
     protocol = payload['_edit_snapshot']['protocol']
     latest = None
@@ -206,9 +247,14 @@ def history_guard(service, account_id, payload, action_id):
             latest = (result, previous['_edit_snapshot']['protocol'])
     if latest:
         result, previous = latest
+        from .edit_snapshot import follows_previous
+        matches = (follows_previous(protocol['before'], result['after'], protocol, previous)
+                   if protocol.get('concurrency_mode') == previous.get('concurrency_mode') == 'bounded_snapshot'
+                   else canonical(protocol['before']) == canonical(result['after']))
         if (protocol['revision'] == previous['revision']
-                or canonical(protocol['before']) != canonical(result['after'])
-                or canonical(protocol['before']['version']) == canonical(previous['before']['version'])):
+                or not matches
+                or (protocol.get('concurrency_mode') != 'bounded_snapshot'
+                    and canonical(protocol['before']['version']) == canonical(previous['before'].get('version')))):
             raise Problem('edit_stale_before', '后续编辑需新协议版本及最近 verified after 的精确原值', 409)
 
 
@@ -253,25 +299,52 @@ def _execute(service, action_id):
     if time.time() - account['last_write'] < service.s.write_interval:
         raise Problem('rate_limited', '写入间隔未到，尚未编辑', 429)
     request = {'item_id': payload['item_id'], 'api_version': protocol['api_version']}
+    bounded = protocol.get('concurrency_mode') == 'bounded_snapshot'
+    from .edit_snapshot import equivalent, expected_after, projection, read_pair, request_template
+    preflight_snapshots = []
+
+    def matches(left, right):
+        return equivalent(left, right, protocol) if bounded else canonical(left) == canonical(right)
+
+    def read():
+        return read_pair(call, protocol) if bounded else snapshot(call('edit.read', request), protocol)
+
     try:
-        original = snapshot(call('edit.read', request), protocol)
-        if canonical(original) != canonical(protocol['before']):
+        original = read()
+        preflight_snapshots.append(original)
+        if not matches(original, protocol['before']):
             raise ValueError('original changed')
     except Exception:
         raise Problem('edit_original_changed', '只读原值、版本、归属或状态不符，未提交编辑', 409)
     account = guard()
-    template = copy.deepcopy(protocol['template'])
-    parsed = EditProtocol.model_validate({k: v for k, v in protocol.items() if k != 'revision'})
-    for key, path in protocol['request_paths'].items():
-        target = get(template, path[:-1])
-        target[path[-1]] = encoded(parsed, key, payload[key])
-    unchanged = copy.deepcopy(template)
-    for path in protocol['request_paths'].values():
-        get(unchanged, path[:-1])[path[-1]] = get(protocol['original_request'], path)
-    if canonical(unchanged) != canonical(protocol['original_request']):
-        raise Problem('edit_template_changed', '编辑请求包含未批准的固定字段变化', 409)
+    parsed = parse_protocol(protocol)
+    if bounded:
+        template = request_template(protocol, payload, frozen['unique_code'])
+        try:
+            second = read()
+            preflight_snapshots.append(second)
+            if not matches(second, protocol['before']):
+                raise ValueError('second snapshot changed')
+        except Exception:
+            raise Problem('edit_original_changed', '提交前再次双读不符，未提交编辑', 409)
+        account = guard()
+    else:
+        template = copy.deepcopy(protocol['template'])
+        for key, path in protocol['request_paths'].items():
+            target = get(template, path[:-1])
+            target[path[-1]] = encoded(parsed, key, payload[key])
+        unchanged = copy.deepcopy(template)
+        for path in protocol['request_paths'].values():
+            get(unchanged, path[:-1])[path[-1]] = get(protocol['original_request'], path)
+        if canonical(unchanged) != canonical(protocol['original_request']):
+            raise Problem('edit_template_changed', '编辑请求包含未批准的固定字段变化', 409)
     result = {'stage': 'submitting', 'item_id': payload['item_id'], 'ownership_verified': False,
               'status_verified': False, 'content_verified': False}
+    if bounded:
+        result.update(preflight_snapshots=preflight_snapshots,
+                      comparison_mode=protocol.get('comparison_mode', 'full_snapshot'),
+                      observational_fields=protocol.get('observational_fields', []),
+                      before_projection_hash=digest(projection(protocol['before'], protocol)))
     checkpoint(service, action_id, result)
     service.db.execute('UPDATE accounts SET last_write=?,last_call=? WHERE id=?', (time.time(), time.time(), account['id']))
     try:
@@ -281,9 +354,13 @@ def _execute(service, action_id):
         result['stage'] = 'verifying'
         checkpoint(service, action_id, result)
         guard()
-        after = snapshot(call('edit.read', request), protocol)
-        expected = {**protocol['before'], **{k: payload[k] for k in ('title', 'desc', 'price')}, 'version': after['version']}
-        if canonical(after) != canonical(expected):
+        after = read()
+        expected = (expected_after(protocol, payload) if bounded else
+                    {**protocol['before'], **{k: payload[k] for k in ('title', 'desc', 'price')}, 'version': after['version']})
+        if bounded:
+            result.update(concurrency_mode='bounded_snapshot', after_content_hash=digest(after), after=after)
+            result['after_projection_hash'] = digest(projection(after, protocol))
+        if not matches(after, expected):
             raise ValueError('readback mismatch')
         result.update(stage='verified', ownership_verified=True, status_verified=True, content_verified=True,
                       after=after, verified_at=time.time())

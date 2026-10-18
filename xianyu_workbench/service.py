@@ -84,8 +84,9 @@ class Service:
         result["result"] = self.vault.open(row["result"]) if row.get("result") else None
         if actor != 'admin' and row['kind'] == 'item.publish' and result['result']:
             result['result'].pop('uploads', None)
-        if actor != 'admin' and row['kind'] == 'item.edit' and result['result']:
-            result['result'].pop('after', None)
+        if actor != 'admin' and row['kind'] == 'item.edit' and result['result'] is not None:
+            from .edit_result import public_edit_result
+            result['result'] = public_edit_result(result['result'], result['payload'].get('item_id'))
         result.pop("idem", None)
         record = self.db.one("SELECT * FROM reconciliations WHERE action_id=?", (row["id"],))
         result["reconciliation"] = self.reconciliation_view(record, actor) if record else None
@@ -189,8 +190,14 @@ class Service:
                     raise Problem("idempotency_conflict", "相同幂等键不能用于不同内容", 409)
                 return self.action_view(dict(old))
             if body.kind == 'item.edit':
-                from .item_edit import unknown_guard
+                from .item_edit import projection_history_guard, unknown_guard
                 unknown_guard(self, c, account['id'], payload['item_id'])
+                projection_history_guard(self, c, account['id'], payload['_edit_snapshot']['protocol'])
+                code = payload['_edit_snapshot'].get('unique_code')
+                if code:
+                    for prior in c.execute("SELECT payload FROM actions WHERE account_id=? AND kind='item.edit'", (account['id'],)):
+                        if self.vault.open(prior['payload']).get('_edit_snapshot', {}).get('unique_code') == code:
+                            raise Problem('edit_code_collision', 'uniqueCode 碰撞，未创建动作', 409)
                 current = c.execute('SELECT value FROM settings WHERE key=?', ('edit-protocol:' + account['id'],)).fetchone()
                 if not current or canonical(self.vault.open(current['value'])) != canonical(payload['_edit_snapshot']['protocol']):
                     raise Problem('edit_changed', '协议在申请期间变化，请重新申请', 409)

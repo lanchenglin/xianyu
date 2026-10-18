@@ -14,7 +14,8 @@ def test_bridge_disabled_before_import(monkeypatch):
         dispatch_edit('edit.submit', {})
 
 
-@pytest.mark.parametrize('operation,api', [('edit.read', 'mtop.idle.pc.idleitem.editDetail'),
+@pytest.mark.parametrize('operation,api', [('edit.detail', 'mtop.taobao.idle.pc.detail'),
+                                         ('edit.read', 'mtop.idle.pc.idleitem.editDetail'),
                                          ('edit.submit', 'mtop.idle.pc.idleitem.edit')])
 def test_bridge_fixed_endpoint_single_attempt(monkeypatch, operation, api):
     monkeypatch.setenv('XY_EDIT_ENABLED', 'true')

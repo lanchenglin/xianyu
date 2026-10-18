@@ -2,9 +2,10 @@
 import asyncio
 import os
 import subprocess
-import time
 
 import pytest
+
+from tests.cdp_startup import wait_for_cdp_port
 
 pytestmark = pytest.mark.skipif(not os.getenv('XY_TEST_CHROMIUM'), reason='set XY_TEST_CHROMIUM for isolated system browser tests')
 
@@ -41,13 +42,7 @@ def test_real_cdp_disconnect_keeps_browser_and_existing_tab(tmp_path, monkeypatc
         '--user-data-dir=' + str(profile), 'about:blank'], env=env,
         stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     try:
-        port_file = profile / 'DevToolsActivePort'
-        for _ in range(150):
-            if port_file.exists() or process.poll() is not None:
-                break
-            time.sleep(.1)
-        assert port_file.exists(), 'isolated Chromium did not expose its random CDP port'
-        port = int(port_file.read_text().splitlines()[0])
+        port = wait_for_cdp_port(process, profile)
         assert port != 9235
         address = f'http://127.0.0.1:{port}'
         for key, value in {'XY_BROWSER_CDP_ENDPOINT': address, 'XY_BROWSER_CDP_ACCOUNT_ID': 'fake-account',

@@ -4,6 +4,50 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
+## 2026-10-19 定向复审 FAIL：摘要允许字段值未限型
+
+父助手进一步定向复审发现允许key内dict/list或任意字符串可穿透；此前819通过不抵消此缺口，保留FAIL。仅按公开privacy-types-fix说明修正结果投影，不改平台字段转换或daily。
+
+先 RED **44 failed, 3 passed /16.27s**，日志 `/home/lan/.hermes/cache/scratch/xianyu-privacy-types-red.log`。逐个七允许key覆盖dict/list/嵌套私密标记/畸形字符串/null，HTTP列表及详情、真实MCP stdio→临时API的submitted/unconfirmed/failed。补错型bool/int、错目标ID/Unicode数字/换行、未知stage/notice；NaN/Infinity/负Infinity通过解密边界替身测试，未发送非法JSON。合法摘要和admin原始审计兼容检查保留。
+
+新增edit_result.public_edit_result有限标量投影：stage仅实际submitting/verifying/verified；item_id仅ASCII数字字符串且匹配action目标；三验证字段严格bool；verified_at仅有限非负int/float且排除bool（巨大整数转float溢出也丢弃）；notice仅现有固定生产中文文案。坏值/容器/未知字段丢弃，不str()隐式回显。管理员原始结果不经过该投影。隐私类型+既有隐私+投影专项 **84 passed /29.09s**，ruff通过。最终全量 **866 passed, 1 warning /323.42s，退出0，无skip**，日志 `/home/lan/.hermes/cache/scratch/xianyu-privacy-types-final.log`；启用专用Chromium与固定scratch TMPDIR、env -u PYTHONPATH。独立UI smoke、ruff、pip check、node --check、git diff --check全部通过。唯一warning为既有Starlette/httpx弃用提醒；本轮Python3.12。本地修复通过不等于父助手独立复审PASS。日志及临时数据均在指定scratch，无生产访问/真实CDP/部署/commit/push。
+
+## 2026-10-19 投影复审 FAIL：Agent 原始审计泄漏修复
+
+父助手复审 **FAIL**：action_view 非admin只删除 item.edit result.after，新增 preflight_snapshots 两轮完整原始detail/edit仍暴露于Agent HTTP/MCP。此前813通过与只读审查未发现问题不能抵消该FAIL。仅按指定公开privacy-fix说明修复，不加入真实字段转换。
+
+先 RED **6 failed, 1 warning /5.58s**，日志 `/home/lan/.hermes/cache/scratch/xianyu-projection-privacy-red.log`：HTTP列表/单条详情的submitted、unconfirmed、failed、running，真实投影执行链生成preflight，以及真实MCP stdio→临时API多状态list_actions均泄漏私密标记。非admin item.edit结果改为显式白名单：stage/item_id/ownership_verified/status_verified/content_verified/verified_at/notice；未列字段（含before/after/preflight/协议/hash和未知未来字段）默认不返回。管理员完整解密审计和数据库原值不变，新增测试逐项验证。
+
+关联检查：发布执行结果当前保留uploads私有回执（既有投影去除）及固定摘要，无preflight原始detail；消息结果为固定验证摘要，人工核对证据仍admin-only。本批不扩大重构其他action路径。隐私+投影+snapshot专项 **59 passed /19.41s**。ruff首次新增测试多余空行已修正。最终全量 **819 passed, 1 warning /306.22s，退出0，无skip**，日志 `/home/lan/.hermes/cache/scratch/xianyu-projection-privacy-final.log`；使用env -u PYTHONPATH、固定scratch TMPDIR、XY_TEST_CHROMIUM=/snap/bin/chromium与专用浏览器缓存。独立UI smoke、ruff、pip check、node --check、git diff --check全部通过。唯一warning仍为Starlette/httpx弃用提醒。此次为本地修复证据，未冒充父助手独立复审PASS。所有本轮日志与临时数据在指定scratch，未访问真实数据/服务/CDP，未改daily，未commit/push/部署。
+
+## 2026-10-19 三叶 observational_projection 增量
+
+仅读取父助手指定公开 stability-evidence/differences 两文件；不读取私有快照。显式 v3 comparison_mode=observational_projection + 三个有限枚举子集；旧协议默认 full_snapshot。只允许普通detail的 browseCnt(int)、serverTime(str)、商业浮层指定text(str)值变化，逐次验证存在/类型/依赖不重叠。完整原始before、两轮preflight及after保留，稳定投影hash不是版本/CAS。保存与提案事务、执行历史、双读和after一致使用投影；历史过渡同时匹配新旧契约，未知锁止不变。
+
+先 RED **17 failed, 12 passed /6.14s**（缺显式投影字段导致HTTP422），日志 `/home/lan/.hermes/cache/scratch/xianyu-projection-red.log`。事务保存重编门槛另 RED **2 failed**（旧稳定内容仍返回200），加新旧投影历史检查后安全专项 **120 passed /30.53s**。三种协议模式的隔离Chromium UI **4 passed /13.25s**。ruff首次两项空行排序错误已修复。独立只读源码审查未发现具体缺陷；审查者未运行测试，此结论不冒充平台验收。
+
+最终全量 **813 passed, 1 warning /300.42s，退出0，无skip**（Python3.12，专用Chromium），日志 `/home/lan/.hermes/cache/scratch/xianyu-projection-final.log`；唯一warning为既有Starlette/httpx弃用提醒。独立UI smoke、ruff、pip check、node --check、git diff --check全部通过。所有新日志/临时数据使用 `/home/lan/.hermes/cache/scratch`，无全局PYTHONPATH设置，无生产数据/CDP/8099/9235访问，无daily/部署/commit/push。完整真实协议其他映射仍待父助手，编辑默认关闭。
+
+## 2026-10-19 独立 Chromium fixture 启动竞争修复
+
+父助手独立全量 **766 passed, 1 error**：`test_page_state_probe.py:32` 在 DevToolsActivePort 刚创建但内容仍为空时 `splitlines()[0]` 抛 IndexError。该失败确证并保留，不被此前本地767通过抵消。本批仅修改 tests 启动等待及本记录，不修改 bounded_snapshot 或其他业务代码。
+
+可控临时文件分阶段回归先 RED **8 failed /0.17s**：空文件、空行、非数字、0、越界65536、未结束数字行、非ASCII数字以及子进程退出；确实复现原 IndexError。测试不启动浏览器、不访问 CDP。修复后相同8项 **8 passed /0.10s**；追加无文件/无效文件 deadline、读期间退出、文件后出现回归。三个相同缺陷入口（page_state_probe/browser_real/operations_real）均使用 tests/cdp_startup.py：原15秒上限、monotonic deadline、完整ASCII端口行与1～65535、读前及就绪前poll存活验证，不增加sleep、不以文件exists作为就绪。各入口原临时profile/随机端口/清理逻辑不变；源码搜索无其他直接读取路径。
+
+中间真实浏览器专项误用 `TMPDIR=/tmp`，Snap 隔离下端口文件不可见，记录 **2 failed, 15 passed, 5 errors /108.62s**（均为有界deadline而非IndexError）；改用文档已有Snap可见固定目录后，全部专项 **22 passed /52.39s**。统一环境：`env -u PYTHONPATH TMPDIR=/home/lan/.hermes/cache/scratch XY_TEST_CHROMIUM=/snap/bin/chromium PLAYWRIGHT_BROWSERS_PATH=/home/lan/projects/xianyu/.test-browsers PLAYWRIGHT_SKIP_BROWSER_GC=1`，独立虚构数据，不访问真实CDP。
+
+最终全量 **781 passed, 1 warning /289.89s，退出0，无skip**（Python3.12），日志 `/tmp/xianyu-cdp-fixture-final.log`；唯一warning仍为既有Starlette/httpx弃用提醒。上述固定环境下独立 UI smoke 通过（含审批、人工核对、XSS、Agent隔离、移动端）；ruff All checks passed、pip No broken requirements found、node --check 和 git diff --check 全部通过。没有commit/push/部署/线上配置变更。
+
+## 2026-10-19 bounded_snapshot 本地实现与独立审查
+
+读取指定三份脱敏公开证据，未读其私有原件。Request-stage 捕获请求已取消发送：无版本/CAS、web_combined、普通 detail seller 独立归属。实现默认不启用的 v3 bounded_snapshot 与 v2 version_required 并存，未改 SQL schema/daily/生产配置、未重启/部署/commit/push。
+
+TDD：修正测试账号 fixture 后，首轮 **5 failed, 9 passed**（缺 v3 支持，HTTP422）；实现后 snapshot+legacy **40 passed**。UI 双模式先 **1 failed, 2 passed**（风险警告缺失），后隔离 Chromium snapshot/UI/transport **26 passed**。独立审查初次发现两个缺陷：组合模式未编码独立标题变化却接受申请、空身份路径抛 IndexError；再现 **3 failed**，修复为独立标题变化提交前409、空路径422。不发明标题截断转换。uniqueCode 历史碰撞先 **1 failed**，增加 IMMEDIATE 事务内碰撞拒绝；明确 status_path 缺失先 **1 failed**，增加普通 detail 状态严格类型/非空/路径不重叠门槛。
+
+独立只读 reviewer 两轮复审确认以上缺陷已修复、完整双快照/逐叶覆盖/独立seller/未知阻断未降低，未发现新的具体阻断缺陷；最终 status guard 复审 **22 passed**。reviewer 自己的 UI 因无浏览器环境跳过，不冒充 UI 验收；主会话已指定独立 Chromium 实测两种模式。verified 后精确新快照重审、旧快照拒绝、default-off、实际提交 code 等于冻结值均有回归；后补的这些回归首次即通过，不称其先 RED。
+
+首轮全量在追加 status_path 门槛期间运行，旧进程 fixture 与新启动服务契约不一致：**1 failed, 765 passed /313.05s**（snapshot UI 保存协议422）；记录保留 `/tmp/xianyu-snapshot-pytest.log`，不作最终结果。稳定代码后 snapshot/UI **25 passed /16.92s**，安全/恢复专项 **71 passed /21.76s**，ruff、pip check、node --check、diff --check、独立 Chromium UI smoke 全部通过。稳定代码最终全量 **767 passed, 1 warning /307.83s，退出0，无skip**，日志 `/tmp/xianyu-snapshot-final.log`（包含两种模式的隔离 Chromium UI）。唯一 warning 为既有 Starlette/httpx 弃用提醒；本轮 Python 3.12，不宣称已跑3.11。真实工作台编辑/改价仍未验收；图片转换仅完整 identity、独立短标题编辑缺证拒绝，父助手最小补充结构已列 ITEM_EDIT。full data 的动态字段不提供任意忽略规则；具体真实协议可能仍因不匹配被拒绝，不能拿 fixture 启用。
+
 ## 2026-10-19 最终复审外部 JSON 遗漏 P1 修复
 
 父助手最终复审报告 item.edit 事务阻断已通过，NO-GO剩上传/LLM/MCP/CLI外部 response.json 遗漏；此前703通过不能抵消遗漏。逐入口原始响应 RED **25 failed, 3 passed /4.96s**（NaN/Infinity/-Infinity/1e999/重复键/超限及上传未启用stream），日志 `/tmp/xianyu-json-red.log`。改为请求本身stream=True或httpx.Client.stream，逐块限额读取后共用bounded_json→strict_json，校验根结构与消费字段，固定脱敏错误且不重试。上传/LLM/CLI上限1MiB，MCP身份64KiB、业务4MiB，8192字节解码块，finally/context关闭响应。上传原始HTTP测试只调用一次；上游上传fixture改为真实requests.Response字节流以检查新契约，没有削弱异常输入。MCP管理员令牌拒绝固定文案回归曾1 failed，已保留原权限契约并修复。

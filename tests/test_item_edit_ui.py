@@ -18,7 +18,8 @@ def test_admin_edit_form_and_single_action_warning():
     assert "$('item-edit-form').reset()" in js
 
 
-def test_admin_edit_ui_local_only(api_server):
+@pytest.mark.parametrize('snapshot_mode', [False, True, 'projection'])
+def test_admin_edit_ui_local_only(api_server, snapshot_mode):
     executable = os.getenv('XY_TEST_CHROMIUM')
     if not executable:
         pytest.skip('set XY_TEST_CHROMIUM for isolated UI')
@@ -35,10 +36,15 @@ def test_admin_edit_ui_local_only(api_server):
             page.locator('#login-token').fill(settings.admin_token)
             page.locator('#login-form button').click()
             page.locator('[data-page="listings"]').click()
-            page.locator('#edit-protocol-form textarea').fill(json.dumps(protocol()))
+            from tests.test_edit_snapshot import protocol as snapshot_protocol
+            if snapshot_mode:
+                expect(page.locator('#edit-snapshot-warning')).to_contain_text('不是平台版本或 CAS')
+            from tests.test_edit_projection import protocol as projection_protocol
+            chosen = projection_protocol() if snapshot_mode == 'projection' else snapshot_protocol() if snapshot_mode else protocol()
+            page.locator('#edit-protocol-form textarea').fill(json.dumps(chosen))
             page.locator('#edit-protocol-form button').click()
             expect(page.locator('#toast')).to_contain_text('编辑协议已保存')
-            for key, value in {'item_id': '777', 'title': '<script>fictional</script>', 'desc': 'exact\nbody', 'price': '13.20'}.items():
+            for key, value in {'item_id': '777', 'title': 'old' if snapshot_mode else '<script>fictional</script>', 'desc': '<script>fictional</script>\nbody', 'price': '13.20'}.items():
                 page.locator(f'#item-edit-form [name="{key}"]').fill(value)
             page.locator('#item-edit-form button').click()
             expect(page.locator('#queue-list')).to_contain_text('同 ID 编辑/改价')

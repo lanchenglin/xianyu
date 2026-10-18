@@ -109,7 +109,7 @@ class Provider:
     def _live(self, account: dict, operation: str, payload: dict, *, write: bool):
         if operation in {'orders', 'inventory', 'messages'} and not self.s.browser_cdp_endpoint:
             raise Problem('cdp_required', '单页样本同步仅支持管理员绑定的 CDP 账号', 409)
-        edit_transport = operation in {'edit.read', 'edit.submit'}
+        edit_transport = operation in {'edit.read', 'edit.detail', 'edit.submit'}
         if edit_transport:
             action_id = getattr(self._selected, 'edit_action', None)
             self._selected.edit_action = None

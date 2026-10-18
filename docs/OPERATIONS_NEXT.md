@@ -18,7 +18,7 @@
 
 父助手提供官方公开 JS 0.0.178 模块18200 YG：毫秒字符串拼接 floor(1000*Math.random())，发布/编辑每次新生成。每日策略已改为管理员显式生成模式，每个新action创建时仅生成并冻结一次，单字段授权比较与碰撞防护，不再要求证明平台未采用的长期复用。
 
-父助手报告在限定的新测试商品正常网页 `/publish?scene=xyPcMainPublish&itemId=<existing-id>` 修正正文：editDetail 与 edit 均返回精确 ret=['SUCCESS::调用成功']，edit 的 data.itemId 为 string 且同ID；独立详情回读标题/含换行描述逐字一致、soldPrice='2200'、itemStatus=0/在线、imageInfos长度1。未改价、未删帖、未重发。请求route拦截未触发，未获得完整编辑request。**仅文档记录：工作台编辑仍未实现，不能据此声称改价/上下架或把编辑ACK当发布ACK。** 消息read API仅报告当前用户已读，不是对方送达/已读证明。
+父助手报告在限定的新测试商品正常网页 `/publish?scene=xyPcMainPublish&itemId=<existing-id>` 修正正文：editDetail 与 edit 均返回精确 ret=['SUCCESS::调用成功']，edit 的 data.itemId 为 string 且同ID；独立详情回读标题/含换行描述逐字一致、soldPrice='2200'、itemStatus=0/在线、imageInfos长度1。未改价、未删帖、未重发。早先 route 拦截未触发；后续 Request-stage 已捕获完整请求并取消发送，公开 shape 已提供，未读取私有原件。**工作台默认关闭的 v2/version_required 与 v3/bounded_snapshot 路径已实现，非平台验收。v3 无伪造版本、完整双快照/hash非CAS/独立seller/有限映射；具体图片与短标题转换缺证仍拒绝，最小补充结构见 ITEM_EDIT。不能据此声称改价/上下架验收或把编辑ACK当发布ACK。** 消息read API仅报告当前用户已读，不是对方送达/已读证明。
 
 ## 下一步门槛
 

@@ -20,6 +20,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .config import Settings
 from .daily_publish import DailyPublish, DailyPublishIn
+from .edit_snapshot import SnapshotProtocol
 from .faq_policy import FAQPolicy, FAQPolicyIn
 from .item_edit import EditProtocol
 from .item_edit import save_protocol as save_edit_protocol
@@ -156,7 +157,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "item_edit": {"executor_implemented": True, "platform_verified": False,
                               "enabled": s.live_enabled and s.edit_enabled, "admin_only": True,
                               "same_id_only": True, "evidence_contract_required": True,
-                              "protocol_schema": 2, "complete_request_mapping_required": True,
+                              "protocol_schema": 2, "supported_protocol_schemas": [2, 3],
+                              "concurrency_modes": ["version_required", "bounded_snapshot"],
+                              "default_concurrency_mode": "version_required", "snapshot_default_enabled": False,
+                              "snapshot_is_platform_cas": False, "snapshot_title_edit_supported": False,
+                              "complete_request_mapping_required": True,
                               "verified_reedit_requires_new_version": True, "unknown_blocks_reedit": True},
                 "live_publish": s.live_enabled and s.publish_enabled, "publish_complete_snapshot": False, "local_publish_preview": True,
                 "publish_policy": {"live_executor_enabled": s.live_enabled and s.publish_enabled,
@@ -208,7 +213,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "notice": "False 表示本版本没有开放，不会伪造成功；交易仅在闲鱼人工完成"}
 
     @app.put('/api/accounts/{account_id}/edit-protocol')
-    def put_edit_protocol(account_id: str, body: EditProtocol, current=Depends(admin)):
+    def put_edit_protocol(account_id: str, body: EditProtocol | SnapshotProtocol, current=Depends(admin)):
         return save_edit_protocol(service, account_id, body)
 
     @app.post('/api/item-edit', status_code=201)

@@ -2,7 +2,15 @@
 
 这是账号主人自用的闲鱼工作台，不是无条件全自动交易系统。当前真实能力和未实现事项以 README、[能力矩阵](docs/CAPABILITY_MATRIX.md) / `/api/capabilities` 为准，禁止把占位接口或演示数据写成已完成。
 
-## 2026-10-19 管理员同 ID 编辑增量
+## 2026-10-19 observational_projection 增量
+
+v3 默认 full_snapshot，管理员可显式选择固定三叶投影：browse_count/server_time/commerce_subtitle。仅限已证detail browseCnt(int)、serverTime(str)、商业浮层指定text(str)值变化，结构/严格类型每轮必查，不能与身份/内容/金额/状态/请求映射祖先后代重叠，不允许任意路径。完整原始快照审计保留，投影hash不是版本/CAS。保存/提案/执行按同一契约；verified重编同时通过新旧投影比较，未知锁止不变。见ITEM_EDIT，默认编辑关闭，其他真实映射仍待证据。日志/临时文件只放 `/home/lan/.hermes/cache/scratch`，不再写宿主 `/tmp`。
+
+## 2026-10-19 bounded_snapshot 编辑增量
+
+默认仍 version_required/v2，新增显式 v3 bounded_snapshot + 非 CAS 风险确认。完整 detail/edit 双快照与内容 hash（不是版本/CAS），独立 sellerDO.sellerId 归属，逐叶 exact 映射，组合正文/分字符串有限转换，仅 sourceId/bizcode/publishScene 固定常量例外，timestamp_random 每 action 冻结一次/碰撞拒绝。提交前两轮双读，写后完整精确回读；未知三层锁止，verified 后新完整 before=上次 after=当前双读再审批。不造版本、不用 edit.userId 认卖家。独立短标题转换与图片默认值转换仍缺具体证据：当前拒绝改短标题，图片仅完整 identity，详见 ITEM_EDIT 最小补充结构。完整请求已被父助手拦截并取消（shape公开），不再称“未采到”，但脱敏 shape 不足以启用。无生产访问、无 daily 改动、无提交部署。独立审查问题与修复记录见 TEST_REPORT。
+
+## 2026-10-19 管理员同 ID 编辑增量（v2 历史）
 
 见 [ITEM_EDIT](docs/ITEM_EDIT.md)：默认关闭 XY_EDIT_ENABLED，管理员显式完整证据模板/原值/新值/版本/同 UID 同 ID，复用唯一 actions 与 operations.lock，只指定 execute；固定 editDetail/edit 子进程，不猜 payload、不上传/发布替代、不接浏览器。工作台编辑/改价未平台验收，父助手网页正文编辑成功但完整请求未采到。独立审查 FAIL 后修复：schema v13 不变，协议 schema_version=2，v1 拒绝执行；完整 original_request 与模板全等，所有非批准叶子须显式映射到身份/状态/版本/回读不变量并精确验证，固定元数据例外白名单为空。恢复删除协议、旧审批失效。确定 verified 后允许新 before/版本/revision 重新逐条审批，before 必须等于最近 verified after 与当次回读；不确定提交仍阻断所有新键/协议，人工核对不解除。Agent 无配置/申请/执行权；永久人工交易不变。本批不提交不部署。
 

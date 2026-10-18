@@ -29,7 +29,7 @@ WRITES = {
 
 
 def dispatch(operation: str, payload: dict):
-    if operation in {'edit.read', 'edit.submit'}:
+    if operation in {'edit.read', 'edit.detail', 'edit.submit'}:
         return dispatch_edit(operation, payload)
     if operation in {'publish.upload', 'publish.submit', 'publish.readback'}:
         return dispatch_publish(operation, payload)
@@ -127,7 +127,7 @@ def dispatch_edit(operation, payload):
     if os.environ.get('XY_EDIT_ENABLED') != 'true':
         raise ValueError('edit_disabled')
     expected = {'item_id', 'api_version'} | ({'template'} if operation == 'edit.submit' else set())
-    if (operation not in {'edit.read', 'edit.submit'} or set(payload) != expected
+    if (operation not in {'edit.read', 'edit.detail', 'edit.submit'} or set(payload) != expected
             or not re.fullmatch(r'\d{1,30}', payload.get('item_id', ''))
             or not re.fullmatch(r'\d{1,2}\.\d{1,2}', payload.get('api_version', ''))):
         raise ValueError('edit_contract_invalid')
@@ -143,7 +143,9 @@ def dispatch_edit(operation, payload):
         kwargs['allow_redirects'] = False
         return original_post(*args, **kwargs)
     session.http.post = post_once
-    return call(session, api='mtop.idle.pc.idleitem.edit' if operation == 'edit.submit' else 'mtop.idle.pc.idleitem.editDetail',
+    api = {'edit.submit': 'mtop.idle.pc.idleitem.edit', 'edit.read': 'mtop.idle.pc.idleitem.editDetail',
+           'edit.detail': 'mtop.taobao.idle.pc.detail'}[operation]
+    return call(session, api=api,
                 data=payload['template'] if operation == 'edit.submit' else {'itemId': payload['item_id']},
                 version=payload['api_version'], _auto_refresh=False)
 

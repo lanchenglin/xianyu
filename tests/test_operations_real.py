@@ -3,10 +3,11 @@ import asyncio
 import json
 import os
 import subprocess
-import time
 
 import pytest
 from test_operations import inventory, orders
+
+from tests.cdp_startup import wait_for_cdp_port
 
 pytestmark = pytest.mark.skipif(not os.getenv('XY_TEST_CHROMIUM'), reason='isolated Chromium opt-in')
 
@@ -32,13 +33,7 @@ def test_real_cdp_network_listener_identity_and_cleanup(tmp_path, monkeypatch):
         stderr=subprocess.DEVNULL, env={**{k: v for k, v in os.environ.items() if k in ('PATH', 'LANG', 'TMPDIR')},
                                        'HOME': str(tmp_path), 'USERPROFILE': str(tmp_path)})
     try:
-        port_file = profile / 'DevToolsActivePort'
-        for _ in range(150):
-            if port_file.exists() or process.poll() is not None:
-                break
-            time.sleep(.1)
-        assert port_file.exists()
-        port = int(port_file.read_text().splitlines()[0])
+        port = wait_for_cdp_port(process, profile)
         assert port not in (9235, 8099)
         address = f'http://127.0.0.1:{port}'
         for key, value in {'XY_BROWSER_CDP_ENDPOINT': address, 'XY_BROWSER_CDP_ACCOUNT_ID': 'fictional',
