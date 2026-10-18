@@ -1,8 +1,8 @@
 # 给后续开发 Agent 的约束
 
-这是账号主人自用的闲鱼工作台，不是无条件全自动交易系统。当前真实能力和未实现事项以 README / `/api/capabilities` 为准，禁止把占位接口或演示数据写成已完成。
+这是账号主人自用的闲鱼工作台，不是无条件全自动交易系统。当前真实能力和未实现事项以 README、[能力矩阵](docs/CAPABILITY_MATRIX.md) / `/api/capabilities` 为准，禁止把占位接口或演示数据写成已完成。
 
-## 2026-10-16 受控发布执行器（优先于历史禁用描述）
+## 2026-10-16 受控发布执行器（当前）
 
 新增默认关闭 XY_PUBLISH_ENABLED，独立 Cookie HTTP 上传/显式完整模板发布/同 itemId seller UID 回读；仅管理员指定已批准 action，仍统一 operations.lock，旧隐式 item.publish 入口继续阻断。完整协议须管理员取证录入，不猜类目层级/地点/uniqueCode；上传也是单次外部写，绑定素材 hash 和审批。阶段/上传回执加密持久化，unknown 使用 unconfirmed 禁止重试，Agent 无协议配置和执行权限。未真实平台验收，能力声明区分 executor_implemented 与 platform_verified，详见 [PUBLISH_EXECUTOR](docs/PUBLISH_EXECUTOR.md)。不读真实 .env/data/profile，不连接真实实例，不 push/部署。
 
@@ -12,7 +12,7 @@
 
 新增 publish_preview 项目 adapter，仅本地冻结与校验，详见 [PUBLISH_PREVIEW](docs/PUBLISH_PREVIEW.md)。类目/地点为管理员未验证输入，候选 DTO 不是完整平台协议。location 加密且 Agent 不可读，不进入 catalog；默认 revision/图片 hash/UID 变化重新审批。真实发布与自动回验未开，改价/非删除上下架未实现。worker 不领取任何 live action，Provider 同步关闭旧 live delete；不得以删除/重建替代状态转移。schema v10 不变，使用已有加密 settings/actions 字段。本批不 push/部署。
 
-## 2026-10-16 人工审批单条消息（优先于历史写禁用说明）
+## 2026-10-16 人工审批单条消息（当前）
 
 新增管理员部署开关 XY_MESSAGE_SEND_ENABLED，默认关闭，仅精确 message.send。浏览器仍只读；独立同 UID Cookie/WS 来源明确绑定，不提取浏览器 Cookie，不放行其他 CDP 写。审批冻结凭据指纹/UID/endpoint/正文，执行前再次核对 peer/CID；管理员仅领取指定 action，CDP live 消息不由 worker 消费历史 approved。FAQ/首次联系仍关闭，真实执行仍交父助手/Hermes。发送 ACK 无已证契约，结果保持 unconfirmed，新增同文只读观察不是 accepted/送达；不得猜 mid/cid。详见 [MESSAGE_SEND](docs/MESSAGE_SEND.md)。
 
@@ -36,7 +36,7 @@
 
 ## 2026-10-16 低频消息观察增量
 
-默认关闭的账号低频末条采集已接现有单 worker，状态表始于 v9（当前 schema v10），退避、接管与 API/UI/MCP 见 [MESSAGE_OBSERVATION](docs/MESSAGE_OBSERVATION.md)。管理员 FAQ 只保存加密有限策略，不具备发送适配或限额执行器，effective/send_allowed 永远 false；autonomous_reply 保持 false。Agent 只可读取摘要/请求接管，不能配置、解除或授权。恢复关闭采集、接管并撤销策略。完整订单/全状态库存同步、首次联系与真实商品写链路仍未交付；CDP 所有写操作禁用，本批不 push/部署。
+默认关闭的账号低频末条采集已接现有单 worker，状态表始于 v9（当前 schema v10），退避、接管与 API/UI/MCP 见 [MESSAGE_OBSERVATION](docs/MESSAGE_OBSERVATION.md)。管理员 FAQ 只保存加密有限策略，不具备发送适配或限额执行器，effective/send_allowed 永远 false；autonomous_reply 保持 false。Agent 只可读取摘要/请求接管，不能配置、解除或授权。恢复关闭采集、接管并撤销策略。完整订单/全状态库存同步、首次联系未交付；真实发布执行代码已实现但未平台验收；CDP 所有写操作禁用，本批不 push/部署。
 
 ## 2026-10-16 有界分页增量
 
@@ -44,7 +44,7 @@
 
 ## 2026-10-16 任务页布局隔离修复
 
-保留 no_defaults=True，仅 orders/inventory 新建 task page 在导航前启用 CDP focus emulation；task_page/goofish_page 参数默认 false，search/messages 不变。不得向原页或 Browser 发 emulation 命令，不得改借用 context 默认；前后 UID 核验和失败/取消 session/page 清理保留。父助手真实 probe 证实几何1241→3729且 hidden/focus不变，不可解释为仅document.hidden；应用分页仍待父助手验收，详见 CDP_DEFAULTS_DIAGNOSIS。
+保留 no_defaults=True，仅 orders/inventory 新建 task page 在导航前启用 CDP focus emulation；task_page/goofish_page 参数默认 false，search/messages 不变。不得向原页或 Browser 发 emulation 命令，不得改借用 context 默认；前后 UID 核验和失败/取消 session/page 清理保留。父助手真实 probe 证实几何1241→3729且 hidden/focus不变，不可解释为仅document.hidden；用户后续报告 b8ea112 inventory2页40条范围完整、orders13页130条 partial；本批未复测，历史诊断见 CDP_DEFAULTS_DIAGNOSIS。
 
 ## 不可破坏的边界
 
@@ -76,7 +76,7 @@ UI 测试用 `scripts/smoke_ui.py`。浏览器安装务必配置独立的 PLAYWR
 
 Windows、WSL 和 Docker 的显示/浏览器条件不同，不要把 Docker 演示成功当成服务器能无头运行真实搜索。保持一个实例一个队列；数据库结构变化需要显式迁移和备份计划。
 
-## 2026-10-15 续开发状态更新
+## 2026-10-15 续开发状态更新（历史记录）
 
 基线 `4d2aadc` 的 [CI run 38566392741](https://github.com/lanchenglin/xianyu/actions/runs/38566392741) 全部 7 作业成功：Ubuntu/Windows 3.11/3.12、双版本固定 live 契约及 UI。这是历史基线结果，不代表当前 Windows 支持或真实账号验收；最新 `53400f8` 的 Windows 双版本失败及暂停决定以上文支持声明和测试报告为准。
 

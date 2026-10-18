@@ -10,6 +10,29 @@ from tests.test_workbench import workbench as workbench
 from xianyu_workbench.app import create_app
 
 
+@pytest.mark.parametrize('path,replacement', [
+    (('onlyTakeSelf',), 0),
+    (('itemTextDTO', 'titleDescSeparate'), 1),
+    (('itemPostFeeDTO', 'onlyTakeSelf'), 0),
+    (('itemPostFeeDTO', 'supportFreight'), 1.0),
+])
+def test_template_requires_exact_json_types(workbench, path, replacement):
+    client, service = workbench
+    aid, previous = ready(client, service)
+    protocol = {k: v for k, v in previous['payload']['_publish_snapshot']['executor'].items()
+                if k not in ('revision', 'binding')}
+    target = protocol['template']
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = replacement
+    assert client.put(f'/api/accounts/{aid}/publish-protocol', json=protocol).status_code == 200
+    payload = {k: v for k, v in previous['payload'].items() if k != '_publish_snapshot'}
+    response = client.post('/api/publish-preview', json={'account_id': aid, 'kind': 'item.publish',
+        'payload': payload, 'idempotency_key': 'typed-template-fixture'})
+    assert response.status_code == 409, response.text
+    assert response.json()['code'] == 'publish_protocol_mismatch'
+
+
 @pytest.mark.parametrize('bad', ['different_ret', 'missing', 'unknown', 'wrong_type', 'bool_type'])
 def test_readback_requires_exact_contract_and_typed_status(workbench, monkeypatch, bad):
     client, service = workbench

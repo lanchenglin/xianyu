@@ -4,7 +4,34 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
-## 2026-10-16 发布执行器独立审查 FAIL 与三项有界修复
+## 2026-10-18 f8d1ad8 执行器复核、文档整理与灾备回归
+
+本批在 feat/local-next / f8d1ad8 原地修改，未 commit/push/部署。仅项目 `.venv` Python 3.12.14；未重跑 3.11/Windows/远端 CI。未读取真实 .env/data/profile/私有快照，未连接8099/9235或真实平台，不动现有未跟踪 scratch。
+
+- 审查范围：publish_executor/publish_preview/service/provider/bridge 的审批、传输、阶段、回读及角色投影，复跑 f8d1ad8 的精确 ret、状态类型与双开关矩阵。既有实现仍默认关闭、管理员指定单条、worker 不领取 live；未知不重试。未将本次自审称为独立第三方复审。
+- 新问题：模板与 candidate 使用 Python `!=`，`0 == False` / `1 == True` / `1.0 == True` 让不同 JSON 类型误通过。修复前四个 HTTP 反例均返回201而非409（4 failed / 22 deselected）；改为现有 canonical JSON 比较，全部通过。首次测试编写有一项取错 bool 值及错误响应键，先修测试再重跑确认四项真实 RED，不将夹具错误当生产问题。
+- 独立可靠性补充：`test_publish_backup.py` 五阶段 prepared/uploading/submitting/verifying/verified 的离线归档恢复；保留加密 payload/result/协议，旧授权失效、账号暂停、恢复后不重放、Agent 不见 URL/地点/模板/指纹。初次5项因 TestClient 尚未退出、跨线程 close 未释放生命周期锁而失败，改为正常退出 TestClient 后离线恢复，未改生产锁。这是补充回归，不冒称发现生产恢复缺陷。
+- 当前能力正文已整理：交接2.2、Windows暂停、外部通知、离线灾备、消息观察、有界分页与默认关闭发布执行器；建立 [能力矩阵](CAPABILITY_MATRIX.md)，旧测试 FAIL 和以下历史证据保留。
+
+实际命令（仓库根目录，浏览器脚本已核实支持 XY_TEST_CHROMIUM；无安装升级）：
+
+```bash
+env -u PYTHONPATH .venv/bin/python -m pip check
+env -u PYTHONPATH .venv/bin/python -m ruff check .
+export XY_TEST_CHROMIUM=/snap/bin/chromium
+export PLAYWRIGHT_BROWSERS_PATH=/home/lan/.hermes/cache/scratch/xianyu-audit-browsers
+export PLAYWRIGHT_SKIP_BROWSER_GC=1
+env -u PYTHONPATH TMPDIR=/home/lan/.hermes/cache/scratch .venv/bin/python -m pytest
+env -u PYTHONPATH TMPDIR=/home/lan/.hermes/cache/scratch .venv/bin/python scripts/smoke_ui.py
+node --check xianyu_workbench/static/app.js
+git diff --check
+```
+
+全量已等待完整 summary：**535 passed, 1 warning in 229.52s，退出0，无 skipped**；包含12项固定上游契约、真实 MCP SDK stdio→临时 API 与隔离 Chromium。pip check 无冲突，ruff 通过。独立 smoke_ui 实际输出 UI smoke passed（登录、账号、搜索、监控、聊天、审批、人工核对/XSS/Agent隔离、图片、演示发布、移动端、退出）；node 检查通过。唯一 warning 为既有 Starlette/httpx TestClient 弃用提示。diff 初检发现三份文档尾部多空行，已清理后复检。
+
+**真实边界：** 所有协议/状态/账号均虚构测试数据，不是平台证据。未验证真实上传、发布、消息 ACK、图片/配送/uniqueCode/完整 schema/状态语义、钉钉/webhook、实际客户端或 Docker。历史用户报告的分页结果不冒充本批复测。仍需管理员真实协议证据与单次授权验收；本批不代表全部需求完成。
+
+## 2026-10-16 发布执行器独立审查 FAIL 与三项有界修复（历史）
 
 独立审查对原 ac4e991 后增量判定 **FAIL**。本轮核对 HEAD 为 `4520f5e`：P0 回读仅比较 SUCCESS 代码，`SUCCESS::different-contract` 仍被接受；P1 缺失审核/在售状态契约；P1 顶层 live_publish 固定 false，与启用执行不符（嵌套 live_executor_enabled 在此 HEAD 已动态计算）。历史 504 项通过没有覆盖这些问题，不撤销或掩盖 FAIL。
 

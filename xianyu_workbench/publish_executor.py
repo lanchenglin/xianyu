@@ -73,7 +73,7 @@ def freeze(service, account, snapshot):
         actual = template.get(key)
         if key == 'itemCatDTO' and isinstance(actual, dict):
             actual = {k: actual.get(k) for k in value}
-        if actual != value:
+        if canonical(actual) != canonical(value):
             raise Problem('publish_protocol_mismatch', '已核验模板与草稿/类目/地点不一致，请重新录入', 409)
     return {**protocol, 'binding': binding(service, account)}
 

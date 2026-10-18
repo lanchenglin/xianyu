@@ -18,38 +18,18 @@
 
 **默认支持 Linux / WSL，Python 3.11 / 3.12，本地示例使用 3.12；Windows 原生支持暂停。** `53400f8` 的 [CI run 38727928186](https://github.com/lanchenglin/xianyu/actions/runs/38727928186) 中 Linux 双版本、双版本 upstream-contract 和 browser-smoke 通过，Windows 3.11/3.12 失败。Windows 快照保存在独立分支 `work/windows-support-53400f8`（`53400f82f1ce4f1b1322f184b4b15e2e2c949e97`）；当前分支仅保留 Linux CI 门槛，不删除跨平台源码或回归。后续 Linux 全绿不代表 Windows 支持恢复；历史成功与失败见[测试报告](docs/TEST_REPORT.md)。
 
-## 2026-10-16 受控单条发布执行器
-
-新增默认关闭 `XY_PUBLISH_ENABLED`：管理员录入已核验完整协议，冻结素材 hash/价格/类目/地点/凭据后批准并指定一个 action。执行器实际实现独立 Cookie 上传、单次显式 payload 发布和同 UID itemId 只读回验，不调用旧隐式 publish。上传回执/阶段加密持久化，未知结果不重试，worker 不领取 live，Agent 无审批/执行权限。审查 FAIL 后已补独立精确回读 ret 与严格类型的状态路径/允许值冻结，缺失或未知保持 unconfirmed。**尚未真实平台验收**：`live_publish` 和 `live_executor_enabled` 等于两个开关的逻辑与（默认 false），`publish_policy.executor_implemented=true`，`platform_verified=false`；运行启用不等于平台验证通过。见 [执行方法、边界与父助手证据清单](docs/PUBLISH_EXECUTOR.md)。不 push、不部署。
-
-## 2026-10-16 本地发布冻结预览（历史）
-
-用户报告基线 cea21b7 消息 P0 复审 PASS、已 push 且 CI38868085093 五绿；真实发送未开、ACK 未核实。新增 [本地发布冻结链](docs/PUBLISH_PREVIEW.md)：管理员加密类目/地点、图片 hash/配送候选快照、审批与指定单条校验、HTTP/UI/MCP 权限隔离。`local_publish_preview=true`；真实发布执行器及自动回验未开放，live_publish/publish_complete_snapshot 仍 false。所有 live 商品写排除 worker 自动领取，旧 live delete 同步关闭；不以删除冒充下架。改价/非删除上下架尚待真实协议证据。此次不 push/部署，未做真实账号写验收。
-
-## 2026-10-16 P0 审查修复（历史）
-
-`75b6f98` 独立审查 FAIL：旧无 CDP live 发送绕过默认关闭开关与 worker 单条限制。本次关闭旧直发路径；所有 live 消息必须显式开关、CDP/凭据绑定、管理员指定队列单条执行，worker 永不领取历史或新 live 消息，Provider 直接调用也拒绝。演示自动流程保留。修复后仍待独立复审，不将本地测试当上线许可；[FAIL 及修复契约](docs/MESSAGE_SEND.md)。
-
-## 2026-10-16 单条审批消息增量
-
-新增默认关闭的管理员 `XY_MESSAGE_SEND_ENABLED`，仅允许已核验 peer/CID 的 `message.send`。CDP 只读核验，发送明确使用独立导入、同 UID 绑定的 Cookie/WS；审批冻结来源绑定与正文，管理员可只执行指定一条，不消费历史 approved 消息。其他 CDP 写、FAQ、首次联系仍拒绝。发送后只读核对但无可靠 ACK 关联，仍 unconfirmed、不宣称 accepted/送达；[完整契约与父助手最小取证](docs/MESSAGE_SEND.md)。真实发送/Hermes 接入尚未验收。
-
-用户提供的基线：b8ea112 已 push/部署，CI 38857758684 五作业绿；真实 inventory 2 页 40 条仅 self_published complete，orders 13 页 130 条因 25 秒 limit partial。本批不重复分页修复、不 push/部署。
-
-## 2026-10-16 有界页面读取
-
-买到订单与本人发布列表支持固定任务页有界滚动、多页去重和持久进度；订单末页字符串仍未获证，保持 partial。本人发布列表仅在已证布尔末页时 complete；卖出订单、下架列表、全状态库存未实现。历史缓存不冒充完整快照。响应早于 DOM/hook 的时序改用 750ms 有界等待/滚动，加载中不滚动；高度与底端统一按 document.scrollingElement 计算，避免横向滚动条使滚动停在真实底端之前。保留 no_defaults=True，仅 orders/inventory 新任务页启用 focus emulation，不改借用 context 默认或用户原页，search/messages 不变；依据父助手真实几何对照，不将原因简化为 document.hidden。真实工作台 API 修复效果待父助手复测，不扩大能力范围。迁移与取证需求见 [分页边界](docs/OPERATION_PAGINATION.md)。
-
 ## 能力与边界
+
+当前实现、隔离测试、真实验收与阻塞逐项见 [能力矩阵](docs/CAPABILITY_MATRIX.md)；历史 CI/FAIL 见测试报告。
 
 | 功能 | 本版实现 |
 |---|---|
 | 商品搜索、价格/地区过滤、去重 | 已实现；过滤本次返回样本，不保证全平台覆盖 |
 | 商品详情、已有会话、消息历史 | 已接固定上游接口；依赖账号登录态及页面状态 |
 | AI 起草询价、回复、商品文案、对比分析 | 已实现；可配置兼容 Chat Completions 的模型，也可由 Hermes 直接完成 |
-| 主动向已有会话发送消息 | 已接入；核对会话与收件人后，必须经人工审批 |
-| 上传图片、发布申请 | 本地/演示可用；真实发布因上游无法冻结类目/地点暂不开放 |
-| 删除商品 | 明确标注可能不可恢复，需确认文字与归属校验；**不冒充普通下架** |
+| 主动向已有会话发送消息 | 默认关闭；独立 Cookie/WS、CDP peer/CID 核验、人工审批及管理员指定单条，真实发送未验收 |
+| 上传图片、发布申请 | 本地冻结预览不上传；真实执行器已实现但默认关闭，管理员完整协议/审批/指定单条，尚未平台验收，见 [发布契约](docs/PUBLISH_EXECUTOR.md) |
+| 删除商品 | 演示申请/确认可用；旧 live delete 已关闭；**不冒充普通下架** |
 | 本地草稿和商品台账 | 草稿原位编辑、revision 冲突保护、归档；台账不是平台全量库存 |
 | 搜索监控、去重与通知 | 最低 5 分钟；站内已读/归档；管理员可启用钉钉/受限 webhook 固定摘要，默认关闭，见[通知说明](docs/NOTIFICATIONS.md) |
 | 操作审批、幂等、单队列、审计、风控暂停 | 已实现；超时或中断的写操作不会自动重发 |
@@ -66,7 +46,7 @@
 | 完整订单同步、实时自动客服、自动议价成交 | **未实现**；样本不等于完整订单/全状态库存；消息仍按需读取、起草、审批发送 |
 | 支付、购买、退款、确认收货 | **不提供，永久保留人工执行** |
 
-上游的 `message.send` 返回 `mid`，不等于已验证送达；工作台将真实发送结果记为 **unconfirmed / 结果待核实**。发布返回有效商品 ID 后记为 **submitted / 上游已接受**，不宣称已经展示给所有用户。未知状态不能靠反复点击重试解决。管理员可在“操作审批”中对 `unconfirmed/submitted/blocked` 记录人工核对；结论只表示人工观察，原执行状态/结果不会被覆盖。每操作仅一次不可覆盖记录，相同请求幂等、冲突 409；Agent 只能查看结论/时间，不能核对或读取证据正文。
+上游的 `message.send` 返回 `mid`，不等于已验证送达；工作台将真实发送结果记为 **unconfirmed / 结果待核实**。受控发布须精确 ACK、同 ID/UID 与冻结状态契约全部通过才记为 **submitted**；任一不明为 unconfirmed，不宣称已经展示给所有用户。未知状态不能靠反复点击重试解决。管理员可在“操作审批”中对 `unconfirmed/submitted/blocked` 记录人工核对；结论只表示人工观察，原执行状态/结果不会被覆盖。每操作仅一次不可覆盖记录，相同请求幂等、冲突 409；Agent 只能查看结论/时间，不能核对或读取证据正文。
 
 ## 先跑通演示
 
@@ -116,7 +96,7 @@ python3.12 -m venv .venv
 
 由你安装系统 Google Chrome 或 Chromium、Node.js，完成闲鱼网页登录，导出自己账号的 Cookie JSON，再通过工作台“账号管理”导入。工作台不会扫描你所有浏览器的 Cookie，不会自动换号或尝试绕过验证码。
 
-在 `.env` 中将 `XY_LIVE_ENABLED=false` 改为 `true`，重启服务，新增真实账号并导入。CDP 模式仅验证上述白名单只读范围，不测试详情、完整会话历史或任何写操作；隔离模式的既有接口须另行逐项验收，写操作仍需人工审批，真实发布继续禁用。遇到验证或风控会暂停账号，需本人处理后恢复。
+在 `.env` 中将 `XY_LIVE_ENABLED=false` 改为 `true`，重启服务，新增真实账号并导入。CDP 模式仅验证上述白名单只读范围，不测试详情、完整会话历史或任何写操作；隔离模式的既有接口须另行逐项验收，写操作仍需人工审批，真实发布与消息另需各自默认关闭的部署开关及完整冻结审批；旧隐式发布、旧直发和 live delete 仍关闭。遇到验证或风控会暂停账号，需本人处理后恢复。
 
 **推荐在 Linux / WSL 同一环境运行工作台、Chrome/Chromium 和上游依赖；Windows 原生联调暂停。** WSL 的实际浏览器也必须位于同一 WSL 环境并有可用图形显示；不能假设 WSL 能直接使用 Windows 的浏览器登录态。首版 Docker 镜像只提供演示/管理/MCP，不承诺无头服务器真实搜索可用。
 
@@ -185,17 +165,3 @@ skills/               给 AI 使用的操作规范
 ## 许可
 
 本项目 MIT；上游依赖为 Apache-2.0，详见 [第三方声明](THIRD_PARTY_NOTICES.md)。遵守平台规则和账号授权边界；不保证平台接口长期稳定，也不提供验证绕过、批量骚扰或自动交易能力。
-
-## 2026-10-15 续开发状态更新
-
-基线 `4d2aadc` 的 [CI run 38566392741](https://github.com/lanchenglin/xianyu/actions/runs/38566392741) 全部 7 作业成功：Ubuntu/Windows 3.11/3.12、双版本固定 live 契约及 UI。这是历史基线结果，不代表当前 Windows 支持或真实账号验收；最新 `53400f8` 的 Windows 双版本失败及暂停决定以上文支持声明和测试报告为准。
-
-固定上游五项核实见 [静态可行性报告](docs/UPSTREAM_FEASIBILITY.md)。真实发布因不能冻结类目/地点暂时禁用（live_publish=false）；本地草稿、演示发布和审批申请保留。禁止用默认值变化后的上游发布代替完整审批。
-
-### P2-04 本地离线恢复增量（2026-10-15）
-
-已提供管理员离线 `backup` / `restore --offline` CLI：一致性数据库+素材、密钥/manifest/hash 校验、受限解包、活动实例拒绝、异常回滚和中断启动保护。恢复暂停账号/监控，pending/approved 失效、running 转不确定，旧任务不重放。无 HTTP/MCP 恢复能力，Agent 不可操作任意文件。详见 [备份说明](docs/BACKUP.md)。此前“无恢复 CLI”为历史状态；定时/保留策略仍未实现。
-
-### P2-02 单条草稿管理（2026-10-15）
-
-已实现单条原位编辑、revision 乐观并发保护和归档 UI；显式 v2→v3 迁移增加 revision=1 / archived=0，保留原内容。PUT `/api/drafts/{id}` 接受原 account_id、revision 和完整草稿字段；POST `/api/drafts/{id}/archive` 接受 account_id、revision。账号/旧版本/已归档冲突返回 409，不另建副本；归档非平台删除，修改不会改变已冻结审批。管理员和 Agent 均可操作安全本地草稿，无新增管理员权限或任意文件操作。未增加 MCP 编辑工具（HTTP/UI 可用），既有 MCP 保存工具保持新建语义。没有素材删除接口，所有引用图片保留。批量发布、素材回收、取消归档尚未实现。

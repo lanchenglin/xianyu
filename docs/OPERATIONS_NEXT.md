@@ -1,82 +1,30 @@
-# 运营能力续开发矩阵与执行断点
+# 运营续开发断点
 
-日期：2026-10-15；起点 feat/local-next / 121f3c8。本轮不接触 .env/data、8099、9235 或真实平台；不升级固定上游，不部署、不 push。500 轮为工作上限而非验收指标；批次完成不等于全部需求完成。
+2026-10-18，当前基线 f8d1ad8。实现与验收逐项见 [能力矩阵](CAPABILITY_MATRIX.md)，任务编号见 [交接清单](DEVELOPMENT_HANDOFF.md)。历史批次测试证据统一保留在 [TEST_REPORT](TEST_REPORT.md)，不再以互相覆盖的“最新更新”描述当前能力。
 
-## 2026-10-16 发布本地预览（最新）
+## 当前可复用
 
-已交付本地图片hash/类目/配送/加密地点冻结、角色投影、审批及指定单条校验。真实执行器未开放；真实发布/自动回验、同itemId改价/非删除上下架仍待具体字段证据，不能勾选完成。所有live写不由worker领取，旧live delete关闭。见 [使用与父助手最小取证](PUBLISH_PREVIEW.md)。用户报告cea21b7消息P0复审PASS、已push且CI38868085093五绿，真实发送未开ACK未核实；本批不push/部署。
+已有有界买到订单/本人发布列表、末条消息及严格文本、按需本地草稿、默认关闭低频观察/接管、有限 FAQ 策略存储、站内通知状态、默认关闭钉钉/webhook 摘要、离线备份恢复、单条草稿管理、真实 MCP stdio 临时集成。
 
-## 2026-10-16 已有会话单条发送（历史）
+已有默认关闭的管理员单条消息执行与发布执行器；二者均走唯一审批队列，worker 不领取 live。消息只读同文观察不是 ACK；发布完整协议由管理员取证录入，回读必须精确 ret、同 ID UID、严格类型状态允许值。旧隐式 publish 和 live delete 关闭。发布与消息真实写均未验收，不自动启用。
 
-默认关闭开关 + 独立绑定 Cookie/WS + CDP peer/CID 只读复核 + 冻结审批 + 指定单条队列执行已实现；UI 样本选择起草、管理员单条按钮均有隔离浏览器测试。FAQ 仍非执行策略，实际 Hermes 接入/商品写/订单全量仍待继续。发送后的只读同文观察不能可靠关联 ACK，accepted 判定尚未交付；缺口与父助手最小取证见 [MESSAGE_SEND](MESSAGE_SEND.md)。先完成已有会话真实安全验收，再取首次联系响应 CID 关联；不猜 mid。用户报告 b8ea112 已部署且 CI38857758684 五绿，inventory2页40条 self_published complete，orders13页130条 time_limit partial；不重复分页修复。
+## 下一步门槛
 
-## 2026-10-16 有界分页（历史）
-
-买到订单已提交 8401eea；本人发布列表继续使用同一有界滚动状态机。v10 进度、去重、重复页/游标停止及完整/部分/失败缓存保留已实现。订单仅 known string true，末页 false 留待父助手取证；商品 bool false 仅完成 self_published 范围，不能称全状态库存。卖出订单/下架列表未实现。真实滚动触发、POST 分页字段和末页取证需求见 [OPERATION_PAGINATION](OPERATION_PAGINATION.md)。以下单页研究结论为历史状态。
-
-## 2026-10-16 低频采集 / 接管 / FAQ 授权存储
-
-已实现默认关闭的账号低频采集、既有单 worker 集成、持久去重、退避、接管及 API/UI/MCP；v9 迁移与恢复关闭。管理员有限 FAQ 策略加密存储、有效期/范围/模板/频率校验与撤销已实现，但没有发送执行器或频率消耗账本，永远 effective/send_allowed=false，autonomous_reply 仍 false。契约与准确限制见 [MESSAGE_OBSERVATION](MESSAGE_OBSERVATION.md)。无 push/部署，本批真实验收交 Hermes。
-
-下一断点：完成独立复审与同 SHA CI 后由 Hermes 部署只读功能（仍默认关闭）；继续以下分页和安全执行证据门槛，不把此批算作完整交付。
-
-### 分页与安全执行链研究结论
-
-- `operations.normalize` 对 orders 的 nextPage 只有字符串类型证据，lastEndRow 只做结构检查；没有末页值语义、下一请求参数和状态覆盖证据，不能猜递增页码或声称完整订单。
-- inventory 有布尔 nextPage，但当前 adapter 仅监听自建页面单次响应，没有下一页请求/范围证据；必须取得状态标签和下一页请求参数/终止样本才能做有界遍历。
-- `normalize_messages` 只投影 userConvs.lastMessage；有稳定 messageId 和双方映射，没有历史游标或消息 item_id 绑定。现有缓存能去重但不能补回采集间隔内中间消息；FAQ 的商品 AND 会话范围因此无法用于执行。
-- 安全执行必须仍经 actions 冻结账号/模式/完整 payload/digest，发送前核验会话与收件人；本批新增接管检查不能替代已有审批。未来策略执行需单独事务限额账本、策略 revision/撤销/过期二次核验、unknown 禁止自动重试，且真实 CDP 发送目前仍拒绝。
-- Hermes 待取证：脱敏的两页请求/响应关联、可验证末页、商品状态覆盖、消息历史 cursor 和 item/cid/peer 同记录。开发者不连接真实端点。2026-10-16 用户追加授权：Hermes 可从正常出售商品选择真实上架测试对象，并自行选择一个商品进行普通咨询；真实执行由 Hermes 负责。本批不执行真实发送，后续仍需冻结所选商品的实际素材、内容、价格及咨询目标/正文，遵守统一审批与不确定结果不重试。
-
-## 消息编码与本地草稿增量（历史）
-
-基线 da3e2ad。父助手新增证据已纠正 messageId 纯数字假设：按有界 opaque 字符串原样保存；普通 101/custom1→base64 JSON1/text.text 解码，type14/tip 不作正文。pair 当前 UID/sender 双成员校验，私有正文加密，不记录 raw custom。用户选择 incoming 可读样本后 HTTP/UI/MCP 生成 local_template 草稿，v8 加密表；不调模型、不提案、不发送，CDP 写入仍拒绝。旧缓存/失败采集/过期/自己消息拒绝草稿。见 [MESSAGES](MESSAGES.md)。
-
-实际平台验收交父助手；本批测试全为临时假数据。分页、实时监听、FAQ 管理员授权、发送支持、首次联系、发布/改价上下架和 Hermes 实际接入仍未完成。
-
-## 第三批：消息元数据样本（历史）
-
-基线 b0e84fe；已实现真实 CDP 被动 WS 采集器、严格末条元数据归一化、账号 HMAC 加密缓存、HTTP/UI/MCP 与 v7 索引迁移，见 [MESSAGES](MESSAGES.md)。正文不可用，收件人未验证，禁止样本回复提案；没有将编码未知当作元数据采集阻塞。只读结构证据来自父助手，本批不接真实账号，不部署/push。实际消息采集未验收；需要父助手补充的具体编码/收件人字段见消息契约。
-
-下一断点：验证 custom 编码与单聊双方对应后，按需选择可读消息→建议→原人工审批；当前无可读消息，本批不伪造草稿链路。分页、后台监听、无人值守授权策略、首次聊天、发布冻结、改价/上下架及实际 Hermes 接入仍未完成。
-
-## 第二批状态（历史，优先于更早矩阵）
-
-基线 465f898；父助手已授权取得 bought/personal/im/publish 结构证据，不再以旧上游缺接口结束。订单及本人商品单页纵向实现见 [OPERATIONS_SAMPLES](OPERATIONS_SAMPLES.md)：受限 CDP 网络监听、UID 前后与 head.self、最小字段、v6 加密缓存、按账号 API/UI/MCP；partial_orders/partial_inventory 可用，完整同步仍 false。订单字符串 nextPage 没有值语义，保留可验证样本并记录分页错误，不猜游标。
-
-userConvs 已证明 messageId/createAt/content/sender.uid/cid 与会话 cid 同记录；旧文档“稳定 ID 待取证”仅为历史断点，不能否定新证据。正文编码尚未证明，本批未实现消息解析器/采集/增量 listener。下一独立单元从虚构结构 fixture 的纯解析器开始，再取得编码证据后接只读样本。首次联系、发布冻结、改价/上下架、交易仍未开放；自动回复及外部通知默认关闭。
-
-真实平台验收留给父助手；开发只用临时数据、随机本地端口和隔离 Chromium。日志位于绝对 `/home/lan/.hermes/cache/scratch/xianyu-operations2-evidence`，不写 repo scratch；无 push/部署/运行配置变更。
-
-## 任务矩阵与依赖（第一批历史）
-
-| 能力 | 当前/可实现性 | 下一验收门槛 |
+| 工作 | 下一份必要证据/决策 | 本地可做与不可做 |
 |---|---|---|
-| 既有搜索、审批、草稿、人工核对、浏览器隔离 | 已实现；本轮保留回归 | CDP 仍仅 search，账号 uid/所有权/取消保护不变 |
-| 真实发布冻结 | 可用底层 builder 构造，但需真实页面/响应核实 | category.recommend 需要先上传图片；预览不得暗中上传。管理员地区快照加密、模型仅地区摘要；执行前默认地点比较；图片 hash/配送/类目绑定 digest；可靠发布结果与本人详情核对前 live_publish=false |
-| 首次联系 | create_chat 有请求入口；响应契约待核实 | 用请求 mid 关联真实响应 cid，校验商品卖家；未知结果不发送、不重发 |
-| 全量本人库存 | 需真实页面核实分页及状态 | 本人 uid、item_id、状态、next cursor、明确末页；部分结果不能清空历史 |
-| 改价/上下架 | 依赖本人库存/详情和真实操作语义 | Decimal、旧值并发检查、同一商品 ID 状态转移、统一审批与事后只读核对；delete/recreate 禁止替代 |
-| 消息低频采集 | 底层 listUserMessages 已有分页；稳定 ID 字段待取证 | 有界分页、sender/cid/item/id/time 同记录关联、持久游标去重、忽略自己；不可正文 hash 伪装平台 ID |
-| 无人值守 FAQ | 未实现、默认关闭 | 独立管理员授权设计：商品白名单、确定话术、期限、速率、接管、撤销；仍用统一队列；投诉/退款/交易/站外付款/预算人工 |
-| 本人订单只读 | 需真实页面核实 | 只保存订单 ID/状态/商品/更新时间，分页部分结果、失败保留旧值；不采电话地址，无交易写路径 |
-| 站内通知已读/归档 | 可直接实现 | HTTP/schema/UI/MCP，幂等、不删除原通知、独立测试 |
-| 外部通知 | 可直接实现 | 默认关闭、管理员配置、固定摘要、HTTPS 公网 IP 固定连接/禁止重定向、签名、超时、有限重试与投递日志；隔离接收端验证 |
-| Hermes MCP | 现有 stdio 代理；需真协议测试 | 临时随机端口演示 API + MCP 子进程 initialize/list/call、Agent 正常/Admin 拒绝、固定目标，无真实 connector 配置修改 |
+| 发布真实验收 | PUBLISH_EXECUTOR 的完整请求、上传、独立 ret、状态路径/类型/值、uniqueCode/配送/图片语义 | 可补故障/恢复回归；不可用 fixture 配真实协议，不能为了 ACK 重发 |
+| 发送回执 | 请求与 ACK 可靠关联、peer/CID/正文验证 | 可保持 unconfirmed/不重试；不能把 mid 或同文历史当送达 |
+| 完整订单 | 真实末页原始类型/值、卖出范围 | 可维护 bought 有界分页；不能猜 false 或下一接口 |
+| 全状态库存 | 下架/已售范围与分页证据 | self_published complete 不外推到全库存；缓存不清历史 |
+| 完整消息增量 | 历史 cursor、稳定 ID、item/cid/peer 同记录 | 末条轮询可能漏中间消息，不能承诺完整监听 |
+| FAQ 自动回复 | 独立授权设计、真实 item/cid、限额事务账本、撤销/接管 | 策略存储不是执行器，不得删除 blocked_reason 开放 |
+| 改价/上下架/首次联系 | 同 ID 原值与写语义、建会话响应 CID 关联 | 不新增猜测 endpoint，不用 delete/recreate 或 mid 代替 |
+| 运维 | 实际客户端/Docker/真实通知目标验收；保留策略需求 | 不修改宿主或其他项目配置；不自动部署 |
 
-## 本批实现方案与 TDD 执行顺序
+## 本批选定的独立可靠性缺口
 
-1. `tests/test_notifications.py`：先测已读/归档路由不存在的 RED；db 显式 v4 迁移保存 archived，HTTP 本地状态更新，UI/MCP 联动后 GREEN。旧通知保留，归档不涉及平台。
-2. `xianyu_workbench/notifications.py`：独立配置/传输/投递服务；`tests/test_external_notifications.py` 分组先 RED，再实现 URL 拒绝、IP 固定、签名、配置加密与管理员权限、唯一 outbox、退避重试和重启恢复。集成现有单 worker，不增加抢账号后台。
-3. 配置修改使未发送旧配置任务取消，不把历史通知全量补发到新目的地。仅新通知入队。一次调用只处理一个任务，最多三次；未知投递可能重复，接收方用稳定 delivery ID 去重。业务操作绝不重试。
-4. `tests/test_mcp_stdio.py` 使用真实 SDK stdio 客户端与临时 Uvicorn。新增工具发现/调用与角色拒绝，禁止任意 URL/脚本/凭据工具。适用新增行为必须记录 RED；既有能力首次即通过如实记集成验收。
-5. 每个可验收提交明确文件列表，更新 TEST_REPORT / DEVELOPMENT_HANDOFF 的短增量与相应文档；双 Python、ruff、pip check、独立 Chromium UI。证据写 scratch/xianyu-operations-evidence，不提交运行日志。
+发布执行器新增了加密协议与多阶段回执，原灾备测试只覆盖通用动作状态，未覆盖这些字段在真实离线归档/恢复后的保留和 Agent 投影。本批增加 `test_publish_backup.py`，以五阶段虚构记录检查恢复暂停、旧授权失效、result/payload/协议保留、恢复账号后不重放及私密字段隐藏。没有新增业务、网络接口、schema 或依赖；补充回归不冒称真实发布证据。
 
-## Hermes 只读取证清单（需要主人单独授权，开发者本轮不执行）
+## 后续取证纪律
 
-- 本人发布编辑页：类目 ID/名称/channelCatId/tbCatId、地区字段来源与默认地点变更、运费选项；只读取，不上传、不提交。完整地址不回传模型。
-- 本人商品管理页：在售/下架/已售分页及末页标志、本人 uid、商品 ID、价格状态与更新时间；上下架按钮文案及确认对话框语义，不点击确认。
-- 已有本人聊天页：一条脱敏历史消息的稳定 ID、cid、sender uid、item_id、timestamp、分页 cursor；创建会话响应需另行写授权，不用只读许可暗中创建。
-- 本人订单列表：分页标志、订单 ID、商品 ID、状态、更新时间；不要提供姓名电话详细地址或任何支付凭据。
-
-推荐项目内白名单 adapter，而非第二运营后台。暂不需要 fork/升级固定依赖；若取证证实必须升级，再单独提出具体 commit、license 与迁移验收供 Hermes 决策。
+真实页面取证须由主人另行授权执行者进行；本批不连接真实实例。只回传必要字段名、类型、范围与脱敏关联，不回传 Cookie/HAR/精确地址。上传、建会话和发布均是写，不能使用只读授权偷跑。任何不确定结果先人工核对，不换幂等键碰运气。固定上游不因缺证随意升级，不引入竞争账号的第二后台。

@@ -22,7 +22,7 @@
 
 旧协议缺少 readback_success_ret 或 readback_status 时，执行前明确拒绝，必须管理员补证后重新保存协议、预览及审批；不为历史 approved 自动补默认值。以上字段随完整协议进入加密 payload/digest，任一变更阻断旧审批。回读 ret 不匹配、状态缺失/未知/类型错误一律停在 verifying/unconfirmed，不重传、不重复提交，不设置 status_verified。结果不保存或向 Agent 暴露原始状态字段值。
 
-模板中的 itemTextDTO/itemPriceDTO/itemPostFeeDTO/itemAddrDTO/顶层 onlyTakeSelf 必须与草稿 candidate 完全相等；itemCatDTO 必须包含且匹配四个基本类目字段，附加层级字段冻结原样保留。其他模板字段也全部冻结并直接发送，管理员必须核验其含义；执行器不是平台 schema 验证器。模板会绑定具体草稿，不是任意商品可复用的默认值。
+模板中的 itemTextDTO/itemPriceDTO/itemPostFeeDTO/itemAddrDTO/顶层 onlyTakeSelf 必须与草稿 candidate 的 canonical JSON 完全相等（包括类型；数字 0/1/1.0 不能替代布尔 false/true）；itemCatDTO 必须包含且匹配四个基本类目字段，附加层级字段冻结原样保留。其他模板字段也全部冻结并直接发送，管理员必须核验其含义；执行器不是平台 schema 验证器。模板会绑定具体草稿，不是任意商品可复用的默认值。
 
 图片转换沿固定上游：extraInfo 三项字符串 false、isQrCode=false、major=true、type=0、status=done，按冻结素材顺序填 url/heightSize/widthSize。该源码映射尚需平台证据（尤其多图 major）。当前 URL 仅接受 HTTPS alicdn.com 或其子域，正整数宽高；其他域返回停止，不猜着放宽。
 

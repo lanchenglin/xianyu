@@ -1,14 +1,10 @@
 # 商品发布本地冻结链（2026-10-16）
 
-> 更新：本文件下方记录 ac4e991 本地预览阶段。后续已实现默认关闭的独立受控执行器，最新执行方式与证据门槛见 [PUBLISH_EXECUTOR](PUBLISH_EXECUTOR.md)。旧隐式 publish 仍拒绝；预览本身仍不上传、不发布。
+## 当前边界
 
-## 完成与未开放必须分开（历史）
+本地预览不上传、不推荐类目、不读取平台默认地点。管理员类目/地点输入、素材 SHA256、配送候选与账号 UID/模式进入唯一 actions 加密快照。candidate 不是完整平台协议，source 仍为 admin_local_unverified。
 
-已实现真实可运行的**本地**流程：管理员加密类目/地点输入 → 本地图片 SHA256 校验 → 冻结预览进入唯一 actions 队列 → 人工审批 → 管理员指定 action 校验。演示账号执行结果仅 `simulated`；live 在任何上传/网络传输之前返回明确失败。没有真实发布成功接口，没有新增可打开真实发布的环境开关。
-
-`local_publish_preview=true`，`live_publish=false`、`publish_complete_snapshot=false`。完整平台快照还需要上传返回、平台类目/地点字段语义及可靠响应证据。候选 DTO 是源码投影，不是可发送协议；特意不生成 imageInfoDOList/uniqueCode，不调用上游 publish 自动重算入口。
-
-所有 live action（包括历史商品 approved）不由 worker 自动领取。Provider 继续拒绝 live publish，并关闭旧 live delete 直通；delete 不是普通下架。改价/非删除上下架的真实执行、同 itemId 自动回验仍未实现，不宣称完成。现有管理员人工核对可用于已有不确定操作，但不是自动回验。
+`local_publish_preview=true`；真实执行器已实现但默认关闭，`live_publish` 为 live_enabled AND publish_enabled，`publish_complete_snapshot=false`。完整协议/精确 ret/严格类型状态需管理员取证录入，详见 [PUBLISH_EXECUTOR](PUBLISH_EXECUTOR.md)。没有协议或只开启 live 仍不能发布。旧隐式 publish/live delete 阻断，worker 不领取任何 live action；改价/非删除上下架未实现。
 
 ## 使用
 
@@ -26,7 +22,7 @@
 
 2. 本地素材上传沿用现有接口，自动去 EXIF；这不是上传闲鱼。POST `/api/publish-preview` 接受现有 ActionIn（kind 必须 item.publish）。完整 PublishIn 参数、不可变素材 ID/hash、类目、配送候选 DTO、地点、revision、账号 UID/模式全部进入加密 action payload 和审批 digest。HTTP 与 MCP `preview_listing` 返回角色投影，Agent 看不到 GPS/POI/完整 candidate。
 3. 管理员检查 `/api/actions/{id}`，使用既有 approve 与 execute 路由。指定 action 和 digest 才执行一条，重复执行被拒。执行前重新比较默认 revision、UID、图片文件 hash 与全部候选字段。变化则失败，需新幂等键重新预览/审批。相同幂等键只返回旧冻结操作，不会重新授权。UI 对相同内容在本页面内复用幂等键；修改默认快照后如需对相同内容重新申请，请刷新页面并重新载入草稿，再生成新预览（或 API 显式使用新幂等键）。旧“发布申请”与“冻结预览”使用不同的幂等键命名空间。
-4. 演示可走完整审批/模拟执行；live 即使 XY_LIVE_ENABLED=true 也只完成本地校验后停止。预览绝不调用上传、类目推荐、地点接口或浏览器。旧 `/api/actions item.publish` 和旧 MCP propose_listing 仍为不完整本地申请，不能绕过真实执行阻断。
+4. 演示可走完整审批/模拟执行；live 仅 XY_LIVE_ENABLED=true 时不能执行；双开关与完整冻结协议俱全后才能走独立单条执行器。预览绝不调用上传、类目推荐、地点接口或浏览器。旧 `/api/actions item.publish` 和旧 MCP propose_listing 仍为不完整本地申请，不能绕过真实执行阻断。
 
 ## 存储及恢复
 

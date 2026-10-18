@@ -31,7 +31,7 @@ GET/PUT `/api/accounts/{account_id}/faq-policy`，POST `/revoke`。PUT/撤销仅
 
 策略加密存于 settings，每次修改 revision 递增；默认关闭。必须指定 1–20 个商品 ID **且** 1–20 个会话 ID（交集语义），固定无插值模板最多 500 字，期限最多 30 天，最短间隔 300 秒、每日上限 1–100。模板保守拒绝交易/站外/凭据/指令和承诺关键词；这不是完整内容安全分类器。
 
-当前永远 `effective=false, send_allowed=false`。enabled 仅表示保存管理员意图，不代表生效；未过期且未暂停/接管时 blocked_reason=`send_adapter_unavailable`。**没有匹配消息的自动执行器、频率消耗账本或发送授权绕过**，策略不能创建 actions。`autonomous_reply=false`、`message_sample_propose=false` 不变。未来接通前必须补真实 item/cid 同记录绑定、发送许可不可变快照、逐执行撤销/过期/限额复核、统一持久审批队列与 unknown 不重试测试；不能只删除 blocked_reason 就启用发送。
+当前永远 `effective=false, send_allowed=false`。enabled 仅表示保存管理员意图，不代表生效；未过期且未暂停/接管时 blocked_reason=`send_adapter_unavailable`。**没有匹配消息的自动执行器、频率消耗账本或发送授权绕过**，策略不能创建 actions。`autonomous_reply=false` 不变；`message_sample_propose=true` 是另行人工审批单条消息能力，不是 FAQ 自动发送授权。未来接通前必须补真实 item/cid 同记录绑定、发送许可不可变快照、逐执行撤销/过期/限额复核、统一持久审批队列与 unknown 不重试测试；不能只删除 blocked_reason 就启用发送。
 
 ## 恢复与验收
 

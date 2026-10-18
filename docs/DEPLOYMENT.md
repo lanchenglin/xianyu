@@ -8,7 +8,7 @@
 
 ## 2026-10-16 分页迁移注意
 
-有界订单/本人发布列表增量使用 schema v10，启动持单实例锁执行显式迁移并生成 before-v9 一致性备份；保留原 vault key 和旧库，旧同步不追认为完整。部署前按既有离线备份流程保存数据，不在运行中换库。此轮仅本地测试，未部署，工作台分页 API 尚未真实验收；父助手报告已取得浏览器滚动分页证据，但订单末页仍未知，证据范围与限制见 [浏览器验收边界](BROWSER.md#验收边界) 及 [分页契约](OPERATION_PAGINATION.md)。无需新增 endpoint/浏览器配置，仍禁止备用浏览器/账号回退。
+有界订单/本人发布列表增量使用 schema v10，启动持单实例锁执行显式迁移并生成 before-v9 一致性备份；保留原 vault key 和旧库，旧同步不追认为完整。部署前按既有离线备份流程保存数据，不在运行中换库。用户报告 b8ea112 真实 API 库存2页40条范围完整、订单13页130条 time_limit partial；本批未复测，订单末页仍未知，证据范围与限制见 [浏览器验收边界](BROWSER.md#验收边界) 及 [分页契约](OPERATION_PAGINATION.md)。无需新增 endpoint/浏览器配置，仍禁止备用浏览器/账号回退。
 
 ## 1. 推荐落地方式
 
@@ -31,7 +31,9 @@
 | XY_VAULT_KEY | Fernet 数据加密密钥，必须独立妥善备份 |
 | XY_DATA_DIR | 数据目录，默认当前工作目录的 data |
 | XY_LIVE_ENABLED | 默认 false；真实查询和写操作全部关闭 |
-| XY_WORKER_ENABLED | 是否运行审批执行队列与搜索监控；默认 true |
+| XY_MESSAGE_SEND_ENABLED | 默认 false；独立已有会话单条发送，需完整绑定与审批 |
+| XY_PUBLISH_ENABLED | 默认 false；独立单条发布执行器，需完整协议与审批 |
+| XY_WORKER_ENABLED | 默认 true；演示队列、监控、观察与通知；不自动领取 live action |
 | XY_OPERATION_TIMEOUT | 上游单次操作超时，默认 120 秒 |
 | XY_ALLOWED_HOSTS | 允许访问的主机名/IP，逗号分隔；默认为本机 |
 | XY_UPSTREAM_PYTHON | 可选上游 Python 可执行文件完整路径；此环境也必须安装本工作台和固定 live 依赖 |
@@ -48,7 +50,7 @@
 
 首次登录由账号主人自己在浏览器完成。导入对象应是本人闲鱼登录态的 JSON：可以是 name/value 数组，也可以是键值对象；需要 unb 与 _m_h5_tk。数组包含域名时只接受 goofish.com / taobao.com 的相关域。不要使用来历不明的登录态导出扩展。工作台不会自动扫描本机浏览器。
 
-在设置 `XY_LIVE_ENABLED=true` 并重启后，新增真实账号并导入。CDP 模式只按 search / orders / inventory / messages 白名单逐项做只读验收，不验证 item、chats、history 或写入。隔离模式可另行验证一次搜索、商品详情、已有会话及历史；已有会话咨询仍需逐条人工审批并人工核对，不等于可靠送达。真实商品发布继续禁用，不作为当前验收步骤。
+在设置 `XY_LIVE_ENABLED=true` 并重启后，新增真实账号并导入。CDP 模式只按 search / orders / inventory / messages 白名单逐项做只读验收，不验证 item、chats、history 或写入。隔离模式可另行验证一次搜索、商品详情、已有会话及历史；已有会话咨询仍需逐条人工审批并人工核对，不等于可靠送达。真实发布执行器默认关闭，另需 XY_PUBLISH_ENABLED 和管理员已取证完整协议/冻结审批/指定单条；未真实验收，不能照虚构 fixture 开启，见 [发布执行器](PUBLISH_EXECUTOR.md)。旧隐式 publish 和 live delete 仍禁用。
 
 上游发消息目前不能证明送达。没有会话时先在闲鱼人工联系，不要使用伪造 cid。删除可能永久生效，不应拿重要商品测试。平台要求验证码/验证时立即停，不提供绕过或频繁重试逻辑。
 
@@ -100,17 +102,3 @@ docker compose down
 管理员打开“操作审批”，在 `unconfirmed/submitted/blocked` 原操作上点击“记录人工核对”。表单固定显示原账号、操作 ID、演示/真实模式和原状态；选择“观察到相关平台记录 / 未观察到相关记录 / 仍无法判断”，填写必要证据摘要后保存。证据加密保存，仅管理员可读；Agent 只见人工结论/时间。
 
 每操作仅一次不可覆盖记录，请谨慎填写；重复网络请求须用同一幂等键/内容，冲突显示错误并应刷新查看原记录，不可换键覆盖。核对不会修改原状态、重启操作、解除暂停，也不证明送达或已读。上游无可靠回执时只能记录人工证据，不能伪造自动验证。
-
-## 2026-10-15 续开发状态更新
-
-基线 `4d2aadc` 的 [CI run 38566392741](https://github.com/lanchenglin/xianyu/actions/runs/38566392741) 全部 7 作业成功：Ubuntu/Windows 3.11/3.12、双版本固定 live 契约及 UI。这是历史基线结果，不代表当前 Windows 支持或真实账号验收；最新 `53400f8` 的 Windows 双版本失败及暂停决定以上文支持声明和测试报告为准。
-
-固定上游五项核实见 [静态可行性报告](UPSTREAM_FEASIBILITY.md)。真实发布因不能冻结类目/地点暂时禁用（live_publish=false）；本地草稿、演示发布和审批申请保留。禁止用默认值变化后的上游发布代替完整审批。
-
-### P2-04 本地离线恢复增量（2026-10-15）
-
-已提供管理员离线 `backup` / `restore --offline` CLI：一致性数据库+素材、密钥/manifest/hash 校验、受限解包、活动实例拒绝、异常回滚和中断启动保护。恢复暂停账号/监控，pending/approved 失效、running 转不确定，旧任务不重放。无 HTTP/MCP 恢复能力，Agent 不可操作任意文件。详见 [备份说明](BACKUP.md)。此前“无恢复 CLI”为历史状态；定时/保留策略仍未实现。
-
-### P2-02 单条草稿管理（2026-10-15）
-
-已实现单条原位编辑、revision 乐观并发保护和归档 UI；显式 v2→v3 迁移增加 revision=1 / archived=0，保留原内容。PUT `/api/drafts/{id}` 接受原 account_id、revision 和完整草稿字段；POST `/api/drafts/{id}/archive` 接受 account_id、revision。账号/旧版本/已归档冲突返回 409，不另建副本；归档非平台删除，修改不会改变已冻结审批。管理员和 Agent 均可操作安全本地草稿，无新增管理员权限或任意文件操作。未增加 MCP 编辑工具（HTTP/UI 可用），既有 MCP 保存工具保持新建语义。没有素材删除接口，所有引用图片保留。批量发布、素材回收、取消归档尚未实现。
