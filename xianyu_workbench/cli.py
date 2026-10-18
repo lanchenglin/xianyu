@@ -44,6 +44,13 @@ def main():
     restore.add_argument('--data-dir', type=Path, required=True)
     restore.add_argument('--archive', type=Path, required=True)
     restore.add_argument('--offline', action='store_true', required=True)
+    schedule = sub.add_parser('backup-schedule', help='默认关闭的离线备份调度；不安装宿主任务')
+    schedule.add_argument('--data-dir', type=Path, required=True)
+    schedule.add_argument('--destination', type=Path, required=True)
+    schedule.add_argument('--enabled', action='store_true')
+    schedule.add_argument('--interval', type=int, default=86400)
+    schedule.add_argument('--keep', type=int, default=7)
+    schedule.add_argument('--watch', action='store_true', help='每60秒检查到期；活动服务跳过')
     args = parser.parse_args()
     if args.command == "init":
         try:
@@ -71,6 +78,26 @@ def main():
                 print(f'恢复完成；账号/监控暂停，旧待执行申请失效。回滚副本：{rollback}')
         except Exception:
             parser.exit(1, '备份/恢复失败：请检查离线状态、密钥、路径、备份完整性与权限；未输出敏感异常。\n')
+    elif args.command == 'backup-schedule':
+        import time
+
+        from .backup_schedule import tick
+        from .security import Vault
+        if not args.enabled:
+            print('disabled')
+            return
+        try:
+            vault = Vault(os.environ.get('XY_VAULT_KEY', ''))
+            while True:
+                print(tick(args.data_dir, args.destination, vault, enabled=True,
+                           interval_s=args.interval, keep=args.keep), flush=True)
+                if not args.watch:
+                    break
+                time.sleep(60)
+        except KeyboardInterrupt:
+            return
+        except Exception:
+            parser.exit(1, '离线调度失败：请检查专属目录、密钥、恢复状态与权限；未输出敏感异常。\n')
     elif args.command == "serve":
         import uvicorn
 

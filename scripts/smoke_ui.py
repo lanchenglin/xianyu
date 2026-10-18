@@ -203,6 +203,23 @@ def main():
                     page.get_by_role('button', name='归档草稿', exact=True).click()
                     expect(page.locator('#draft-list')).to_contain_text('已归档')
                     expect(page.get_by_role('button', name='载入编辑区', exact=True)).to_have_count(0)
+                    page.get_by_role('button', name='取消归档', exact=True).click()
+                    expect(page.get_by_role('button', name='载入编辑区', exact=True)).to_have_count(1)
+                    page.get_by_role('button', name='查看本地素材 / 安全回收', exact=True).click()
+                    expect(page.locator('#draft-list')).to_contain_text('被引用，保留')
+                    expect(page.get_by_role('button', name='永久删除本地素材', exact=True)).to_have_count(0)
+                    def import_dialog(dialog):
+                        if dialog.type == 'prompt':
+                            dialog.accept('[{"title":"UI 批量虚构草稿"}]')
+                        else:
+                            dialog.accept()
+                    page.on('dialog', import_dialog)
+                    page.get_by_role('button', name='批量导入本地草稿', exact=True).click()
+                    expect(page.locator('#draft-list')).to_contain_text('UI 批量虚构草稿')
+                    page.remove_listener('dialog', import_dialog)
+                    page.locator('dialog[open] button').last.click()
+                    page.get_by_role('button', name='导入批次逐条进度', exact=True).click()
+                    expect(page.locator('#draft-list')).to_contain_text('尚未申请')
                     page.locator('[data-page="queue"]').click()
                     expect(page.locator("#queue-list .previews img")).to_have_count(1)
                     page.once("dialog", lambda dialog: dialog.accept("确认执行"))

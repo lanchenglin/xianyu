@@ -59,6 +59,15 @@ def test_stdio_discovery_call_and_local_notice_state(api_server, tmp_path):
             result = await session.call_tool('cached_messages', {'account_id': 'messages'})
             assert not result.isError
             assert 'unavailable' in str(result) and 'last_message_samples' in str(result)
+            assert {'local_asset_candidates', 'unarchive_listing_draft', 'search_price_history',
+                    'preview_draft_import', 'confirm_draft_import', 'draft_import_progress', 'propose_import_row'} <= tools
+            assert not {'recycle_asset', 'backup_schedule', 'bulk_approve'} & tools
+            result = await session.call_tool('preview_draft_import', {'account_id': 'messages',
+                'rows': [{'title': 'MCP fictional import'}], 'idempotency_key': 'mcp-import-001'})
+            assert not result.isError and 'digest' in str(result)
+            assert service.db.one('SELECT COUNT(*) n FROM drafts')['n'] == 0
+            result = await session.call_tool('local_asset_candidates', {'account_id': 'messages'})
+            assert not result.isError
             assert 'preview_listing' in tools
             assert not {'publish_defaults', 'execute_action'} & tools
             result = await session.call_tool('preview_listing', {'account_id': 'messages', 'title': '测试',

@@ -106,6 +106,22 @@ class DraftArchiveIn(Model):
     revision: int = Field(ge=1)
 
 
+class DraftImportIn(Model):
+    account_id: str
+    rows: list[dict] = Field(min_length=1, max_length=50)
+    idempotency_key: str = Field(min_length=8, max_length=100, pattern=r'^[\w.:-]+$')
+
+
+class DraftImportConfirmIn(DraftImportIn):
+    digest: str = Field(pattern=r'^[a-f0-9]{64}$')
+
+
+class AssetRecycleIn(Model):
+    account_id: str
+    sha256: str = Field(pattern=r'^[a-f0-9]{64}$')
+    confirm: Literal['永久删除未引用本地素材']
+
+
 class MonitorIn(SearchIn):
     interval_s: int = Field(default=900, ge=300, le=86400)
 

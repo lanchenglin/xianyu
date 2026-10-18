@@ -1,11 +1,11 @@
 # 当前能力 / 实现 / 验收矩阵
 
-2026-10-18，源码核对 `f8d1ad8` 及本批工作树；以 `xianyu_workbench/app.py` 的 `/api/capabilities` 为字段来源。true 是适配/本地能力存在，不保证任意模式可用；运行开关、账号授权和平台验收是三件事。历史测试数量与 FAIL 见 [TEST_REPORT](TEST_REPORT.md)，本批结果只记在该报告对应日期。
+2026-10-18，源码核对 `35914be` 及本批工作树；以 `xianyu_workbench/app.py` 的 `/api/capabilities` 为字段来源。true 是适配/本地能力存在，不保证任意模式可用；运行开关、账号授权和平台验收是三件事。历史测试数量与 FAIL 见 [TEST_REPORT](TEST_REPORT.md)，本批结果只记在该报告对应日期。
 
 | 能力与 capability | 当前实现/入口 | 隔离测试证据（不是平台证据） | 真实平台验收 | 剩余阻塞/限制 |
 |---|---|---|---|---|
 | search/item_detail/existing_chats/message_history=true | provider/bridge 固定适配；CDP 仅 search/orders/inventory/messages | test_workbench、test_upstream_contract、test_browser_* | 本批未验收；此前用户报告 CDP search 成功 | 模式不同，CDP 不提供 item/chats/history |
-| local_drafts/local_draft_edit/local_draft_archive=true | 本地原位编辑、revision、归档 | test_drafts、smoke_ui | 本地能力不需平台 | 批量/取消归档/素材回收未实现 |
+| local_drafts/local_draft_edit/local_draft_archive=true | 本地原位编辑、revision、归档 | test_drafts、smoke_ui | 本地能力不需平台 | 新增 local_draft_unarchive/local_asset_recycle/local_draft_import=true，管理员明确回收、历史引用保护、单条审批；test_local_management/test_draft_import |
 | send_with_approval/message_sample_propose=true | 唯一审批，管理员指定单条；独立 Cookie/WS；默认关闭 | test_message_send*、MCP stdio、隔离 UI | 未验收真实发送 | 无可靠 ACK；unconfirmed 不重试；FAQ 不发送 |
 | message_bodies/message_reply_drafts/partial_messages=true | 严格文本解码、末条缓存/本地模板草稿 | test_message_text/messages/message_reply、隔离 WS | 用户报告旧基线43条/32文本，本批未复测 | 非完整历史；未知编码不猜 |
 | message_observation=true | 默认关闭，最短300秒，同 worker、去重/退避/接管 | test_message_observation、test_faq_policy、smoke_ui | 本批未验收 | 可能漏中间消息；send_allowed=false |
@@ -17,10 +17,10 @@
 | partial_orders/partial_inventory=true | bought_orders/self_published 有界滚动、缓存/进度 | test_operation_pagination、test_operations_*、隔离 Chromium | 用户报告 b8ea112：库存2页40条范围完整；订单13页130条时限 partial | 本批未复测；orders_terminal_verified=false；缓存历史并集非快照 |
 | order_sync/full_inventory_sync=false | 没有全范围同步 | 范围/partial/失败不清库回归 | 无完整验收 | 卖出/下架/全状态未实现；sample_policy.platform_verified=false |
 | first_contact/platform_edit_price/platform_relist=false | 未开放 | 未知操作/交易拒绝回归 | 无 | 真实协议及同 ID 状态语义缺证；不猜接口 |
-| search_monitors/notification_state=true | 最短5分钟、去重、已读/归档 | test_notifications、smoke_ui | 本批未验收真实监控 | 非全平台扫描；价格历史未实现 |
+| search_monitors/notification_state=true | 最短5分钟、去重、已读/归档 | test_notifications、smoke_ui | 本批未验收真实监控 | search_price_history/search_price_drop_notifications=true；test_price_history；仅新鲜连续搜索样本，非全平台扫描 |
 | external_notifications=true | 默认关闭、admin 配置，钉钉/webhook 固定摘要，独立 outbox | test_external_notifications/notification_transport；本地 TLS | 未投递真实钉钉/webhook | 超时可能重复通知；最多3次仅重试通知、不重试业务 |
 | manual_reconciliation=true | admin 一次不可覆盖结论/加密证据；Agent 只看概要 | test_workbench、隔离 UI | 本批无真实人工证据验收 | automatic_receipt_verification=false；观察非送达，不重放 |
-| offline_backup_restore_cli=true | backup.py/cli.py；v10、数据库+素材、密钥/关系校验、恢复暂停 | test_backup*、test_cli_encoding、test_publish_backup | 仅虚构数据恢复演练 | 无定时/保留/云备份；无 HTTP/MCP 文件入口 |
+| offline_backup_restore_cli=true | backup.py/cli.py；v12、数据库+素材、密钥/关系校验、恢复暂停 | test_backup*、test_cli_encoding、test_publish_backup | 仅虚构数据恢复演练 | offline_backup_schedule_cli=true；默认关闭离线调度/专属目录保留，test_backup_schedule；无在线/云备份、HTTP/MCP 文件入口 |
 | mcp=true | 固定目标 Agent-only stdio | test_mcp_stdio 实际 SDK→临时 API | 实际 Hermes/其他客户端未验收 | 不能把 SDK 测试当客户端已配置 |
 | payment/refund/confirm_receipt=false | 永久人工，无交易执行工具 | 白名单/权限回归 | 不安排自动执行验收 | 下单/提现/成交承诺同样人工 |
 

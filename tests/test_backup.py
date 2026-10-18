@@ -195,6 +195,9 @@ def test_restore_v2_archive_migrates_drafts_before_install(tmp_path):
     old_db = tmp_path / 'old.db'
     old_db.write_bytes(files['workbench.db'])
     with closing(sqlite3.connect(old_db)) as c:
+        c.execute('DROP TABLE draft_import_rows')
+        c.execute('DROP TABLE draft_imports')
+        c.execute('DROP TABLE price_samples')
         c.execute('DROP TABLE message_observation')
         c.execute('DROP TABLE message_reply_drafts')
         c.execute('DROP TABLE operation_records')

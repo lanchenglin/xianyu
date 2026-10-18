@@ -175,6 +175,56 @@ def save_listing_draft(account_id: str, title: str, desc: str, price: str = "0",
 
 
 @mcp.tool()
+def unarchive_listing_draft(account_id: str, draft_id: str, revision: int) -> dict:
+    """取消本地草稿归档，必须使用当前版本；不修改审批或平台商品。"""
+    from urllib.parse import quote
+    return api('POST', f'/api/drafts/{quote(draft_id, safe="")}/unarchive',
+               {'account_id': account_id, 'revision': revision})
+
+
+@mcp.tool()
+def local_asset_candidates(account_id: str) -> list[dict]:
+    """查看本地素材引用保护状态；删除仅管理员人工确认，MCP 不可删除。"""
+    from urllib.parse import quote
+    return api('GET', f'/api/accounts/{quote(account_id, safe="")}/assets')
+
+
+@mcp.tool()
+def search_price_history(account_id: str, monitor_id: str) -> dict:
+    """读取最多200条本地搜索价格样本，缺失/过期不是降价，不触发平台写。"""
+    from urllib.parse import quote, urlencode
+    return api('GET', f'/api/accounts/{quote(account_id, safe="")}/price-history?{urlencode({"monitor_id": monitor_id})}')
+
+
+@mcp.tool()
+def preview_draft_import(account_id: str, rows: list[dict], idempotency_key: str) -> dict:
+    """预览最多50条本地草稿；不保存、不申请、不发布。每行不含账号字段。"""
+    return api('POST', '/api/draft-import/preview', {'account_id': account_id, 'rows': rows, 'idempotency_key': idempotency_key})
+
+
+@mcp.tool()
+def confirm_draft_import(account_id: str, rows: list[dict], idempotency_key: str, digest: str) -> dict:
+    """按已预览摘要幂等保存本地草稿，不会批量批准或发布。"""
+    return api('POST', '/api/draft-import/confirm', {'account_id': account_id, 'rows': rows,
+               'idempotency_key': idempotency_key, 'digest': digest})
+
+
+@mcp.tool()
+def draft_import_progress(account_id: str, import_id: str) -> dict:
+    """查询导入各草稿当前版本的逐条审批进度；不是批量执行工具。"""
+    from urllib.parse import quote
+    return api('GET', f'/api/accounts/{quote(account_id, safe="")}/draft-imports/{quote(import_id, safe="")}')
+
+
+@mcp.tool()
+def propose_import_row(account_id: str, import_id: str, draft_id: str, revision: int) -> dict:
+    """只为指定的一条草稿冻结预览并申请审批；管理员逐条审批，未知结果不重试。"""
+    from urllib.parse import quote
+    return api('POST', f'/api/draft-imports/{quote(import_id, safe="")}/{quote(draft_id, safe="")}/propose',
+               {'account_id': account_id, 'revision': revision})
+
+
+@mcp.tool()
 def list_actions() -> list[dict]:
     """读取原审批/执行状态和人工核对结论/时间（不含证据正文）。核对不是送达/已读回执，不改变原状态，不授权重发。MCP 不能核对或审批。"""
     return api("GET", "/api/actions")

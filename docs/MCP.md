@@ -4,6 +4,10 @@
 
 接入前先按部署说明启动工作台；本地完整开发推荐 Python 3.12。以下示例是当前已提供的通用配置，不代表你的具体客户端或三个远程 Gateway 已联调通过。首次建会话、实时自动客服等待办见交接清单，MCP 不会额外实现后端没有的能力。
 
+## 本地管理与价格样本（2026-10-18）
+
+新增 `unarchive_listing_draft`、`local_asset_candidates`、`search_price_history`、`preview_draft_import`、`confirm_draft_import`、`draft_import_progress`、`propose_import_row`。批次最多50条，确认只保存草稿，单条申请仍走已有发布冻结链和唯一审批队列。素材删除、备份调度、批量批准/执行均没有 MCP 工具。详见 [本地管理](LOCAL_MANAGEMENT.md) 与 [通知](NOTIFICATIONS.md)。
+
 ## 本地发布冻结预览（2026-10-16）
 
 新增 `preview_listing(account_id,title,desc,price,images,idempotency_key,delivery,post_price,can_self_pickup)`，对应 POST `/api/publish-preview`，仅本地冻结并提出审批，不上传闲鱼。需要管理员预先录入类目/地点本地快照；缺少时明确拒绝，不编造默认值。Agent 只得到类目、地区摘要、图片 hash 与快照 revision，看不到 GPS/POI/完整协议候选。无默认配置、审批、执行的 MCP 工具；管理员令牌仍被 stdio 拒绝。旧 `propose_listing` 保留不完整申请语义。真实执行器已实现但默认关闭且未平台验收；MCP 不能配置协议或执行，见 [PUBLISH_EXECUTOR](PUBLISH_EXECUTOR.md)。

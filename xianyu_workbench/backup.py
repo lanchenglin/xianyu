@@ -114,6 +114,8 @@ def hash_file(path, expected_size):
 def create_backup(directory: Path, output: Path, vault: Vault) -> None:
     check_local_paths(directory)
     with FileLock(str(directory / 'server.lock'), timeout=0):
+        if (directory / 'restore-in-progress').exists():
+            raise ValueError('恢复未完成，拒绝备份')
         database = directory / 'workbench.db'
         check_limits([database.stat().st_size, 0])  # Reserve the manifest entry before copying.
         with closing(sqlite3.connect(f'{database.as_uri()}?mode=ro', uri=True)) as source:

@@ -136,7 +136,8 @@ class Service:
             paths.append(str(asset_path(self.s, row)))
         return paths
 
-    def propose(self, body: ActionIn, actor: str, *, publish_preview: bool = False) -> dict:
+    def propose(self, body: ActionIn, actor: str, *, publish_preview: bool = False,
+                draft_guard: tuple[str, int] | None = None) -> dict:
         account = self.provider.account(body.account_id)
         try:
             payload = ACTION_MODELS[body.kind].model_validate(body.payload).model_dump(mode="json")
@@ -172,6 +173,13 @@ class Service:
                 if old["digest"] != signature:
                     raise Problem("idempotency_conflict", "相同幂等键不能用于不同内容", 409)
                 return self.action_view(dict(old))
+            if draft_guard:
+                draft_id, revision = draft_guard
+                if not c.execute('SELECT 1 FROM drafts WHERE id=? AND account_id=? AND revision=? AND archived=0',
+                                 (draft_id, account['id'], revision)).fetchone():
+                    raise Problem('draft_conflict', '草稿在申请期间变化，请重新载入', 409)
+            if body.kind == 'item.publish':
+                self.validate_assets(account['id'], payload['images'])
             action_id = uuid.uuid4().hex
             now = time.time()
             c.execute("INSERT INTO actions(id,account_id,kind,payload,digest,mode,idem,state,created,expires) VALUES(?,?,?,?,?,?,?,?,?,?)",
@@ -363,6 +371,8 @@ class Service:
         try:
             body = SearchIn(account_id=row["account_id"], query=row["query"], **json.loads(row["filters"]))
             results = self.search(body)
+            from .price_history import observe
+            observe(self, row, results)
             previous = set(json.loads(row["seen"]))
             current = {str(i["item_id"]) for i in results["items"] if i.get("item_id")}
             new = [i for i in results["items"] if str(i.get("item_id")) not in previous]

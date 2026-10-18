@@ -27,4 +27,12 @@ python -m xianyu_workbench.cli restore --data-dir /absolute/private/data --archi
 
 恢复完成：所有账号 paused=1、所有搜索监控 enabled=0；pending/approved 统一 expired（即便 pending 从未执行，也不保留其旧授权）；running→unconfirmed；原 unconfirmed/submitted/终态及核对记录保留，均不重新入队。管理员恢复账号也不会让旧申请再执行。人工先核对平台，再按当前事实创建新的必要申请，不要复制不确定写任务重试。
 
-未实现：自动定时、保留/自动清理策略、云端备份、密钥轮换与公开脱敏导出。恢复演练全用临时目录虚构数据，不代表真实账号已验收。
+## 默认关闭的离线调度与有界保留
+
+`backup-schedule --data-dir /absolute/private/data --destination /absolute/private/scheduled --enabled --interval 86400 --keep 7 --watch`。不带 `--enabled` 只输出 disabled，不读取密钥或创建目录；不带 `--watch` 只检查一次。watch 每60秒检查到期，间隔允许3600～2592000秒，保留1～100份。密钥仍只取进程环境，不读 .env；不安装系统服务/cron、不自动停服务。
+
+专属目的地必须在 data 外，首次为空；加密 owner 绑定源绝对路径与原密钥。目录及元数据拒绝符号链接；未知文件停止调度。独立 schedule.lock 防并发调度，create_backup 仍拿 server.lock；活动实例返回 busy，不能在线热备。恢复中标记存在时拒绝备份。最近备份时间用于到期判断，时钟回退不立即产生备份。
+
+先创建成功，再完整校验所有本目录候选，最后仅删除本调度命名且超出 keep 的旧包；失败/损坏不删除旧包。扫描上限101份，超过须管理员检查，不无限扫描。中断可能留下不完整包，会阻止后续清理，需管理员离线检查；不自动删除损坏包。不会碰迁移备份、手工归档或 restore-rollback。目的地在恢复包外，不从备份恢复调度授权；正在运行的外部调度进程由管理员自行停止。始终遵守离线锁，不提供 HTTP/UI/MCP 任意文件入口。
+
+未实现：云端备份、密钥轮换与公开脱敏导出。恢复演练全用临时目录虚构数据，不代表真实账号已验收。

@@ -4,6 +4,24 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
+## 2026-10-18 35914be 后离线运营纵向增量
+
+本轮保留工作树供父助手统一审查提交，未 commit/push/部署，scratch 原有未跟踪内容未动。未读取真实 .env/data/profile/私有快照、未连接8099/9235、未访问平台或真实通知目标。四项：取消归档与管理员引用保护素材回收；默认关闭离线备份调度及保留；搜索样本价格历史/降价通知；批量本地草稿预览/幂等导入/逐条申请进度。schema v11/v12 显式迁移。
+
+测试先行记录：最初本地管理3 failed、调度2 failed、价格1 failed、导入2 failed（缺模块/路由）；实现后核心8 passed。追加并发申请回归发现 revision 检查不在 action 写事务中（1 failed），修复为事务内 draft_guard 后通过；追加符号链接回收反例1 failed，增加路径/重复登记拒绝后通过。并发素材引用/离线恢复/MCP补充回归首次通过，不能称为修复前RED。
+
+首轮全量 **540 passed, 3 failed, 1 warning / 219.97s**：旧v2备份夹具未移除新表，两个消息测试仍断言schema10。修正历史夹具与版本断言，针对性8 passed。没有放宽生产迁移或删除旧安全断言。
+
+最终全量已等待实际 summary：**548 passed, 1 warning in 218.77s，退出0，无 skipped**。新增功能集合13 passed；真实 MCP SDK stdio临时API回归包含新工具发现、导入预览不落库、素材候选，无删除/备份/批量批准工具。备份恢复增加v12价格和批次关系保留、监控关闭/账号暂停/无action重放。
+
+命令环境：`env -u PYTHONPATH`、项目 `.venv`、`TMPDIR=/home/lan/.hermes/cache/scratch`、`XY_TEST_CHROMIUM=/snap/bin/chromium`、`PLAYWRIGHT_BROWSERS_PATH=/home/lan/.hermes/cache/scratch/xianyu-offline-browsers`、`PLAYWRIGHT_SKIP_BROWSER_GC=1`。实际运行 `python -m pytest -q`、`python scripts/smoke_ui.py`、`python -m pip check`、`python -m ruff check .`、`node --check xianyu_workbench/static/app.js`、`git diff --check`。
+
+UI冒烟实际退出0，增加取消归档、引用素材不可删除、JSON批量预览/确认、逐条进度，保留原登录/搜索/通知/审批/人工核对/XSS/Agent隔离/演示发布/移动端。pip check 无冲突；ruff初检1项导入排序问题，修复后 All checks passed；node/diff通过。唯一warning是既有Starlette/httpx弃用提醒，不升级依赖。CLI默认关闭实测输出disabled且未访问虚构路径。
+
+日志在项目外隔离目录：`/home/lan/.hermes/cache/scratch/xianyu-offline-pytest-final.log`、`xianyu-offline-ui-final.log`；首轮失败日志 `xianyu-offline-pytest.log` 保留。仅本机项目Python3.12，未重跑3.11/Windows/CI。
+
+边界：未真实上传/发布/发送/删除，未修改FAQ自动发送、live默认关闭、唯一审批队列、账号隔离、管理员单action、不确定不重试及永久人工交易。离线调度不在线备份、不安装宿主任务；素材中断可能留未登记文件，不自动清理任意文件；价格仅搜索样本，批量仅本地草稿。平台结构/类型/验收需求清单在 OPERATIONS_NEXT，不声明整个产品全部完成。
+
 ## 2026-10-18 f8d1ad8 执行器复核、文档整理与灾备回归
 
 本批在 feat/local-next / f8d1ad8 原地修改，未 commit/push/部署。仅项目 `.venv` Python 3.12.14；未重跑 3.11/Windows/远端 CI。未读取真实 .env/data/profile/私有快照，未连接8099/9235或真实平台，不动现有未跟踪 scratch。

@@ -138,9 +138,33 @@ def operation_progress_schema(conn):
     conn.execute('ALTER TABLE operation_syncs ADD COLUMN stop_reason TEXT')
 
 
+def price_history_schema(conn):
+    conn.execute('''CREATE TABLE price_samples (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        account_id TEXT NOT NULL REFERENCES accounts(id),
+        monitor_id TEXT NOT NULL REFERENCES monitors(id), item_id TEXT NOT NULL,
+        price TEXT, observed REAL NOT NULL, mode TEXT NOT NULL,
+        UNIQUE(monitor_id,item_id,observed)
+    )''')
+    conn.execute('CREATE INDEX price_sample_recent ON price_samples(monitor_id,item_id,observed DESC)')
+
+
+def draft_import_schema(conn):
+    conn.execute('''CREATE TABLE draft_imports (
+        id TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES accounts(id),
+        idem TEXT NOT NULL, digest TEXT NOT NULL, created REAL NOT NULL,
+        UNIQUE(account_id,idem)
+    )''')
+    conn.execute('''CREATE TABLE draft_import_rows (
+        import_id TEXT NOT NULL REFERENCES draft_imports(id), position INTEGER NOT NULL,
+        draft_id TEXT NOT NULL REFERENCES drafts(id),
+        PRIMARY KEY(import_id,position)
+    )''')
+
+
 MIGRATIONS = (initial_schema, reconciliation_schema, draft_revision_schema,
               notification_state_schema, notification_delivery_schema, operations_schema, message_samples_schema, message_reply_schema, message_observation_schema,
-              operation_progress_schema)
+              operation_progress_schema, price_history_schema, draft_import_schema)
 
 
 class DB:

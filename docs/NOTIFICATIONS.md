@@ -28,6 +28,12 @@ schema v4 为旧通知加 archived=0；v5 新增 notification_deliveries，notif
 
 通知队列与平台审批队列分开，**只重试通知，绝不重试业务操作**；它不是绕过审批的聊天通道。全部平台写仍逐条人工审批，无人值守 FAQ 未开放。
 
+## 搜索样本价格历史与降价提醒
+
+schema v11 新增 price_samples，仅现有监控成功搜索后观察，不额外抓取平台。按账号+监控+item_id 隔离；严格正数十进制、最多两位小数，不解析带货币符号/范围/NaN/布尔值。fetched_at 必须在当前时间前300秒内，同监控重复/倒序时间不录入。两次相邻有效观察间隔须不超过 `min(86400, interval_s*2)` 才可判断下降；缺失、重复冲突或非法价格写空观察、打断连续性，不把缺失当0或售罄。每监控最多1000条，查询最多200条，不是全平台历史。
+
+GET `/api/accounts/{account_id}/price-history?monitor_id=...`；UI 监控卡“价格样本历史”、MCP `search_price_history`。降价只写站内通知，外部仍只发送固定摘要；不创建 action，不改价，不联系卖家。没有补发历史通知或业务重试。
+
 ## 验证范围
 
 真实临时 TLS 服务接收端验证连接、主机名证书、签名、摘要和持久状态；仅测试边界将已验证公网地址路由到随机 loopback 端口并信任临时证书。生产无放宽开关。没有向外部服务发送，本轮钉钉及真实 webhook 未验收。测试见 tests/test_notification_transport.py、test_external_notifications.py、test_notifications.py 和 test_mcp_stdio.py。

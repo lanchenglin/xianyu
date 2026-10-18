@@ -26,7 +26,7 @@
 
 ## 存储及恢复
 
-没有新增数据库列/表：使用既有加密 settings（命名空间 `publish-defaults:<account_id>`）和加密 actions.payload 的版本化快照字段。schema 仍 v10；既有 key 校验、备份恢复加密验证覆盖这两类字段。恢复会按既有规则使 pending/approved 失效，running 不确定，不能重放。
+没有新增数据库列/表：使用既有加密 settings（命名空间 `publish-defaults:<account_id>`）和加密 actions.payload 的版本化快照字段。该功能最初保持 schema v10；当前离线运营迁移到 v12，但发布仍复用原字段；既有 key 校验、备份恢复加密验证覆盖这两类字段。恢复会按既有规则使 pending/approved 失效，running 不确定，不能重放。
 
 ## 固定上游证据与父助手最小取证
 

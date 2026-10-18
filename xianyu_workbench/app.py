@@ -26,10 +26,13 @@ from .models import (
     AccountIn,
     ActionIn,
     ApprovalIn,
+    AssetRecycleIn,
     AssistIn,
     CookiesIn,
     DraftArchiveIn,
     DraftEditIn,
+    DraftImportConfirmIn,
+    DraftImportIn,
     DraftIn,
     LLMConfigIn,
     MonitorIn,
@@ -137,7 +140,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                                    "cdp_operations": ["search", "orders", "inventory", "messages"], "cdp_writes": False,
                                    "admin_configuration_only": True, "failure_fallback": False},
                 "local_drafts": True, "local_draft_edit": True, "local_draft_archive": True,
-                "offline_backup_restore_cli": True, "search_monitors": True, "mcp": True,
+                "local_draft_unarchive": True, "local_asset_recycle": True, "local_draft_import": True,
+                "local_management_policy": {"asset_delete_role": "admin", "historical_references_protected": True,
+                                            "import_limit": 50, "bulk_approval": False},
+                "offline_backup_restore_cli": True, "offline_backup_schedule_cli": True,
+                "backup_schedule_policy": {"default_enabled": False, "online_backup": False,
+                                           "minimum_interval_s": 3600, "maximum_retained": 100},
+                "search_price_history": True, "search_price_drop_notifications": True,
+                "search_monitors": True, "mcp": True,
                 "notification_state": True, "external_notifications": True,
                 "notification_policy": {"default_enabled": False, "configuration_role": "admin",
                                         "channels": ["webhook", "dingtalk"], "content": "fixed_summary_only",
@@ -409,14 +419,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         service.provider.account(body.account_id)
         service.validate_assets(body.account_id, body.images)
         draft_id = uuid.uuid4().hex
-        service.db.execute("INSERT INTO drafts(id,account_id,content,updated) VALUES(?,?,?,?)",
-                           (draft_id, body.account_id, service.vault.seal(body.model_dump(mode="json")), time.time()))
+        with service.db.connect() as c:
+            c.execute('BEGIN IMMEDIATE')
+            service.validate_assets(body.account_id, body.images)
+            c.execute("INSERT INTO drafts(id,account_id,content,updated) VALUES(?,?,?,?)",
+                      (draft_id, body.account_id, service.vault.seal(body.model_dump(mode="json")), time.time()))
         return {"id": draft_id, "revision": 1, "archived": False, "notice": "仅保存本地草稿，未上架"}
 
     @app.put('/api/drafts/{draft_id}')
     def edit_draft(draft_id: str, body: DraftEditIn, current=Depends(role)):
         service.validate_assets(body.account_id, body.images)
         with service.db.connect() as c:
+            c.execute('BEGIN IMMEDIATE')
+            service.validate_assets(body.account_id, body.images)
             changed = c.execute('UPDATE drafts SET content=?,revision=revision+1,updated=? '
                                 'WHERE id=? AND account_id=? AND revision=? AND archived=0',
                                 (service.vault.seal(body.model_dump(mode='json', exclude={'revision'})),
@@ -435,6 +450,50 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 raise Problem('draft_conflict', '草稿已变化、归档或账号不符，请重新载入', 409)
         return {'id': draft_id, 'revision': body.revision + 1, 'archived': True}
 
+    @app.post('/api/drafts/{draft_id}/unarchive')
+    def unarchive_draft(draft_id: str, body: DraftArchiveIn, current=Depends(role)):
+        with service.db.connect() as c:
+            changed = c.execute('UPDATE drafts SET archived=0,revision=revision+1,updated=? '
+                                'WHERE id=? AND account_id=? AND revision=? AND archived=1',
+                                (time.time(), draft_id, body.account_id, body.revision)).rowcount
+            if not changed:
+                raise Problem('draft_conflict', '草稿版本、账号或归档状态不符，请重新载入', 409)
+        return {'id': draft_id, 'revision': body.revision + 1, 'archived': False}
+
+    @app.get('/api/accounts/{account_id}/assets')
+    def asset_candidates(account_id: str, current=Depends(role)):
+        from .local_management import list_assets
+        return list_assets(service, account_id)
+
+    @app.post('/api/assets/{asset_id}/recycle')
+    def asset_recycle(asset_id: str, body: AssetRecycleIn, current=Depends(admin)):
+        from .local_management import recycle_asset
+        return recycle_asset(service, asset_id, body, current)
+
+    @app.post('/api/draft-import/preview')
+    def draft_import_preview(body: DraftImportIn, current=Depends(role)):
+        from .draft_import import preview
+        return preview(service, body)
+
+    @app.post('/api/draft-import/confirm')
+    def draft_import_confirm(body: DraftImportConfirmIn, current=Depends(role)):
+        from .draft_import import confirm
+        return confirm(service, body)
+
+    @app.get('/api/accounts/{account_id}/draft-imports')
+    def draft_imports(account_id: str, current=Depends(role)):
+        return service.db.all('SELECT id,created FROM draft_imports WHERE account_id=? ORDER BY created DESC LIMIT 100', (account_id,))
+
+    @app.get('/api/accounts/{account_id}/draft-imports/{import_id}')
+    def draft_import_progress(account_id: str, import_id: str, current=Depends(role)):
+        from .draft_import import progress
+        return progress(service, account_id, import_id)
+
+    @app.post('/api/draft-imports/{import_id}/{draft_id}/propose')
+    def draft_import_propose(import_id: str, draft_id: str, body: DraftArchiveIn, current=Depends(role)):
+        from .draft_import import propose_row
+        return propose_row(service, body.account_id, import_id, draft_id, body.revision, current)
+
     @app.get("/api/drafts")
     def drafts(current=Depends(role)):
         return [{**row, "content": service.vault.open(row["content"])} for row in service.db.all("SELECT * FROM drafts ORDER BY updated DESC LIMIT 200")]
@@ -452,6 +511,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                            (monitor_id, body.account_id, body.query, canonical(filters), body.interval_s))
         service.db.audit(current, "monitor.created", monitor_id)
         return {"id": monitor_id, "notice": "程序运行时才会监控；结果在工作台通知栏，不会自动联系卖家"}
+
+    @app.get('/api/accounts/{account_id}/price-history')
+    def price_history(account_id: str, monitor_id: str, current=Depends(role)):
+        from .price_history import history
+        return history(service, account_id, monitor_id)
 
     @app.get("/api/monitors")
     def monitors(current=Depends(role)):

@@ -28,7 +28,7 @@
 
 ## 持久化与隔离
 
-- schema v10 不变，沿用加密 settings / actions.payload / actions.result。
+- 发布自身不新增 schema，沿用加密 settings / actions.payload / actions.result；当前离线运营迁移为 v12。
 - 在统一 operations.lock 下串行执行全部阶段。action 原子 approved→running 防并发/双击。
 - 第一次外部写前保存 prepared，每张上传前 uploading，上传后保存素材 ID/hash/URL/宽高，提交前 submitting + 请求 digest，成功 ACK 后 verifying + itemId，回读成功 verified。
 - 每个阶段重新核验开关、暂停、时效、模式、凭据、图片、defaults/protocol revision；回读后再次核验身份。上传子进程对读取到内存的实际字节核 hash 后上传同一份字节。
