@@ -8,7 +8,8 @@ from typing import Literal
 
 from pydantic import ConfigDict, Field, StrictStr, model_validator
 
-from .item_edit import EditIn, InvariantMapping, get, leaves
+from .edit_transforms import SnapshotInvariantMapping, transform_invariant
+from .item_edit import EditIn, get, leaves
 from .models import Model
 from .security import canonical, digest
 
@@ -98,7 +99,7 @@ class SnapshotProtocol(Model):
     identity_paths: dict[str, list[StrictStr]]
     status_path: list[StrictStr] = Field(min_length=2, max_length=10)
     content_mappings: list[ContentMapping] = Field(min_length=5, max_length=20)
-    invariant_mappings: list[InvariantMapping] = Field(min_length=1, max_length=200)
+    invariant_mappings: list[SnapshotInvariantMapping] = Field(min_length=1, max_length=200)
     fixed_constants: dict
     unique_code_mode: Literal['timestamp_random']
     success_ret: list[StrictStr] = Field(min_length=1, max_length=4)
@@ -169,8 +170,9 @@ class SnapshotProtocol(Model):
             path, source = tuple(mapping.request_path), mapping.before_path
             if source[0] != 'edit':
                 raise ValueError('request invariants require editDetail evidence')
-            if canonical(get(self.template, path)) != canonical(get(self.before, source)):
-                raise ValueError('exact typed invariant mapping required; no inferred image transforms')
+            transformed = transform_invariant(mapping, get(self.before, source))
+            if canonical(get(self.template, path)) != canonical(transformed):
+                raise ValueError('request must exactly match evidenced finite transform')
             # A fixed request value cannot be sourced from approved changing content.
             distinct([source, *(m.path for m in self.content_mappings)])
             paths.append(path)

@@ -4,6 +4,12 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
+## 2026-10-19 v3 有限命名转换与公开标签证据
+
+基线eba9b9a，父助手报告已独立866通过并提交推送，未部署。仅读取指定三份脱敏transform结构/控制值/差异；不读私有原件。v3 invariant_mapping新增默认identity的bool_string/single_image_v1/free_shipping_v1/category_v1；固定路径、严格源键/类型/边界、完整原始请求等于转换结果。源快照不归一化，前后变化继续阻断；v2映射结构不变。itemLabelExtList未放行，公开0.0.178 chunk的推荐卡片transportData依赖证据与最小需求见EDIT_LABEL_EVIDENCE。
+
+先RED **3 failed,25 passed /5.23s**（缺transform导致合法协议422），日志 `/home/lan/.hermes/cache/scratch/xianyu-transforms-red.log`；实现后含旧模式 **76 passed /18.17s**。增加变更审批失效/v2拒绝转换字段、权限/数组/类型/额外源字段拒绝等，转换+投影+隐私类型专项 **107 passed /30.65s**。后补审批回归首次通过，不称RED。ruff首轮测试24项单行分支格式违规已修复。最终全量 **896 passed, 1 warning /332.43s，退出0，无skip**（Python3.12，专用Chromium，包含新增转换模式UI），日志 `/home/lan/.hermes/cache/scratch/xianyu-transforms-final.log`。独立UI smoke、ruff、pip check、node --check、git diff --check全部通过；唯一warning仍为Starlette/httpx弃用提醒。无生产访问/daily改动/部署/commit/push；所有本轮日志与临时下载在scratch。
+
 ## 2026-10-19 定向复审 FAIL：摘要允许字段值未限型
 
 父助手进一步定向复审发现允许key内dict/list或任意字符串可穿透；此前819通过不抵消此缺口，保留FAIL。仅按公开privacy-types-fix说明修正结果投影，不改平台字段转换或daily。

@@ -17,10 +17,25 @@
 - `status_path` 必须明确指向普通 detail 已取证状态（非空字符串或严格整数），与身份/内容路径不重叠；原状态逐类型冻结，不以猜测 ONLINE 枚举代替证据。
 - `before_values` 为原 item_id/title/desc/两位小数元价格。`content_mappings` 只允许对象路径和 field=title/desc/price；编码仅 identity（文字）、yuan_string/cent_string（金额）。必须独立覆盖普通 detail 三项及 edit 正文/价格；互不重叠。不支持表达式、JS、任意 URL/API。
 - 请求文字严格固定 `itemTextDTO={title: before.desc, desc: before.desc, titleDescSeparate:false}`，价格严格固定 `itemPriceDTO={priceInCent: 分整数字符串}`。实际提交只替换这两个正文叶子和价格；**独立改短标题尚缺转换证据，申请时拒绝任何 title 变化**。新正文仍要求普通 detail 短标题保持原值；若平台改变它，则 unknown，不能猜截断后宣称 verified。
-- `original_request == template` 全等。其余请求叶子须 `invariant_mappings` 从完整 edit 快照逐类型精确映射；图片目前仅完整数组精确相等（有限 identity），不推导/补默认图片字段，不支持缺证的数组转换。变化内容不能成为固定字段来源。
+- `original_request == template` 全等。其余请求叶子须 `invariant_mappings` 从完整 edit 快照逐类型精确映射；默认 identity；新增下述已证有限命名转换，不支持缺证的任意数组转换。变化内容不能成为固定字段来源。
 - 例外仅 `fixed_constants` 中逐字冻结的 sourceId/bizcode/publishScene（后两者须 pcMainPublish）；sourceId 具体值仍须管理员取证。unique_code_mode 必须 timestamp_random，原始 uniqueCode 保留，申请时按毫秒拼接0～999整数生成一次并冻结到 action/digest；同账号历史碰撞在申请事务内拒绝，不自动重抽。它不是版本、幂等或 CAS 保证。
 - `api_version/detail_api_version` 分别绑定固定 editDetail/edit 与普通 detail；三个精确 success ret 独立冻结。双读完整 before 匹配→构造→再次双读完整匹配→重验授权→持久化提交阶段→单次 edit→精确 ACK→双读完整 after。共享 operations.lock；提交后任何异常仍 unknown，不重试。
 - 三层未知阻断保留：保存协议、新申请的 IMMEDIATE 事务及执行历史检查。verified 后允许新 revision / 完整新 before（必须等于最近 after）及逐条重新审批；不要求伪造新版本，执行前两轮双读都必须匹配。SQL schema 仍 v13，恢复删除协议、撤销旧审批。
+
+### v3 有限请求转换（2026-10-19）
+
+每条 invariant_mappings 可显式指定 `transform`，默认 `identity`。v2 不接受此字段，原行为不变。非identity只允许下面固定request_path及 `before_path=["edit", 对应根字段]`，不执行表达式/JS/路径函数；必须 `original_request == template == 变换结果`（映射覆盖部分），不生成或替代原始请求证据。
+
+| transform | 允许字段 | 完整限制 |
+|---|---|---|
+| bool_string | freebies/defaultPrice | 仅严格字符串true/false转bool，不接受已有bool或大小写变体 |
+| single_image_v1 | imageInfoDOList | 数组长度恰为1；源仅url/extraInfo/widthSize/heightSize/major/type，extraInfo仅raw/isT/isH字符串并逐字保留；url非空原字符串不变；宽高1～10位ASCII正整数字符串转int（本地上限，不宣称平台上限）；major严格bool字符串；type仅字符串0；输出isQrCode=false、labels=[]、templateIndex="0"（唯一索引）、thumbnail=原url、status=done |
+| free_shipping_v1 | itemPostFeeDTO | 源恰好三bool字符串加templateId/idleTemplateId/postPriceInCent；先要求后三者均字符串0，且三flag为true/true/false包邮组合，再输出三bool与templateId="0"；非零邮费/其他组合拒绝 |
+| category_v1 | itemCatDTO | 源恰好catId/catName/channelCatId/tbCatId/sugShow五字符串，仅sugShow="false"可省略，其余四项逐字保留 |
+
+任何额外源字段、缺字段或错类型均拒绝，不静默丢弃。完整原始源快照仍参与前后比较与审计，转换不作为读回归一化/忽略变化。转换名称和完整协议进入revision/digest/审批，改动后旧审批失效。没有图片上传/URL抓取或新API通道。
+
+`itemLabelExtList` 没有转换白名单：已提供实际shape不满足identity，继续阻塞；不猜null或默认值。公开官方chunk标签证据及最小补充要求见 [EDIT_LABEL_EVIDENCE](EDIT_LABEL_EVIDENCE.md)。本地其他转换已交付，不代表完整真实协议可启用。
 
 ### 显式 observational_projection（2026-10-19）
 

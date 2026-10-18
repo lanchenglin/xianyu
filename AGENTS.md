@@ -2,6 +2,10 @@
 
 这是账号主人自用的闲鱼工作台，不是无条件全自动交易系统。当前真实能力和未实现事项以 README、[能力矩阵](docs/CAPABILITY_MATRIX.md) / `/api/capabilities` 为准，禁止把占位接口或演示数据写成已完成。
 
+## 2026-10-19 v3有限转换增量
+
+v3新增显式命名bool_string/single_image_v1/free_shipping_v1/category_v1，默认identity，v2不变。只固定已证源/目标路径、严格完整源键和类型，原始请求须精确匹配转换结果；单图、零邮费包邮组合、sugShow字符串false边界见ITEM_EDIT，额外字段拒绝。原始双读不归一化，变化进digest/审批，未知锁止与隐私投影不变。标签尚无有限转换：公开chunk表明依赖推荐卡片transportData，不能从editDetail自行补null/默认值，证据与最小补充结构见EDIT_LABEL_EVIDENCE。编辑默认关闭，本批不部署/提交推送。
+
 ## 2026-10-19 observational_projection 增量
 
 v3 默认 full_snapshot，管理员可显式选择固定三叶投影：browse_count/server_time/commerce_subtitle。仅限已证detail browseCnt(int)、serverTime(str)、商业浮层指定text(str)值变化，结构/严格类型每轮必查，不能与身份/内容/金额/状态/请求映射祖先后代重叠，不允许任意路径。完整原始快照审计保留，投影hash不是版本/CAS。保存/提案/执行按同一契约；verified重编同时通过新旧投影比较，未知锁止不变。见ITEM_EDIT，默认编辑关闭，其他真实映射仍待证据。日志/临时文件只放 `/home/lan/.hermes/cache/scratch`，不再写宿主 `/tmp`。

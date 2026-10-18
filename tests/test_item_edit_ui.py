@@ -18,7 +18,7 @@ def test_admin_edit_form_and_single_action_warning():
     assert "$('item-edit-form').reset()" in js
 
 
-@pytest.mark.parametrize('snapshot_mode', [False, True, 'projection'])
+@pytest.mark.parametrize('snapshot_mode', [False, True, 'projection', 'transforms'])
 def test_admin_edit_ui_local_only(api_server, snapshot_mode):
     executable = os.getenv('XY_TEST_CHROMIUM')
     if not executable:
@@ -41,6 +41,9 @@ def test_admin_edit_ui_local_only(api_server, snapshot_mode):
                 expect(page.locator('#edit-snapshot-warning')).to_contain_text('不是平台版本或 CAS')
             from tests.test_edit_projection import protocol as projection_protocol
             chosen = projection_protocol() if snapshot_mode == 'projection' else snapshot_protocol() if snapshot_mode else protocol()
+            if snapshot_mode == 'transforms':
+                from tests.test_edit_transforms import protocol as transform_protocol
+                chosen = transform_protocol()
             page.locator('#edit-protocol-form textarea').fill(json.dumps(chosen))
             page.locator('#edit-protocol-form button').click()
             expect(page.locator('#toast')).to_contain_text('编辑协议已保存')
