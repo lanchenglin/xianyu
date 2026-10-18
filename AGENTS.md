@@ -2,6 +2,10 @@
 
 这是账号主人自用的闲鱼工作台，不是无条件全自动交易系统。当前真实能力和未实现事项以 README、[能力矩阵](docs/CAPABILITY_MATRIX.md) / `/api/capabilities` 为准，禁止把占位接口或演示数据写成已完成。
 
+## 2026-10-18 Docker 隔离灾备验收
+
+基线 a9cbb50 后本机 Docker 演示构建/非 root 启动/重启持久化/离线恢复已实测，非生产或平台验收。恢复暂存 `.restore-*` 与 `restore-rollback-*` 改放目标 data 内部，保证挂载根可写且同卷 rename；不能改回父目录或通过 root/放宽 /app 权限规避。保留 server.lock、中断标记、旧授权失效与不重放；回滚副本不自动打包/清理。证据见 TEST_REPORT，后续 Docker 测试继续独立项目/临时虚构数据，禁止操作真实部署。
+
 ## 2026-10-16 受控发布执行器（当前）
 
 新增默认关闭 XY_PUBLISH_ENABLED，独立 Cookie HTTP 上传/显式完整模板发布/同 itemId seller UID 回读；仅管理员指定已批准 action，仍统一 operations.lock，旧隐式 item.publish 入口继续阻断。完整协议须管理员取证录入，不猜类目层级/地点/uniqueCode；上传也是单次外部写，绑定素材 hash 和审批。阶段/上传回执加密持久化，unknown 使用 unconfirmed 禁止重试，Agent 无协议配置和执行权限。未真实平台验收，能力声明区分 executor_implemented 与 platform_verified，详见 [PUBLISH_EXECUTOR](docs/PUBLISH_EXECUTOR.md)。不读真实 .env/data/profile，不连接真实实例，不 push/部署。

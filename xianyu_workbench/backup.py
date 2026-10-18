@@ -186,7 +186,8 @@ def create_backup(directory: Path, output: Path, vault: Vault) -> None:
 def restore_backup(directory: Path, archive_path: Path, vault: Vault) -> Path:
     check_local_paths(directory)
     with FileLock(str(directory / 'server.lock'), timeout=0):
-        with tempfile.TemporaryDirectory(prefix='.restore-', dir=directory.parent) as temporary:
+        # Keep staging and rollback on the data volume, including Docker mount roots.
+        with tempfile.TemporaryDirectory(prefix='.restore-', dir=directory) as temporary:
             stage = Path(temporary)
             with zipfile.ZipFile(archive_path) as archive:
                 validate_archive(archive, stage, vault)
@@ -210,7 +211,7 @@ def restore_backup(directory: Path, archive_path: Path, vault: Vault) -> Path:
                 c.execute("UPDATE actions SET state='unconfirmed',error='恢复时执行结果不确定；禁止重试' WHERE state='running'")
                 c.execute('INSERT INTO audit(created,actor,event,target,detail) VALUES(?,?,?,?,?)',
                           (time.time(), 'local-admin', 'backup.restored', '', '{}'))
-            rollback = directory.parent / ('restore-rollback-' + uuid.uuid4().hex)
+            rollback = directory / ('restore-rollback-' + uuid.uuid4().hex)
             rollback.mkdir(mode=0o700)
             marker = directory / 'restore-in-progress'
             previous_marker = marker.read_bytes() if marker.exists() else None

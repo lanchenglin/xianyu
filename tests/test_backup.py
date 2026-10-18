@@ -46,6 +46,30 @@ def test_backup_contains_consistent_database_assets_and_key_proof(tmp_path):
     assert b'SECRET-NOT-EXPORTED' not in output.read_bytes()
 
 
+def test_restore_data_volume_with_unwritable_parent(tmp_path):
+    import os
+
+    if os.name != 'posix' or os.geteuid() == 0:
+        pytest.skip('requires unprivileged POSIX filesystem permissions')
+    from xianyu_workbench import backup
+
+    root, vault, db = seed(tmp_path)
+    output = root / 'private.zip'
+    backup.create_backup(root, output, vault)
+    db.execute("UPDATE accounts SET label='damaged copy'")
+    tmp_path.chmod(0o500)
+    try:
+        rollback = backup.restore_backup(root, output, vault)
+        assert rollback.parent == root
+        assert DB(root, vault).one('SELECT label,paused FROM accounts') == {'label': 'fake', 'paused': 1}
+        with closing(sqlite3.connect(rollback / 'workbench.db')) as old:
+            assert old.execute('SELECT label FROM accounts').fetchone()[0] == 'damaged copy'
+        assert not list(root.glob('.restore-*'))
+        assert not (root / 'restore-in-progress').exists()
+    finally:
+        tmp_path.chmod(0o700)
+
+
 def test_restore_destroyed_copy_pauses_and_never_replays(tmp_path):
     from xianyu_workbench import backup
     root, vault, db = seed(tmp_path)

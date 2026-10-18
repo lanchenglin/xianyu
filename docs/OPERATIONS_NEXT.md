@@ -1,6 +1,6 @@
 # 运营续开发断点
 
-2026-10-18，当前基线 35914be。实现与验收逐项见 [能力矩阵](CAPABILITY_MATRIX.md)，任务编号见 [交接清单](DEVELOPMENT_HANDOFF.md)。历史批次测试证据统一保留在 [TEST_REPORT](TEST_REPORT.md)，不再以互相覆盖的“最新更新”描述当前能力。
+2026-10-18，当前基线 a9cbb50；本轮 Docker 隔离验收及恢复修复见 TEST_REPORT。实现与验收逐项见 [能力矩阵](CAPABILITY_MATRIX.md)，任务编号见 [交接清单](DEVELOPMENT_HANDOFF.md)。历史批次测试证据统一保留在 [TEST_REPORT](TEST_REPORT.md)，不再以互相覆盖的“最新更新”描述当前能力。
 
 ## 当前可复用
 
@@ -19,7 +19,7 @@
 | 完整消息增量 | 历史 cursor、稳定 ID、item/cid/peer 同记录 | 末条轮询可能漏中间消息，不能承诺完整监听 |
 | FAQ 自动回复 | 独立授权设计、真实 item/cid、限额事务账本、撤销/接管 | 策略存储不是执行器，不得删除 blocked_reason 开放 |
 | 改价/上下架/首次联系 | 同 ID 原值与写语义、建会话响应 CID 关联 | 不新增猜测 endpoint，不用 delete/recreate 或 mid 代替 |
-| 运维 | 实际客户端/Docker/真实通知目标验收；离线调度保留已实现 | 不修改宿主或其他项目配置；不自动部署 |
+| 运维 | Docker 隔离演示/持久化/灾备已验收；实际客户端/生产部署/真实通知目标仍待授权验收；离线调度保留已实现 | 不修改宿主或其他项目配置；不自动部署 |
 
 ## 上批独立可靠性补充（35914be 已包含）
 

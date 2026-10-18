@@ -4,6 +4,36 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
+## 2026-10-18 a9cbb50 后 Docker 隔离演示与恢复修复
+
+基线 `a9cbb50`，保留工作树交父助手审查，未 commit/push。未读真实 .env/data/profile，未连接宿主8099/9235，不动仓库 scratch，不改宿主配置/镜像源，不真实发送/上传/发布，不改变 FAQ 授权。所有应用数据、令牌/密钥均本批虚构。
+
+### Docker 实测与 RED/GREEN
+
+- Docker Engine client/server **29.8.0**、Compose **v5.5.1**，default context 可用。预先只读核实既有镜像源配置及缓存：`python:3.12-slim` Linux amd64，digest `sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea`（本地同时有 python 与 harbor 标签）。使用缓存基础镜像、`build --pull=false`，未更换源；容器构建 pip 依赖下载成功，无外部下载阻塞。
+- 项目外 allowlist 构建上下文仅复制 Dockerfile、requirements.lock、pyproject.toml、README 和已跟踪 xianyu_workbench；未把仓库根/scratch/data 传给 Docker。独立 Compose 项目 `xyaccept-b874adc72c`，临时 env_file，专属命名卷，`127.0.0.1::8099`，保留 UID10001/cap_drop/no-new-privileges/健康检查；live/message_send/publish/worker 全 false。首次上下文的私有 umask 导致临时复制源码不可被 UID10001 的 `python -c` 导入，诊断改在 /tmp 使用已安装包，复建时仅规范临时公开源码文件/目录权限644/755；不是生产权限修复。
+- 首次构建成功，健康启动、未认证401、账号/图片/加密草稿/已批准演示动作、运行中备份拒绝、重启持久化、停机备份通过；**恢复失败**。实际 traceback：`backup.py:189` 在 `/app/.restore-*` 创建目录 PermissionError。父目录 /app 不可写，且它与 data 命名卷不在同一文件系统；不能靠放宽 /app 或 root 规避。
+- 新增 `test_restore_data_volume_with_unwritable_parent`，非 root POSIX 实际只读父目录：修复前 **1 failed**，同一 PermissionError；改为 data 内暂存与回滚，专项 **36 passed, 1 warning / 9.59s**。覆盖原数据回滚副本、恢复暂停、暂存/marker 清理，既有中断标记、回滚注入、错误密钥、资源/关系校验及发布阶段恢复仍通过。无 schema/依赖/协议变更。
+- 修复后重新构建并从新空卷重跑完整流程，实际端口 **32770 → 32771 → 32772**（重启重新查询端口）。备份后主动修改虚构账号标签、删除草稿、损坏图片，再通过真实 CLI 恢复：标签/图片字节/schema12/草稿恢复、账号暂停、旧 approved→expired；恢复账号后真实 Service.run_once 返回 false，无旧动作重放。默认关闭 schedule CLI 输出 disabled。镜像内 pip check 无冲突、运行 UID10001、data 权限0700。
+- 最终演练输出 **ALL DOCKER ACCEPTANCE CHECKS PASSED，退出0**。`down --volumes --remove-orphans` 仅指定本批项目；容器/卷/网络 label 查询均空。测试镜像 `54630728f2e5…` 已精确删除；首次构建旧ID查询已不存在，无其他镜像/容器/卷清理、无 prune。构建缓存未全局清理。
+
+### 修复后最终全量验证
+
+项目 `.venv` Python **3.12.14**，`env -u PYTHONPATH`，稳定 `TMPDIR=/home/lan/.hermes/cache/scratch`，`XY_TEST_CHROMIUM=/snap/bin/chromium`，独立 `PLAYWRIGHT_BROWSERS_PATH=<本批证据目录>/browsers`、`PLAYWRIGHT_SKIP_BROWSER_GC=1`，所有浏览器新临时 profile。实际顺序运行：
+
+- `python -m pytest -q`：**549 passed, 1 warning in 246.69s，退出0，无 skipped**，日志 `pytest-fixed.log`。唯一 warning 为既有 Starlette/httpx 弃用提醒；含既有真实 MCP stdio 与隔离浏览器回归。
+- `python scripts/smoke_ui.py`：**UI smoke passed，退出0**，日志 `ui.log`；登录/账号/搜索/监控/聊天/审批/人工核对/XSS/Agent隔离/图片/演示发布/移动端/退出通过。
+- `python -m ruff check .`：All checks passed；`python -m pip check`：No broken requirements found；`node --check xianyu_workbench/static/app.js`、`git diff --check` 与变更 Markdown 本地链接存在性检查通过。
+- 本批未运行 Python3.11/Windows/远端CI，不借用历史结果宣称本轮通过。Docker/恢复及全量本地验证完成，仍交父助手独立审查，不宣称独立复审已通过。
+
+### 其他离线验收核查与剩余边界
+
+已有真实 MCP SDK stdio→临时 API 回归直接复用全量测试，没有重造客户端。离线本地管理/草稿导入/价格样本/调度/权限/恢复测试继续覆盖；修正 DEPLOYMENT 过期的 schema v10 与“无调度”声明，当前为 v12、默认关闭离线调度。Docker 演示验收不等于生产部署或容器内真实浏览器支持。
+
+剩余平台事项仍按 OPERATIONS_NEXT 的取证表阻塞：发布完整协议/图片/配送/uniqueCode/真实状态、消息ACK/历史cursor、买到真实末页/卖出订单、全状态库存、改价/上下架、首次联系CID；未猜接口或制造平台证据。FAQ自动发送需独立授权与限额账本设计；实际客户端配置、真实模型/通知目标、生产部署、云备份/密钥轮换均不由本次隔离演练代替。付款等永久人工不变。
+
+证据目录（项目外，不提交）：`/home/lan/.hermes/cache/scratch/xy-docker-accept-3d7xn1bh/`；`build.log` / `accept.log` 保留首次失败，`restore-red.log` 为回归 RED，`build-fixed.log` / `accept-fixed.log` 为修复后 Docker 实测，`accept.py` 为本次临时驱动。原基线全量 `pytest.log`：548 passed, 1 warning /225.18s，不冒充修复后结果。
+
 ## 2026-10-18 35914be 后离线运营纵向增量
 
 本轮保留工作树供父助手统一审查提交，未 commit/push/部署，scratch 原有未跟踪内容未动。未读取真实 .env/data/profile/私有快照、未连接8099/9235、未访问平台或真实通知目标。四项：取消归档与管理员引用保护素材回收；默认关闭离线备份调度及保留；搜索样本价格历史/降价通知；批量本地草稿预览/幂等导入/逐条申请进度。schema v11/v12 显式迁移。

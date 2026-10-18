@@ -1,6 +1,6 @@
 # 当前能力 / 实现 / 验收矩阵
 
-2026-10-18，源码核对 `35914be` 及本批工作树；以 `xianyu_workbench/app.py` 的 `/api/capabilities` 为字段来源。true 是适配/本地能力存在，不保证任意模式可用；运行开关、账号授权和平台验收是三件事。历史测试数量与 FAIL 见 [TEST_REPORT](TEST_REPORT.md)，本批结果只记在该报告对应日期。
+2026-10-18，源码核对 `a9cbb50` 及本批工作树；以 `xianyu_workbench/app.py` 的 `/api/capabilities` 为字段来源。true 是适配/本地能力存在，不保证任意模式可用；运行开关、账号授权和平台验收是三件事。历史测试数量与 FAIL 见 [TEST_REPORT](TEST_REPORT.md)，本批结果只记在该报告对应日期。
 
 | 能力与 capability | 当前实现/入口 | 隔离测试证据（不是平台证据） | 真实平台验收 | 剩余阻塞/限制 |
 |---|---|---|---|---|
@@ -28,5 +28,6 @@
 
 - Linux/WSL Python 3.11/3.12：当前支持；本批实际仅项目 `.venv` Python 3.12.14，历史双版本结果不冒充本批运行。
 - Windows 原生：暂停。`53400f8` 的 Windows 双 CI 失败保留；当前 Linux 五作业门槛不表示 Windows 恢复。
-- Chromium：隔离临时 profile/本地页面/随机端口测试，非真实账号。Google Chrome、实际桌面/WSLg 与 Docker 部署仍需各环境验收。
+- Chromium：隔离临时 profile/本地页面/随机端口测试，非真实账号。Google Chrome、实际桌面/WSLg 仍需各环境验收。
+- Docker：2026-10-18 本机隔离演示构建/非 root 启动/API/重启持久化/离线备份恢复及不重放已实际通过；发现并修复挂载根恢复暂存/回滚位置问题。专属资源已清理；不是生产部署、真实浏览器或平台验收，详见 TEST_REPORT。
 - 无人值守权限、宿主文件权限与实际客户端联调不会由 capability=true 自动获得。

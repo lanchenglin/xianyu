@@ -1,6 +1,6 @@
 # 本地开发交接与未完成功能清单
 
-更新：2026-10-18；核对基线 `feat/local-next` / `35914be`。本文正文只描述当前实现，不用“最新段落优先”覆盖旧声明。历史失败、CI 和分批测试证据保留在 [TEST_REPORT](TEST_REPORT.md)。本批未提交、未 push、未部署、未访问真实平台。
+更新：2026-10-18；核对基线 `feat/local-next` / `a9cbb50` 及 Docker 恢复修复工作树。本文正文只描述当前实现，不用“最新段落优先”覆盖旧声明。历史失败、CI 和分批测试证据保留在 [TEST_REPORT](TEST_REPORT.md)。本批未提交、未 push、未部署、未访问真实平台。
 
 ## 1. 从哪里开始
 
@@ -33,7 +33,7 @@ FastAPI + SQLite 单实例；中文 UI、管理员/Agent 分权、加密账号�
 - 微信/邮件通道未实现；现有搜索样本价格历史/降价提醒已实现，不保证全平台覆盖。
 - 云备份、密钥轮换未实现；默认关闭的离线调度 CLI/专属目录有界保留已实现，不支持在线备份，不安装宿主定时器。
 - 发布完整协议的真实平台验收、图片与配送语义、uniqueCode 来源及真实状态证据；有执行代码不等于已验收或可直接开启。
-- 实际 Hermes 等客户端、真实模型服务、Docker 部署验收；Windows 原生支持暂停。
+- 实际 Hermes 等客户端、真实模型服务、Docker 生产部署验收；本机 Docker 隔离演示及恢复已于2026-10-18完成，见 TEST_REPORT；Windows 原生支持暂停。
 
 `GET /api/capabilities` 是代码声明，不是账户授权。`live_publish` 与嵌套启用字段为双开关逻辑与；`executor_implemented=true` 与 `platform_verified=false` 并存。详见逐项矩阵。
 
