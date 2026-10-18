@@ -4,6 +4,38 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
+## 2026-10-19 最终复审外部 JSON 遗漏 P1 修复
+
+父助手最终复审报告 item.edit 事务阻断已通过，NO-GO剩上传/LLM/MCP/CLI外部 response.json 遗漏；此前703通过不能抵消遗漏。逐入口原始响应 RED **25 failed, 3 passed /4.96s**（NaN/Infinity/-Infinity/1e999/重复键/超限及上传未启用stream），日志 `/tmp/xianyu-json-red.log`。改为请求本身stream=True或httpx.Client.stream，逐块限额读取后共用bounded_json→strict_json，校验根结构与消费字段，固定脱敏错误且不重试。上传/LLM/CLI上限1MiB，MCP身份64KiB、业务4MiB，8192字节解码块，finally/context关闭响应。上传原始HTTP测试只调用一次；上游上传fixture改为真实requests.Response字节流以检查新契约，没有削弱异常输入。MCP管理员令牌拒绝固定文案回归曾1 failed，已保留原权限契约并修复。
+
+专项含结构/身份探测阻断/超限停止读取/既有CLI与MCP：**49 passed, 1 warning /11.72s**。最终全量 **743 passed, 1 warning /280.05s，退出0，无skip**，日志 `/tmp/xianyu-json-final-full.log`。独立Chromium UI smoke通过；ruff All checks passed、pip No broken requirements found、node --check及git diff --check通过。唯一warning仍为既有Starlette/httpx弃用提醒。上述为本地修复证据，不替代父助手独立复审或真实平台验收。
+
+剩余读取边界扫描：项目Python仅security.strict_json和message_text已带duplicate/constant钩子的json.loads；message_text原始文本另有18KB/深度/节点限制，非业务写协议。浏览器app.js的response.json是同源工作台响应展示，不是服务端外部信任入口，未盲改前端。固定上游SDK内部MTOP/其他解析未改造，不声明整个SDK全部严格；项目provider对子进程原始输出仍strict_json。模型生成content若不是合法JSON仍按原契约作为普通草稿文本返回，不当结构化协议执行。未访问真实数据/凭据/浏览器，未重启/部署/commit/push，未改daily。
+
+## 2026-10-19 第二轮独立复审 FAIL 修复
+
+第二轮复审 **FAIL**：unknown后协议PUT和新key提案仍接受，但执行层已阻断，不能称已发生重复外写；JSON入口接受非有限数及重复键。已有684通过不能抵消FAIL。本轮不接触真实配置/数据/浏览器/私有快照，不部署/提交/推送，不改daily。
+
+HTTP及canonical先RED：**11 failed /2.89s**，包含unknown后200、NaN/Infinity/-Infinity/1e999、顶层/嵌套重复键、canonical非有限及嵌套Cookie JSON重复键。事务内unknown_guard、申请协议复核、原始HTTP流限额严格解析、共用strict_json和canonical allow_nan=False后同组 **11 passed /2.93s**。新增并发执行期间保存/申请、prepare后历史竞争、事务内检查与账号商品隔离；最新复审专项 **19 passed /4.97s**。编辑全专项含独立Chromium **75 passed /22.39s**（最后增加的事务作用域用例另计）。旧回归中4项原先期待unknown后保存成功，按新需求改为入口409；不删除执行阻断覆盖。
+
+同类JSON路径检查：复用message_text已有duplicate/constant规则；HTTP所有JSON路由、cookies_json、CLI配置、备份manifest、Vault与本地JSON读取、bridge输入/provider输出、外部browser/CDP/通知JSON改用strict_json。multipart与form不预解析，GET/static保持；UI smoke通过。JSON字符串作为普通商品正文不递归解释成协议。历史坏数据不静默修改，固定脱敏错误。全量 **702 passed, 1 warning /277.41s，退出0，无skip**，日志 `/tmp/xianyu-edit-rereview-final.log`；全量收集后补充1项事务作用域/账号商品隔离测试，已在19项专项通过，不计入702。ruff/pip/node/diff最终通过（中途导入排序及EOF空行已修复）。唯一warning仍为Starlette/httpx弃用提醒。保留两轮FAIL；本地修复不等于独立复审PASS，更不等于平台验收。父助手报告editDetail userId语义尚未核对，未猜UID/版本映射，继续默认关闭。
+
+## 2026-10-19 同 ID 编辑独立审查 FAIL 修复
+
+父助手独立审查 **FAIL**：原模板仅校验三个可变叶子，可夹带 OFFLINE/未知字段；旧实现成功后永久锁商品不符合需求。此前通过数（含父助手报告662）不能抵消此 FAIL。本轮依据指定脱敏修复要求，未访问生产端口/凭据/私有快照、未改 daily、未提交部署。
+
+先 RED：`test_item_edit_review.py` **5 failed /2.16s**（状态/未知/嵌套数组/未映射字段被200接受、成功后再次编辑failed）；另旧协议提交前失败被误记unknown的 RED **1 failed /1.16s**。修复协议 v2 全覆盖映射、原始请求递归绑定、固定元数据无免检例外；持久化 verified after，允许新版本/新revision/重新审批，unknown仍锁止。旧v1不自动迁移授权；明确提交前失败不占未知锁。并发、恢复、Agent隐藏after、数组/嵌套/类型/未知字段等回归已补。
+
+阶段性专项含编辑Chromium UI **56 passed /18.53s**，再补旧协议用例后审查专项 **22 passed /6.40s**。全量 **684 passed, 1 warning /275.01s，退出0，无skip**，日志 `/tmp/xianyu-edit-review-final.log`。随后更新的API能力说明/UI文案亦通过编辑+MCP专项 **59 passed /26.41s**；UI smoke通过。ruff/pip/node/diff通过，唯一warning仍为既有Starlette/httpx弃用提醒。不将本地修复等同独立复审PASS或真实平台验收，当前禁止部署/启用直到父助手复审及完整真实证据满足门槛。
+
+## 2026-10-19 管理员单条同 ID 编辑（隔离实现，后续独立审查 FAIL）
+
+仅读取指定脱敏证据与仓库文件，不读取真实 .env/data/profile，不连接生产/平台或现有浏览器，不改每日生产配置，不 commit/push/deploy。父助手已验证的发布/每日部署状态以 LIVE_PUBLISH_ACCEPTANCE 为准，本批不重验。新增默认关闭管理员编辑证据控制面及固定 editDetail/edit 适配器，详见 ITEM_EDIT；真实完整编辑 payload 未采集、工作台编辑/改价未验收。
+
+RED 首轮 14 failed（缺失 edit_enabled）；恢复测试先失败于协议未撤销；UI 结构测试先失败于表单缺失；新幂等键绕过一次提交限制先复现第二次 unconfirmed 后封堵。开发期间修复 FastAPI 局部前向类型注解导致 body 被识别为 query（13 failed）、测试虚构 Cookie 缺字段（6 failed），ruff unused import/排序；这些失败不隐去。后补安全/固定传输/UI/MCP 回归中首次通过的部分不称先 RED。
+
+当前新增专项 **33 passed, 1 warning /13.37s**，包含独立 Chromium 随机本地端口的新表单保存/申请/文本 XSS/Agent 隐藏测试；真实 MCP stdio **2 passed, 1 warning /6.09s**。独立 UI smoke 已通过（登录/账号/搜索/监控/消息/审批/人工核对/Agent 隔离/图片/发布/移动端/退出）。ruff All checks passed、pip No broken requirements found、node --check、git diff --check 均通过。全量第一轮 **659 passed, 1 warning /262.29s**；加入编辑 Chromium UI 与 MCP 断言后最终全量 **660 passed, 1 warning /263.24s，退出0，无 skipped**，日志 `/tmp/xianyu-edit-final-pytest.log`。最终全量收集后另扩展恢复参数覆盖 running/submitted，专项 **3 passed /2.27s**（原 approved 加两种状态）；这两个新增参数未计入 660，不冒称已纳入该全量。唯一 warning 为既有 Starlette/httpx 弃用提醒。最后 ruff/pip/node/diff 再次通过。未做真实平台验收或独立第三方审查，留父助手审查后决定提交部署。
+
 ## 2026-10-19 GPS 纬度/经度方向修复
 
 父助手报告bc605b3部署后publish-defaults返回422 location.gps string_pattern_mismatch，已证网页格式为纬度在前、经度在后。仅用虚构坐标复现，未读取私有GPS、来源快照、.env/data/profile或真实实例，未部署/重启/commit/push。

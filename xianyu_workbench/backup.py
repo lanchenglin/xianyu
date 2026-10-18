@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import shutil
 import sqlite3
@@ -17,7 +16,7 @@ from cryptography.fernet import InvalidToken
 from filelock import FileLock
 
 from .db import DB, MIGRATIONS
-from .security import Vault, canonical
+from .security import Vault, canonical, strict_json
 
 MAX_TOTAL_BYTES = 512 * 1024 * 1024
 MAX_FILES = 10000
@@ -41,7 +40,7 @@ def validate_archive(archive, stage, vault):
             raise ValueError('备份文件类型无效')
     if 'manifest.json' not in names or archive.getinfo('manifest.json').file_size > 2 * 1024 * 1024:
         raise ValueError('备份 manifest 缺失或过大')
-    manifest = json.loads(archive.read('manifest.json'))
+    manifest = strict_json(archive.read('manifest.json'))
     if (manifest.get('format') != 1 or not isinstance(manifest.get('schema'), int)
             or not 1 <= manifest['schema'] <= len(MIGRATIONS)
             or set(names) != {'manifest.json', *manifest.get('files', {})}
@@ -195,6 +194,7 @@ def restore_backup(directory: Path, archive_path: Path, vault: Vault) -> Path:
             with db.connect() as c:
                 c.execute("UPDATE accounts SET paused=1,pause_reason='备份恢复后需人工核实'")
                 c.execute('UPDATE monitors SET enabled=0')
+                c.execute("DELETE FROM settings WHERE key LIKE 'edit-protocol:%'")
                 c.execute('UPDATE message_observation SET enabled=0,takeover=1,revision=revision+1')
                 for policy in c.execute("SELECT key,value FROM settings WHERE key LIKE 'faq:%'").fetchall():
                     value = vault.open(policy['value'])

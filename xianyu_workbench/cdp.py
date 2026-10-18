@@ -8,6 +8,8 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from .security import strict_json
+
 
 def endpoint(value: str) -> str:
     if not re.fullmatch(r'http://(?:127\.0\.0\.1|\[::1\]):[0-9]+/?', value):
@@ -31,8 +33,7 @@ def websocket_url(value: str, *, transport=None) -> str:
                 content.extend(chunk)
                 if len(content) > 65536:
                     raise ValueError('cdp_discovery_failed')
-    import json
-    ws = json.loads(content).get('webSocketDebuggerUrl', '')
+    ws = strict_json(content).get('webSocketDebuggerUrl', '')
     prefix = base.replace('http://', 'ws://', 1) + '/devtools/browser/'
     if not isinstance(ws, str) or not ws.startswith(prefix) or not re.fullmatch(r'[A-Za-z0-9_-]+', ws[len(prefix):]):
         raise ValueError('cdp_websocket_invalid')

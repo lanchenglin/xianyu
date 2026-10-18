@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import shutil
 import signal
@@ -17,7 +16,7 @@ from filelock import FileLock, Timeout
 
 from .config import Settings
 from .db import DB
-from .security import Vault, canonical, redact
+from .security import Vault, canonical, redact, strict_json
 
 
 class Problem(Exception):
@@ -110,6 +109,16 @@ class Provider:
     def _live(self, account: dict, operation: str, payload: dict, *, write: bool):
         if operation in {'orders', 'inventory', 'messages'} and not self.s.browser_cdp_endpoint:
             raise Problem('cdp_required', '单页样本同步仅支持管理员绑定的 CDP 账号', 409)
+        edit_transport = operation in {'edit.read', 'edit.submit'}
+        if edit_transport:
+            action_id = getattr(self._selected, 'edit_action', None)
+            self._selected.edit_action = None
+            row = self.db.one('SELECT * FROM actions WHERE id=?', (action_id,)) if action_id else None
+            if (not self.s.live_enabled or not self.s.edit_enabled or not row
+                    or row['state'] != 'running' or row['kind'] != 'item.edit' or not row['approved_at']
+                    or row['account_id'] != account['id'] or row['expires'] <= time.time()
+                    or account['paused'] or account['mode'] != 'live' or write != (operation == 'edit.submit')):
+                raise Problem('edit_authorization_required', '编辑传输仅限指定队列执行器', 409)
         publish_transport = operation in {'publish.upload', 'publish.submit', 'publish.readback'}
         if publish_transport:
             action_id = getattr(self._selected, 'publish_action', None)
@@ -119,11 +128,11 @@ class Provider:
                     or row['state'] != 'running' or row['kind'] != 'item.publish'
                     or row['account_id'] != account['id'] or row['expires'] <= time.time()):
                 raise Problem('publish_authorization_required', '发布传输仅限指定队列执行器', 409)
-        cookie_send = bool((self.s.browser_cdp_endpoint and self.s.message_send_enabled and operation == 'message.send') or publish_transport)
+        cookie_send = bool((self.s.browser_cdp_endpoint and self.s.message_send_enabled and operation == 'message.send') or publish_transport or edit_transport)
         if self.s.browser_cdp_endpoint:
             if operation not in {'search', 'orders', 'inventory', 'messages'} and not cookie_send:
                 raise Problem('cdp_search_only', 'CDP 仅支持搜索、订单、本人商品和末条消息样本；写操作未开放', 409)
-            if not publish_transport and (account['id'] != self.s.browser_cdp_account_id or account['uid'] != self.s.browser_cdp_uid):
+            if not (publish_transport or edit_transport) and (account['id'] != self.s.browser_cdp_account_id or account['uid'] != self.s.browser_cdp_uid):
                 raise Problem('cdp_binding_mismatch', 'CDP 固定账号绑定不匹配，拒绝执行', 409)
         home = self.s.data_dir / "runtime" / account["id"]
         private = home / ".goofish-cli"
@@ -152,7 +161,8 @@ class Provider:
                     'XY_BROWSER_CDP_ENDPOINT': self.s.browser_cdp_endpoint,
                     'XY_BROWSER_CDP_ACCOUNT_ID': self.s.browser_cdp_account_id,
                     'XY_BROWSER_CDP_UID': self.s.browser_cdp_uid,
-                    'XY_MESSAGE_SEND_ENABLED': 'true' if cookie_send and not publish_transport else 'false',
+                    'XY_MESSAGE_SEND_ENABLED': 'true' if cookie_send and not (publish_transport or edit_transport) else 'false',
+                    'XY_EDIT_ENABLED': 'true' if edit_transport else 'false',
                     'XY_PUBLISH_ENABLED': 'true' if publish_transport else 'false',
                     'XY_OPERATION_ACCOUNT_ID': account['id'], 'XY_OPERATION_UID': account['uid']})
         if not self.s.browser_cdp_endpoint or cookie_send:
@@ -185,7 +195,7 @@ class Provider:
             if len(stdout) > 5_000_000:
                 raise Problem("uncertain" if write else "upstream_error", "上游返回过大，结果需人工核实", 502)
             try:
-                output = json.loads(stdout)
+                output = strict_json(stdout)
             except (ValueError, TypeError):
                 raise Problem("uncertain" if write else "upstream_error", "上游返回无法解析，未记录原始输出以保护登录态", 502)
             if process.returncode or not output.get("ok"):

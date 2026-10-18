@@ -1,7 +1,6 @@
 """Installed explicitly by bridge before importing upstream command modules."""
 from __future__ import annotations
 
-import json
 import os
 import shutil
 import tempfile
@@ -11,6 +10,7 @@ from pathlib import Path
 from .browser_config import CDP_OPERATIONS, BrowserError, discover
 from .cancellation import cancellation_scope
 from .cdp import endpoint, guarded_websocket, task_page, websocket_url
+from .security import strict_json
 
 
 def playwright():
@@ -55,7 +55,7 @@ async def goofish_page(*, headless=None, viewport=(1440, 900), cookies=None, foc
         filename = os.environ.get('GOOFISH_COOKIES_PATH')
         if not filename:
             raise BrowserError('browser_cookies_missing')
-        cookies = json.loads(Path(filename).read_text(encoding='utf-8'))
+        cookies = strict_json(Path(filename).read_text(encoding='utf-8'))
     if not os.environ.get('XY_OPERATION_UID') or cookies.get('unb') != os.environ['XY_OPERATION_UID']:
         raise BrowserError('account_mismatch')
     choice = discover(os.environ.get('XY_BROWSER', 'auto'), os.environ.get('XY_BROWSER_EXECUTABLE', ''))

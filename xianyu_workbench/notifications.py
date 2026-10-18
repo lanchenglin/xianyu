@@ -6,7 +6,6 @@ import hashlib
 import hmac
 import http.client
 import ipaddress
-import json
 import re
 import socket
 import ssl
@@ -15,7 +14,7 @@ import time
 import uuid
 from urllib.parse import parse_qs, urlencode, urlsplit
 
-from .security import canonical
+from .security import canonical, strict_json
 
 
 def validate_url(kind, url):
@@ -135,7 +134,7 @@ def send(config, payload, delivery_id):
             raise TimeoutError('delivery_timeout')
         if len(data) > 65536 or not 200 <= response.status < 300:
             raise ValueError('delivery_failed')
-        if config['kind'] == 'dingtalk' and json.loads(data).get('errcode') != 0:
+        if config['kind'] == 'dingtalk' and strict_json(data).get('errcode') != 0:
             raise ValueError('delivery_failed')
     finally:
         deadline.cancel()

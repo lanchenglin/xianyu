@@ -69,7 +69,9 @@ def test_stdio_discovery_call_and_local_notice_state(api_server, tmp_path):
             result = await session.call_tool('local_asset_candidates', {'account_id': 'messages'})
             assert not result.isError
             assert 'preview_listing' in tools
-            assert not {'publish_defaults', 'execute_action'} & tools
+            assert not {'publish_defaults', 'execute_action', 'edit_protocol', 'edit_item', 'propose_edit'} & tools
+            capability = await session.call_tool('capabilities', {})
+            assert not capability.isError and 'item_edit' in str(capability)
             result = await session.call_tool('preview_listing', {'account_id': 'messages', 'title': '测试',
                 'desc': '测试', 'price': '12.30', 'images': ['a' * 32], 'idempotency_key': 'preview-mcp-001'})
             assert result.isError  # No administrator defaults/assets; never invent them.

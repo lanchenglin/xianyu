@@ -20,17 +20,25 @@ def api(method: str, path: str, body: dict | None = None):
         raise ValueError("XY_API_URL 必须是固定的工作台源站地址，不能带凭据、路径或查询参数")
     if parsed.scheme != "https" and not (parsed.scheme == "http" and parsed.hostname in ("localhost", "127.0.0.1", "::1")):
         raise ValueError("远程工作台必须使用 HTTPS；本机可用 HTTP")
-    with httpx.Client(base_url=base, headers={"Authorization": "Bearer " + token}, timeout=150,
-                      follow_redirects=False, trust_env=False) as client:
-        me = client.get("/api/me")
-        me.raise_for_status()
-        if me.json().get("role") != "agent":
-            raise ValueError("MCP 拒绝管理员令牌；必须使用专用 Agent 令牌")
-        response = client.request(method, path, json=body)
-        if response.is_error:
-            result = response.json()
-            raise ValueError(result.get("message", "工作台请求失败"))
-        return response.json()
+    from .security import bounded_json
+    role_rejected = False
+    try:
+        with httpx.Client(base_url=base, headers={"Authorization": "Bearer " + token}, timeout=150,
+                          follow_redirects=False, trust_env=False) as client:
+            with client.stream('GET', '/api/me') as response:
+                response.raise_for_status()
+                me = bounded_json(response.iter_bytes(chunk_size=8192), 65536)
+            if me.get('role') != 'agent':
+                role_rejected = True
+                raise ValueError('invalid role')
+            with client.stream(method, path, json=body) as response:
+                result = bounded_json(response.iter_bytes(chunk_size=8192), 4_194_304, root_types=(dict, list))
+                response.raise_for_status()
+                return result
+    except Exception:
+        if role_rejected:
+            raise ValueError('MCP 拒绝管理员令牌；必须使用专用 Agent 令牌') from None
+        raise ValueError('工作台响应无效或请求失败；请核对专用 Agent 令牌，不自动重试') from None
 
 
 @mcp.tool()
@@ -41,7 +49,7 @@ def list_accounts() -> list[dict]:
 
 @mcp.tool()
 def capabilities() -> dict:
-    """首先检查真实可用能力；不支持首次联系、平台改价、重新上架及任何交易操作。"""
+    """首先检查真实可用能力；Agent 不支持平台编辑/改价。管理员默认关闭单条编辑需完整证据协议，不是平台验收；MCP 无配置/申请/执行工具。首次联系、重新上架及交易不开放。"""
     return api("GET", "/api/capabilities")
 
 

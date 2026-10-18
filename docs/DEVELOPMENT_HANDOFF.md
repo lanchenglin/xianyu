@@ -28,7 +28,7 @@ FastAPI + SQLite 单实例；中文 UI、管理员/Agent 分权、加密账号�
 ### 2.2 尚未实现或未开放
 
 - 首次联系陌生卖家、可靠消息接受/送达/已读自动判定。
-- 同 itemId 改价/内容编辑、普通下架/重新上架；旧 live delete 已关闭，不能以删除重建代替。
+- 同 itemId 编辑新增默认关闭管理员证据控制面/适配器，见 ITEM_EDIT；完整真实 payload 与工作台编辑/改价验收仍缺，不得直接开启。普通下架/重新上架仍未实现；旧 live delete 已关闭，不能以删除重建代替。
 - 卖出订单、订单真实末页、下架列表/全状态库存同步；现有有界样本不是完整同步。
 - 完整消息历史增量监听、漏消息补偿、无人值守 FAQ 执行/限额账本；低频末条采集不是实时客服。
 - 批量平台运营未开放；本地批量草稿预览/幂等导入/逐条申请进度、取消归档、管理员明确素材回收已实现，见 LOCAL_MANAGEMENT。
@@ -56,7 +56,7 @@ FastAPI + SQLite 单实例；中文 UI、管理员/Agent 分权、加密账号�
 | P1-01 首次联系 | 未开放；须真实响应 CID 与请求关联，mid 不能代替 CID | message_send.py、provider.py、bridge.py |
 | P1-02 回执闭环 | 人工核对已实现；同文观察非 ACK，可靠自动回执待证 | service.py、message_send.py |
 | P1-03 本人库存 | self_published 有界分页已实现；全状态范围待证，失败不可清历史 | operations_browser.py、operation_pagination.py、operations_cache.py |
-| P1-04 改价/编辑 | 未实现；同 ID 原值/归属/版本及写语义待证 | models.py、provider.py |
+| P1-04 改价/编辑 | 默认关闭管理员单条控制面/适配器已实现；完整真实模板、平台版本与写语义仍需取证，工作台未验收 | item_edit.py、provider.py、bridge.py、ITEM_EDIT |
 | P1-05 普通上下架 | 未实现；delete/recreate 禁止替代 | provider.py、service.py |
 | P1-06 客服 | 末条低频采集/接管/策略存储已有；历史游标、item/cid 绑定、限额账本、授权决策仍缺 | message_observation.py、faq_policy.py |
 | P1-07 发布 | 本地冻结和默认关闭单条执行已有；平台协议/状态/图片/配送真实验收未完成 | publish_preview.py、publish_executor.py、bridge.py |

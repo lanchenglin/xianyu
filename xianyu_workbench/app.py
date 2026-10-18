@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import io
-import json
 import os
 import secrets
 import time
@@ -22,6 +21,8 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from .config import Settings
 from .daily_publish import DailyPublish, DailyPublishIn
 from .faq_policy import FAQPolicy, FAQPolicyIn
+from .item_edit import EditProtocol
+from .item_edit import save_protocol as save_edit_protocol
 from .message_observation import MessageObservation, ObservationIn
 from .models import (
     AccountIn,
@@ -45,7 +46,7 @@ from .models import (
 from .provider import Problem, asset_path
 from .publish_executor import PublishProtocol, save_protocol
 from .publish_preview import PublishDefaults, defaults, save_defaults
-from .security import canonical, parse_cookies
+from .security import canonical, parse_cookies, strict_json
 from .service import Service
 
 STATIC = Path(__file__).parent / "static"
@@ -80,6 +81,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             origin = request.headers.get("origin")
             if origin and urlparse(origin).netloc != request.headers.get("host"):
                 return JSONResponse({"code": "bad_origin", "message": "禁止跨站调用"}, status_code=403)
+        media = request.headers.get('content-type', '').split(';', 1)[0].strip().lower()
+        if request.url.path.startswith('/api/') and (not media or media == 'application/json' or media.endswith('+json')):
+            from .security import InvalidJSON, strict_json
+            raw = bytearray()
+            async for chunk in request.stream():
+                raw.extend(chunk)
+                if len(raw) > 12 * 1024 * 1024:
+                    return JSONResponse({'code': 'body_too_large', 'message': '请求最大 12MB'}, status_code=413)
+            request._body = bytes(raw)
+            if raw:
+                try:
+                    strict_json(bytes(raw))
+                except InvalidJSON:
+                    return JSONResponse({'code': 'invalid_json', 'message': 'JSON 格式无效，不允许重复键或非有限数'}, status_code=400)
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
@@ -87,6 +102,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         response.headers["Cache-Control"] = "no-store"
         response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
         return response
+
+    from .security import InvalidJSON
+
+    @app.exception_handler(InvalidJSON)
+    async def invalid_json_handler(request, exc):
+        return JSONResponse({'code': 'invalid_json', 'message': 'JSON 数据无效，请检查输入或联系管理员核对历史数据'}, status_code=422)
 
     @app.exception_handler(Problem)
     async def problem_handler(request, exc):
@@ -132,6 +153,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def capabilities(current=Depends(role)):
         return {"search": True, "item_detail": True, "existing_chats": True, "message_history": True,
                 "send_with_approval": True, "publish_with_approval": True, "delete_with_explicit_approval": True,
+                "item_edit": {"executor_implemented": True, "platform_verified": False,
+                              "enabled": s.live_enabled and s.edit_enabled, "admin_only": True,
+                              "same_id_only": True, "evidence_contract_required": True,
+                              "protocol_schema": 2, "complete_request_mapping_required": True,
+                              "verified_reedit_requires_new_version": True, "unknown_blocks_reedit": True},
                 "live_publish": s.live_enabled and s.publish_enabled, "publish_complete_snapshot": False, "local_publish_preview": True,
                 "publish_policy": {"live_executor_enabled": s.live_enabled and s.publish_enabled,
                                    "executor_implemented": True, "platform_verified": False,
@@ -180,6 +206,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                                   "private_cache_encrypted": True, "platform_verified": False},
                 "payment": False, "refund": False, "confirm_receipt": False,
                 "notice": "False 表示本版本没有开放，不会伪造成功；交易仅在闲鱼人工完成"}
+
+    @app.put('/api/accounts/{account_id}/edit-protocol')
+    def put_edit_protocol(account_id: str, body: EditProtocol, current=Depends(admin)):
+        return save_edit_protocol(service, account_id, body)
+
+    @app.post('/api/item-edit', status_code=201)
+    def propose_edit(body: ActionIn, current=Depends(admin)):
+        if body.kind != 'item.edit':
+            raise Problem('invalid_request', '仅接受同 ID 编辑', 422)
+        return service.propose(body, current)
 
     @app.get('/api/accounts/{account_id}/publish-defaults')
     def get_publish_defaults(account_id: str, current=Depends(admin)):
@@ -524,7 +560,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/catalog")
     def catalog(current=Depends(role)):
-        return [{**row, "data": json.loads(row["data"])} for row in service.db.all("SELECT * FROM catalog ORDER BY updated DESC LIMIT 200")]
+        return [{**row, "data": strict_json(row["data"])} for row in service.db.all("SELECT * FROM catalog ORDER BY updated DESC LIMIT 200")]
 
     @app.post("/api/monitors", status_code=201)
     def monitor(body: MonitorIn, current=Depends(role)):
@@ -574,7 +610,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/notifications")
     def notifications(include_archived: bool = False, current=Depends(role)):
-        return [{**row, "content": json.loads(row["content"])} for row in service.db.all(
+        return [{**row, "content": strict_json(row["content"])} for row in service.db.all(
             "SELECT * FROM notifications WHERE (? OR archived=0) ORDER BY id DESC LIMIT 100", (include_archived,))]
 
     @app.post('/api/notifications/{notification_id}/state')
@@ -588,7 +624,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/audit")
     def audit(current=Depends(admin)):
-        return [{**row, "detail": json.loads(row["detail"])} for row in service.db.all("SELECT * FROM audit ORDER BY id DESC LIMIT 200")]
+        return [{**row, "detail": strict_json(row["detail"])} for row in service.db.all("SELECT * FROM audit ORDER BY id DESC LIMIT 200")]
 
     @app.post("/api/llm/config")
     def llm_config(body: LLMConfigIn, current=Depends(admin)):

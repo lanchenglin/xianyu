@@ -11,6 +11,8 @@ from pathlib import Path
 
 from cryptography.fernet import Fernet
 
+from .security import strict_json
+
 
 def initialize(directory: Path) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
@@ -74,13 +76,15 @@ def main():
             method, body = 'GET', None
             if args.operation == 'configure':
                 method = 'PUT'
-                body = json.loads(args.config.read_text(encoding='utf-8'))
+                body = strict_json(args.config.read_text(encoding='utf-8'))
             elif args.operation in ('revoke', 'tick'):
                 method, endpoint = 'POST', endpoint + '/' + args.operation
             with httpx.Client(follow_redirects=False, trust_env=False, timeout=300) as client:
-                response = client.request(method, endpoint, json=body, headers={'Authorization': 'Bearer ' + token})
-                response.raise_for_status()
-                print(json.dumps(response.json(), ensure_ascii=False))
+                with client.stream(method, endpoint, json=body, headers={'Authorization': 'Bearer ' + token}) as response:
+                    from .security import bounded_json
+                    response.raise_for_status()
+                    value = bounded_json(response.iter_bytes(chunk_size=8192))
+                print(json.dumps(value, ensure_ascii=False, allow_nan=False))
         except Exception:
             parser.exit(1, '每日发布请求失败；不自动重试，请在管理员队列核对结果。\n')
         return

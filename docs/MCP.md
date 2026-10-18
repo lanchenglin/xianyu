@@ -4,6 +4,10 @@
 
 接入前先按部署说明启动工作台；本地完整开发推荐 Python 3.12。以下示例是当前已提供的通用配置，不代表你的具体客户端或三个远程 Gateway 已联调通过。首次建会话、实时自动客服等待办见交接清单，MCP 不会额外实现后端没有的能力。
 
+## 同 ID 编辑权限（2026-10-19）
+
+`capabilities.item_edit` 声明默认关闭的管理员证据控制面，**不授予 Agent 编辑权**。MCP 无协议配置、编辑申请、批准或执行工具；通用 HTTP `/api/actions` 同样拒绝 Agent 的 `item.edit`。动作列表对 Agent 隐去 `_edit_snapshot`（完整协议、原值与凭据指纹），只保留请求的新值和脱敏执行结论。固定 editDetail/edit 仅在管理员指定队列执行器内使用；没有任意 URL/方法/API 注入。真实工作台编辑/改价未验收，详见 [ITEM_EDIT](ITEM_EDIT.md)。
+
 ## 本地管理与价格样本（2026-10-18）
 
 新增 `unarchive_listing_draft`、`local_asset_candidates`、`search_price_history`、`preview_draft_import`、`confirm_draft_import`、`draft_import_progress`、`propose_import_row`。批次最多50条，确认只保存草稿，单条申请仍走已有发布冻结链和唯一审批队列。素材删除、备份调度、批量批准/执行均没有 MCP 工具。详见 [本地管理](LOCAL_MANAGEMENT.md) 与 [通知](NOTIFICATIONS.md)。

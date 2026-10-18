@@ -2,6 +2,10 @@
 
 这是账号主人自用的闲鱼工作台，不是无条件全自动交易系统。当前真实能力和未实现事项以 README、[能力矩阵](docs/CAPABILITY_MATRIX.md) / `/api/capabilities` 为准，禁止把占位接口或演示数据写成已完成。
 
+## 2026-10-19 管理员同 ID 编辑增量
+
+见 [ITEM_EDIT](docs/ITEM_EDIT.md)：默认关闭 XY_EDIT_ENABLED，管理员显式完整证据模板/原值/新值/版本/同 UID 同 ID，复用唯一 actions 与 operations.lock，只指定 execute；固定 editDetail/edit 子进程，不猜 payload、不上传/发布替代、不接浏览器。工作台编辑/改价未平台验收，父助手网页正文编辑成功但完整请求未采到。独立审查 FAIL 后修复：schema v13 不变，协议 schema_version=2，v1 拒绝执行；完整 original_request 与模板全等，所有非批准叶子须显式映射到身份/状态/版本/回读不变量并精确验证，固定元数据例外白名单为空。恢复删除协议、旧审批失效。确定 verified 后允许新 before/版本/revision 重新逐条审批，before 必须等于最近 verified after 与当次回读；不确定提交仍阻断所有新键/协议，人工核对不解除。Agent 无配置/申请/执行权；永久人工交易不变。本批不提交不部署。
+
 ## 2026-10-18 每日管理员发布授权
 
 父助手批准受限每日策略，不是删除审批：默认关闭，固定已验收快照、Asia/Shanghai 计划分钟、账号+日期永久去重，只有策略新建 action 可获授权；沿用唯一队列/operations.lock，Agent 无配置/执行权。未知停止后续日期，暂停/接管撤销、变更重审、恢复撤销但保留日期账本；schema v13。API/UI/CLI 单次 tick 见 DAILY_PUBLISH。发布新增严格整数身份、精确标题/描述/金额/图片数回读契约，不强迫顶层 onlyTakeSelf。父助手报告网页发布及在线回读不等于工作台验收；发布 ACK 尚缺；2026-10-19 已证官方 YG 每次以毫秒拼接0～999整数生成 uniqueCode，已改显式 generation_mode（默认disabled），新action原子冻结一次、碰撞拒绝、只允许该单字段动态比较；旧reuse授权不自动升级，禁止用 fixture 启用生产。历史“本批禁止部署”不限制父助手后来获得的部署授权；当前隔离编码端仍不访问真实实例、不部署、不 commit/push。

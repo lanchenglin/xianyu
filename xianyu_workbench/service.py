@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 import shutil
 import threading
@@ -16,7 +15,7 @@ from .config import Settings
 from .db import DB
 from .models import ACTION_MODELS, ActionIn, AssistIn, ReconciliationIn, SearchIn
 from .provider import Problem, Provider, asset_path
-from .security import Vault, canonical, digest
+from .security import Vault, canonical, digest, strict_json
 
 
 class Service:
@@ -78,12 +77,15 @@ class Service:
         result["payload"] = self.vault.open(row["payload"])
         if actor != 'admin':
             result['payload'].pop('_binding', None)
+            result['payload'].pop('_edit_snapshot', None)
             if '_publish_snapshot' in result['payload']:
                 from .publish_preview import public_snapshot
                 result['payload']['_publish_snapshot'] = public_snapshot(result['payload']['_publish_snapshot'])
         result["result"] = self.vault.open(row["result"]) if row.get("result") else None
         if actor != 'admin' and row['kind'] == 'item.publish' and result['result']:
             result['result'].pop('uploads', None)
+        if actor != 'admin' and row['kind'] == 'item.edit' and result['result']:
+            result['result'].pop('after', None)
         result.pop("idem", None)
         record = self.db.one("SELECT * FROM reconciliations WHERE action_id=?", (row["id"],))
         result["reconciliation"] = self.reconciliation_view(record, actor) if record else None
@@ -139,10 +141,23 @@ class Service:
     def propose(self, body: ActionIn, actor: str, *, publish_preview: bool = False,
                 draft_guard: tuple[str, int] | None = None) -> dict:
         account = self.provider.account(body.account_id)
+        if body.kind == 'item.edit' and actor != 'admin':
+            raise Problem('forbidden', '同 ID 编辑仅限管理员', 403)
+        from .item_edit import EditIn
+        model = EditIn if body.kind == 'item.edit' else ACTION_MODELS[body.kind]
         try:
-            payload = ACTION_MODELS[body.kind].model_validate(body.payload).model_dump(mode="json")
+            payload = model.model_validate(body.payload).model_dump(mode="json")
         except ValidationError:
             raise Problem("invalid_payload", "操作参数无效，请检查消息、金额、图片 ID 和删除确认文字", 422)
+        if body.kind == 'item.edit':
+            old = self.db.one('SELECT * FROM actions WHERE account_id=? AND idem=?', (account['id'], body.idempotency_key))
+            if old:
+                prior = self.vault.open(old['payload'])
+                if old['kind'] != body.kind or {k: v for k, v in prior.items() if k != '_edit_snapshot'} != payload:
+                    raise Problem('idempotency_conflict', '相同幂等键不能改变编辑内容', 409)
+                return self.action_view(old, actor)
+            from .item_edit import prepare
+            payload = prepare(self, account, payload)
         if body.kind == 'message.send':
             self.observation.guard(account['id'])
         if body.kind == 'message.send' and account['mode'] == 'live':
@@ -173,6 +188,12 @@ class Service:
                 if old["digest"] != signature:
                     raise Problem("idempotency_conflict", "相同幂等键不能用于不同内容", 409)
                 return self.action_view(dict(old))
+            if body.kind == 'item.edit':
+                from .item_edit import unknown_guard
+                unknown_guard(self, c, account['id'], payload['item_id'])
+                current = c.execute('SELECT value FROM settings WHERE key=?', ('edit-protocol:' + account['id'],)).fetchone()
+                if not current or canonical(self.vault.open(current['value'])) != canonical(payload['_edit_snapshot']['protocol']):
+                    raise Problem('edit_changed', '协议在申请期间变化，请重新申请', 409)
             if draft_guard:
                 draft_id, revision = draft_guard
                 if not c.execute('SELECT 1 FROM drafts WHERE id=? AND account_id=? AND revision=? AND archived=0',
@@ -229,7 +250,7 @@ class Service:
             if action_id is not None:
                 row = c.execute(query + ' AND a.id=? AND a.digest=?', (action_id, signature)).fetchone()
             else:
-                restriction = " AND NOT (a.mode='live' OR b.mode='live')"
+                restriction = " AND NOT (a.mode='live' OR b.mode='live') AND a.kind!='item.edit'"
                 row = c.execute(query + restriction + ' ORDER BY a.created LIMIT 1').fetchone()
             if not row:
                 return False
@@ -260,6 +281,14 @@ class Service:
                     matching = [s for s in chats.get("sessions", []) if str(s.get("session_id")) == payload["cid"] and str(s.get("peer_user_id")) == payload["toid"]]
                     if not matching:
                         raise Problem("recipient_unverified", "未验证到该收件人与会话的对应关系，请先在闲鱼人工建立/核对会话", 409)
+            elif row['kind'] == 'item.edit':
+                from .item_edit import execute
+                result = execute(self, row['id'])
+                state = 'submitted' if result.get('content_verified') else 'unconfirmed'
+                self.db.execute('UPDATE actions SET state=?,result=?,error=NULL WHERE id=?',
+                                (state, self.vault.seal(result), row['id']))
+                self.db.audit('admin', 'edit.executed', row['id'], {'state': state})
+                return True
             elif row["kind"] == "item.publish":
                 if account['mode'] == 'live' and payload.get('_publish_snapshot', {}).get('executor'):
                     from .publish_executor import execute
@@ -369,11 +398,11 @@ class Service:
             return
         self.db.execute("UPDATE monitors SET next_run=? WHERE id=?", (time.time() + row["interval_s"], row["id"]))
         try:
-            body = SearchIn(account_id=row["account_id"], query=row["query"], **json.loads(row["filters"]))
+            body = SearchIn(account_id=row["account_id"], query=row["query"], **strict_json(row["filters"]))
             results = self.search(body)
             from .price_history import observe
             observe(self, row, results)
-            previous = set(json.loads(row["seen"]))
+            previous = set(strict_json(row["seen"]))
             current = {str(i["item_id"]) for i in results["items"] if i.get("item_id")}
             new = [i for i in results["items"] if str(i.get("item_id")) not in previous]
             if new:
@@ -409,17 +438,22 @@ class Service:
         self.db.audit("ai", "llm.started", call_id, {"model": config["model"], "purpose": body.purpose})
         try:
             with httpx.Client(timeout=60, follow_redirects=False, trust_env=False) as client:
-                response = client.post(url + "/chat/completions", headers={"Authorization": "Bearer " + config["api_key"]},
-                                       json={"model": config["model"], "messages": [{"role": "system", "content": system},
-                                              {"role": "user", "content": canonical(body.model_dump())}],
-                                             "max_tokens": 1800, "temperature": 0.3})
-            response.raise_for_status()
-            text = response.json()["choices"][0]["message"]["content"]
+                with client.stream('POST', url + "/chat/completions", headers={"Authorization": "Bearer " + config["api_key"]},
+                                   json={"model": config["model"], "messages": [{"role": "system", "content": system},
+                                          {"role": "user", "content": canonical(body.model_dump())}],
+                                         "max_tokens": 1800, "temperature": 0.3}) as response:
+                    from .security import bounded_json
+                    response.raise_for_status()
+                    value = bounded_json(response.iter_bytes(chunk_size=8192))
+            choices = value.get('choices')
+            if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict) or not isinstance(choices[0].get('message'), dict):
+                raise ValueError('invalid response structure')
+            text = choices[0]['message'].get('content')
             if not isinstance(text, str):
                 raise ValueError("invalid content")
             cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip())
             try:
-                result = json.loads(cleaned)
+                result = strict_json(cleaned)
             except ValueError:
                 result = {"text": text}
             if not isinstance(result, dict):

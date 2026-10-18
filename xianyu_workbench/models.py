@@ -69,7 +69,7 @@ ACTION_MODELS = {"message.send": MessageIn, "item.publish": PublishIn, "item.del
 
 class ActionIn(Model):
     account_id: str
-    kind: Literal["message.send", "item.publish", "item.delete"]
+    kind: Literal["message.send", "item.publish", "item.delete", "item.edit"]
     payload: dict
     idempotency_key: str = Field(min_length=8, max_length=100, pattern=r"^[\w.:-]+$")
 

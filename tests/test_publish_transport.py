@@ -14,8 +14,13 @@ def upstream(monkeypatch):
         def post(self, url, **kwargs):
             calls.append((url, kwargs))
             assert kwargs.get('allow_redirects') is False
-            return SimpleNamespace(json=lambda: {'object': {'url': 'https://img.alicdn.com/test.png', 'pix': '40x30'}},
-                                   raise_for_status=lambda: None)
+            import io
+
+            import requests
+            response = requests.Response()
+            response.status_code = 200
+            response.raw = io.BytesIO(b'{"object":{"url":"https://img.alicdn.com/test.png","pix":"40x30"}}')
+            return response
     session = SimpleNamespace(unb='12345', http=HTTP())
     modules = {name: ModuleType(name) for name in ['goofish_cli', 'goofish_cli.core', 'goofish_cli.core.mtop', 'goofish_cli.core.session']}
     modules['goofish_cli.core'].Session = SimpleNamespace(load=lambda: session)

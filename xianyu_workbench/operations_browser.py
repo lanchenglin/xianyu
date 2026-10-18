@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import json
 import os
 from urllib.parse import urlsplit
 
@@ -11,6 +10,7 @@ from .browser_adapter import goofish_page, validate_operation
 from .browser_config import BrowserError
 from .operation_pagination import Traversal
 from .operations import MAX_BODY, SOURCES, success_data
+from .security import strict_json
 
 HEAD = 'mtop.idle.web.user.page.head'
 PAGES = {'orders': 'https://www.goofish.com/bought', 'inventory': 'https://www.goofish.com/personal'}
@@ -132,7 +132,7 @@ async def capture(page, kind: str, *, timeout=25, max_bytes=5_000_000) -> dict:
                         break
                     raise ValueError('response_limit')
                 try:
-                    value = json.loads(raw)
+                    value = strict_json(raw)
                     data = success_data(value)
                 except (ValueError, TypeError):
                     continue
@@ -214,7 +214,7 @@ async def capture_messages(page, uid: str, *, timeout=8) -> dict:
                 break
             count += 1
             try:
-                value = json.loads(raw)
+                value = strict_json(raw)
                 stack, nodes = [(value, 0)], 0
                 while stack:
                     node, depth = stack.pop()

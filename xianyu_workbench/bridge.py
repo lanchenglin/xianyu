@@ -13,6 +13,8 @@ import json
 import sys
 from decimal import Decimal
 
+from .security import strict_json
+
 READS = {
     "search": ("search.search", "search"),
     "item": ("item.view", "view"),
@@ -27,6 +29,8 @@ WRITES = {
 
 
 def dispatch(operation: str, payload: dict):
+    if operation in {'edit.read', 'edit.submit'}:
+        return dispatch_edit(operation, payload)
     if operation in {'publish.upload', 'publish.submit', 'publish.readback'}:
         return dispatch_publish(operation, payload)
     if operation == 'message.send':
@@ -87,11 +91,22 @@ def dispatch_publish(operation, payload):
                 headers={'accept': '*/*', 'origin': 'https://www.goofish.com',
                          'referer': 'https://www.goofish.com/', 'user-agent': USER_AGENT},
                 params={'floderId': '0', 'appkey': 'xy_chat', '_input_charset': 'utf-8'},
-                files={'file': ('image.png', image, 'image/png')}, timeout=60, allow_redirects=False)
-            response.raise_for_status()
-            obj = response.json().get('object') or {}
-        width, height = map(int, str(obj.get('pix', '0x0')).split('x'))
-        return {'url': obj.get('url', ''), 'width': width, 'height': height}
+                files={'file': ('image.png', image, 'image/png')}, timeout=60, allow_redirects=False, stream=True)
+            from .security import InvalidJSON, bounded_json
+            try:
+                if not 200 <= response.status_code < 300:
+                    raise InvalidJSON('上传响应无效')
+                value = bounded_json(response.iter_content(chunk_size=8192))
+                obj = value.get('object')
+                if not isinstance(obj, dict) or type(obj.get('url')) is not str or type(obj.get('pix')) is not str:
+                    raise InvalidJSON('上传响应结构无效')
+                import re
+                if not re.fullmatch(r'[1-9][0-9]{0,5}x[1-9][0-9]{0,5}', obj['pix']):
+                    raise InvalidJSON('上传响应尺寸无效')
+                width, height = map(int, obj['pix'].split('x'))
+            finally:
+                response.close()
+        return {'url': obj['url'], 'width': width, 'height': height}
     # requests follows redirects by default: suppress all redirects, including 307 POST replay.
     original_post = session.http.post
     def post_once(*args, **kwargs):
@@ -105,9 +120,37 @@ def dispatch_publish(operation, payload):
         _auto_refresh=False)
 
 
+def dispatch_edit(operation, payload):
+    """Fixed edit endpoints only; never refresh credentials or replay redirects."""
+    import os
+    import re
+    if os.environ.get('XY_EDIT_ENABLED') != 'true':
+        raise ValueError('edit_disabled')
+    expected = {'item_id', 'api_version'} | ({'template'} if operation == 'edit.submit' else set())
+    if (operation not in {'edit.read', 'edit.submit'} or set(payload) != expected
+            or not re.fullmatch(r'\d{1,30}', payload.get('item_id', ''))
+            or not re.fullmatch(r'\d{1,2}\.\d{1,2}', payload.get('api_version', ''))):
+        raise ValueError('edit_contract_invalid')
+    if operation == 'edit.submit' and payload['template'].get('itemId') != payload['item_id']:
+        raise ValueError('edit_identity_mismatch')
+    from goofish_cli.core import Session
+    from goofish_cli.core.mtop import call
+    session = Session.load()
+    if not session.unb or session.unb != os.environ.get('XY_OPERATION_UID'):
+        raise ValueError('account_mismatch')
+    original_post = session.http.post
+    def post_once(*args, **kwargs):
+        kwargs['allow_redirects'] = False
+        return original_post(*args, **kwargs)
+    session.http.post = post_once
+    return call(session, api='mtop.idle.pc.idleitem.edit' if operation == 'edit.submit' else 'mtop.idle.pc.idleitem.editDetail',
+                data=payload['template'] if operation == 'edit.submit' else {'itemId': payload['item_id']},
+                version=payload['api_version'], _auto_refresh=False)
+
+
 def main() -> None:
     try:
-        request = json.loads(sys.stdin.read(250_000))
+        request = strict_json(sys.stdin.read(250_000))
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             data = dispatch(request["operation"], request["payload"])
         output = {"ok": True, "data": data}
