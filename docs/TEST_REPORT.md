@@ -4,6 +4,46 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
+## 2026-10-19 主树CI依赖合并与fixture前置opt-in修复
+
+基线d287040。依赖补丁整包apply --check在报告头部冲突，未覆盖报告；仅manifest/dev lock应用，报告新增历史段落单独合并。运行requirements.lock未改，仅requests及两传递依赖新增，其他锁版本未升级。共享isolated_cdp入口先检查opt-in，避免导入fixture不继承原模块skip标记而先KeyError；配置存在但路径无效仍失败，纯内存测试不skip。
+
+子进程去XY_TEST_CHROMIUM RED **1 failed,1 passed**，确证fixture KeyError，日志xianyu-optin-red.log；修复后定向 **4 passed,1 skipped**（唯一真实浏览器用例按未opt-in跳过）。新回归检查子pytest exit0且skip摘要、坏配置不能静默跳过。现有主环境opt-in全量实际执行该用例。
+
+复用scratch clean311/clean312：锁安装仅满足已有版本，editable切换主树。最初尝试--no-build-isolation缺hatchling，双环境exit2，失败日志保留*-editable.log；改为标准构建隔离成功，没有重装整套依赖。命令级清除PYTHONPATH/PYTHONHOME/VIRTUAL_ENV及XY_/PYTEST_/PLAYWRIGHT_继承配置，PYTHONNOUSERSITE=1，HOME/TMPDIR在scratch。identity日志确认requests来自各env、editable源码为当前主树。
+
+| 最终检查 | clean3.11 | clean3.12 | 主3.12 opt-in |
+|---|---|---|---|
+| 完整pytest | **1000 passed,39 skipped /379.10s，exit0** | **1000 passed,39 skipped /364.32s，exit0** | **1050 passed,0 skipped /540.78s，exit0** |
+| pip check/ruff | 均通过 | 均通过 | 均通过 |
+
+clean基础CI未安装live：2项upstream模块skip；未opt-in浏览器37项skip（含本次前置skip用例），共39。主环境已安装live并配置专用Chromium，因此零skip；计数差异包含upstream模块加载方式，不能简单用skip条数推导测试总数。全部仅既有Starlette/httpx弃用warning。独立UI smoke、Node语法、diff通过。完整日志为scratch/xianyu-ci-current-{311,312}-{full,identity,pipcheck,ruff,install-lock,editable-build-isolated}.log及summary.json；主全量xianyu-ci-main-optin-full.log。清理仅命令环境，无全局export；未触发远端CI，远端结果须父助手push后验证。不访问生产/私有数据，不改daily，不部署commit/push。
+
+## 2026-10-19 CI 开发依赖声明修复（独立 archive bf5b99d）
+
+干净 Python 3.11/3.12 的历史复现均因 `tests/test_external_json.py:10` 顶层导入未声明的 `requests` 而 collection exit 2；长期本地环境的额外安装掩盖此问题。仅在 `pyproject.toml` 的 dev extra 增加 `requests>=2.31,<3`，按原命令生成开发锁：
+
+```bash
+uv pip compile pyproject.toml --extra mcp --extra dev --universal --python-version 3.11 --output-file requirements-dev.lock
+```
+
+保留全部既有锁定版本及 Python 3.11/3.12 的 pyee 条件分支；仅新增 requests 2.34.2、charset-normalizer 3.5.2、urllib3 2.8.0 及依赖来源注释。`requirements.lock` 字节不变，不为 test-only 依赖扩大运行依赖。
+
+复用 scratch 下 clean311/clean312 前检查 `/proc` 的命令行、cwd/exe 和文件描述符，未发现使用目标 venv 的进程。按 `.github/workflows/ci.yml` 普通 tests 作业依次执行 `python -m pip install -r requirements-dev.lock`、`python -m pip install --no-deps -e .`，双版本均退出 0；不是安装 live extra 的 upstream-contract 作业。子进程级清除 PYTHONPATH/PYTHONHOME、XY_*、PYTEST_* 等继承配置，禁用用户 site-packages，HOME/TMPDIR/日志均在独立 scratch 路径。核实 `sys.executable`、`sys.prefix`、`requests.__file__` 均属于各自 clean venv，editable 包指向本 archive 副本，两个环境均无 goofish_cli。
+
+| 检查 | Python 3.11 | Python 3.12 |
+|---|---|---|
+| `python -m pip check` | No broken requirements found；exit 0 | No broken requirements found；exit 0 |
+| `python -m ruff check .` | All checks passed；exit 0 | All checks passed；exit 0 |
+| `python -m pytest --collect-only -q -rs` | 1005 tests collected / 4.68s；exit 0 | 1005 tests collected / 4.53s；exit 0 |
+| `python -m pytest -q -rs` | **968 passed, 38 skipped, 1 warning, 1 error / 383.73s；exit 1** | **968 passed, 38 skipped, 1 warning, 1 error / 368.15s；exit 1** |
+
+全量仍有独立于 requests 的 setup error：`tests/test_cdp_close_observation.py::test_real_second_observer_close_ack_and_target_destruction` 导入的 `isolated_cdp` fixture 先于函数内 skip 执行，在 `tests/test_page_state_probe.py:20` 读取未设置的 `XY_TEST_CHROMIUM` 时抛出 KeyError。原模块的 module-level skip 标记不随 fixture 导入而应用于该测试。此问题未纳入仅 manifest/dev lock/文档的依赖补丁；没有跳过该失败项或注入浏览器配置以宣称通过。
+
+38 项 skip 为未安装 live 的 upstream 契约 2 项及未显式启用独立 Chromium 的浏览器/UI 36 项；收集阶段报告同样的 2 项 upstream skip。唯一 warning 为既有 Starlette/httpx 弃用提醒。requests collection 阻塞已修复，**全量未通过，不代表远端 CI、live/upstream-contract 或 browser-smoke 已过**。本轮未触发/查询远端 CI，未访问真实 `.env`、data、profile、平台或 8099/9235，未部署、commit/push 或修改主树。
+
+完整命令、各步骤真实退出码及最终 summary 保存在 `/home/lan/.hermes/cache/scratch/xianyu-ci-dependency-validation/logs/`：`311-` / `312-` 前缀的 install-lock、install-editable、identity、pip-check、ruff、collect、full 日志及 summary.json；生成命令见 compile.log。日志不纳入补丁。
+
 ## 2026-10-19 已证common标签枚举最小修复
 
 基线bf5b99d，父助手独立1018通过后提交推送。仅读取指定label-type-evidence：旧标签/推荐选中item/transportData/最终请求四处均common，propertyId=-10000；原硬编码category把语义与枚举混淆。新增label_dependency.observed_label_type闭合common|category，默认category仅兼容旧fixture，真实配置必须common；不改原始证据值，四处精确绑定及执行重验同一冻结值。NOT-APPROVED隔离诊断协议未读取、不当启用依据。

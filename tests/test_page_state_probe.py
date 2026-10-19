@@ -15,6 +15,8 @@ pytestmark = pytest.mark.skipif(not os.getenv('XY_TEST_CHROMIUM'), reason='isola
 
 @pytest.fixture
 def isolated_cdp(tmp_path):
+    if not os.getenv('XY_TEST_CHROMIUM'):
+        pytest.skip('isolated Chromium opt-in')
     profile = tmp_path / 'probe-profile'
     process = subprocess.Popen([
         os.environ['XY_TEST_CHROMIUM'], '--headless=new', '--no-sandbox',
