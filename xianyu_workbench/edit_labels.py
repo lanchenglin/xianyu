@@ -22,6 +22,7 @@ STRING_FIELDS = {'channelCateName', 'channelCateId', 'tbCatId', 'labelType', 'pr
 
 class LabelDependency(Model):
     mode: Literal['single_category_v1']
+    observed_label_type: Literal['common', 'category'] = 'category'
     sku_source_mode: Literal['explicit_empty_arrays', 'missing_with_empty_extra'] = 'explicit_empty_arrays'
     card_source_mode: Literal['identity', 'fill_missing_unselected'] = 'identity'
     requests: list[dict] = Field(min_length=2, max_length=2)
@@ -57,7 +58,9 @@ def validate_request(request):
         raise ValueError('bounded card list required')
 
 
-def selected_label(response, category):
+def selected_label(response, category, observed_label_type='category'):
+    if type(observed_label_type) is not str or observed_label_type not in ('common', 'category'):
+        raise ValueError('unsupported observed label type')
     if type(response) is not dict or len(canonical(response).encode()) > 60000 or response.get('ret') != RET:
         raise ValueError('recommendation response contract failed')
     if type(response.get('data')) is not dict:
@@ -94,8 +97,8 @@ def selected_label(response, category):
     equal(td['channelCateId'], category['channelCatId'])
     equal(td['tbCatId'], category['tbCatId'])
     equal(td['propertyName'], value.get('propertyName'))
-    equal(value.get('labelType'), 'category')
-    equal(td['labelType'], 'category')
+    equal(value.get('labelType'), observed_label_type)
+    equal(td['labelType'], observed_label_type)
     return {**td, 'text': value['catName'],
             'properties': '-10000##' + td['propertyName'] + ':' + value['channelCatId'] + '##' + value['catName']}
 
@@ -143,7 +146,7 @@ def validate_dependency(protocol):
     if set(old) != keys or any(type(v) is not str for v in old.values()):
         raise ValueError('exact original label structure required')
     equal(old['propertyId'], '-10000')
-    equal(old['labelType'], 'category')
+    equal(old['labelType'], dep.get('observed_label_type', 'category'))
     category = edit.get('itemCatDTO')
     if type(category) is not dict or any(type(category.get(k)) is not str or not category[k] for k in ('catId', 'catName', 'channelCatId', 'tbCatId')):
         raise ValueError('complete category source required')
@@ -166,7 +169,7 @@ def validate_dependency(protocol):
         validate_request(request)
         cards = [] if i == 0 else card_source(dep['responses'][0], dep.get('card_source_mode', 'identity'))
         equal(request, {**common, 'currentCardList': cards, 'selectedList': selected, 'uniqueCode': request['uniqueCode']})
-        label = selected_label(dep['responses'][i], category)
+        label = selected_label(dep['responses'][i], category, dep.get('observed_label_type', 'category'))
         equal(label['properties'], old['properties'])
         equal(protocol['template']['itemLabelExtList'], [label])
         selected = [label]

@@ -346,7 +346,9 @@ def _execute(service, action_id):
                 else:
                     label_reads.append({'request': recommendation, 'response_rejected': 'size_limit'})
                 label_audit('reading')
-                equal(selected_label(response, protocol['before']['edit']['itemCatDTO']), protocol['template']['itemLabelExtList'][0])
+                equal(selected_label(response, protocol['before']['edit']['itemCatDTO'],
+                                     protocol['label_dependency'].get('observed_label_type', 'category')),
+                      protocol['template']['itemLabelExtList'][0])
                 equal(response, protocol['label_dependency']['responses'][index])
                 label_audit('verified' if index == 1 else 'reading')
                 service.db.audit('admin', 'edit.recommend_verified', action_id, {'index': index})

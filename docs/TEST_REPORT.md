@@ -4,6 +4,12 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
+## 2026-10-19 已证common标签枚举最小修复
+
+基线bf5b99d，父助手独立1018通过后提交推送。仅读取指定label-type-evidence：旧标签/推荐选中item/transportData/最终请求四处均common，propertyId=-10000；原硬编码category把语义与枚举混淆。新增label_dependency.observed_label_type闭合common|category，默认category仅兼容旧fixture，真实配置必须common；不改原始证据值，四处精确绑定及执行重验同一冻结值。NOT-APPROVED隔离诊断协议未读取、不当启用依据。
+
+真实形态虚构fixture先RED **4 failed,26 passed /5.74s**，日志 `/home/lan/.hermes/cache/scratch/xianyu-label-type-red.log`；修复后枚举/混合/错型/变更授权/旧协议/标签补缺专项 **62 passed /15.00s**，ruff通过。代码仅edit_labels声明和三处比较、item_edit执行传递冻结枚举；未扩展真实转换。最终全量 **1048 passed,1 warning /491.14s，退出0，无skip**，日志 `/home/lan/.hermes/cache/scratch/xianyu-label-type-final.log`。隔离Chromium UI smoke、ruff、pip check、node --check、git diff --check全部通过。唯一warning仍为Starlette/httpx弃用提醒。本地全绿不等于父助手独立复审或平台验收。无生产/私有原件访问，无daily/部署/commit/push变动，临时与日志仅scratch。
+
 ## 2026-10-19 整数元回读与256KiB协议总容量
 
 基线3f92303，父助手报告已独立996通过并部署；本轮不操作该部署或daily。仅读取price-size-brief脱敏事实：detail soldPrice='2200'、edit分='220000'，完整协议99461 UTF8字节。EditIn规范两位小数不变，新增price专用yuan_integer_string仅.00编码；非整元提案创建前固定安全422，原raw快照不改。v3协议总容量改为canonical UTF8 256KiB，含模型默认字段不含本地revision；单编辑模板60000字节、单推荐60000/子进程独立限额不放宽。
