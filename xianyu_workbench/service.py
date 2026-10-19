@@ -82,6 +82,13 @@ class Service:
                 from .publish_preview import public_snapshot
                 result['payload']['_publish_snapshot'] = public_snapshot(result['payload']['_publish_snapshot'])
         result["result"] = self.vault.open(row["result"]) if row.get("result") else None
+        if row['kind'] == 'item.publish' and row['mode'] == 'live':
+            from .publish_diagnostics import public_failure
+            detail = result['result']
+            if isinstance(detail, dict) and ('failure' in detail or row['state'] == 'unconfirmed'):
+                detail['failure'] = public_failure(detail.get('failure'), detail.get('stage'))
+            elif detail is None and row['state'] == 'unconfirmed':
+                result['result'] = {'failure': public_failure(None, None)}
         if actor != 'admin' and row['kind'] == 'item.publish' and result['result']:
             result['result'].pop('uploads', None)
         if actor != 'admin' and row['kind'] == 'item.edit' and result['result'] is not None:
@@ -301,9 +308,15 @@ class Service:
                     from .publish_executor import execute
                     result = execute(self, row['id'])
                     state = 'submitted' if result.get('ownership_verified') else 'unconfirmed'
-                    self.db.execute('UPDATE actions SET state=?,result=?,error=NULL WHERE id=?',
-                                    (state, self.vault.seal(result), row['id']))
-                    self.db.audit('admin', 'publish.executed', row['id'], {'state': state})
+                    from .publish_diagnostics import execution_failure, failure_message
+                    failure_code = None
+                    if state != 'submitted':
+                        result['failure'] = execution_failure(result.get('failure'), result.get('stage'))
+                        failure_code = result['failure']['code']
+                    error = failure_message(failure_code) if failure_code else None
+                    self.db.execute('UPDATE actions SET state=?,result=?,error=? WHERE id=?',
+                                    (state, self.vault.seal(result), error, row['id']))
+                    self.db.audit('admin', 'publish.executed', row['id'], {'state': state, 'failure_code': failure_code})
                     return True
                 if '_publish_snapshot' in payload or account['mode'] == 'live':
                     from .publish_preview import preflight

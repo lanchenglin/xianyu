@@ -35,7 +35,21 @@
 
 任何额外源字段、缺字段或错类型均拒绝，不静默丢弃。完整原始源快照仍参与前后比较与审计，转换不作为读回归一化/忽略变化。转换名称和完整协议进入revision/digest/审批，改动后旧审批失效。没有图片上传/URL抓取或新API通道。
 
-`itemLabelExtList` 没有转换白名单：已提供实际shape不满足identity，继续阻塞；不猜null或默认值。公开官方chunk标签证据及最小补充要求见 [EDIT_LABEL_EVIDENCE](EDIT_LABEL_EVIDENCE.md)。本地其他转换已交付，不代表完整真实协议可启用。
+`itemLabelExtList` 不添加通用转换；新增下述显式推荐依赖，缺依赖时仍只有identity，不猜null或默认值。公开证据见 [EDIT_LABEL_EVIDENCE](EDIT_LABEL_EVIDENCE.md)。
+
+### 可选单类目推荐依赖
+
+v3 `label_dependency` 默认null；显式对象字段为 `mode=single_category_v1`、`requests` 两个完整捕获请求、`responses` 两个完整捕获响应、`unique_code_mode=timestamp_random`、evidence。完整协议大小原上限60000字符保留，单推荐请求/响应另限60000 UTF-8字节、最多20卡/每卡100项；这些是本地边界，不宣称平台上限。
+
+只支持原edit.itemLabelExtList恰一项category/propertyId=-10000，严格九字段字符串；`sku_source_mode` 默认explicit_empty_arrays，要求edit.itemSkuList和itemProperties显式空数组，若有itemSkuExtra须为空对象；显式missing_with_empty_extra要求两个数组字段均缺失、itemSkuExtra严格{}、冻结multiSKU=false，且原请求无SKU相关字段。两种来源不静默互换，选择冻结revision/digest。唯一选中项须isClicked/isUserClick="1"，类别四字段匹配原类目。transportData严格15字段/原null类型，派生text与properties后必须全等原始编辑请求标签；任一其他选中项拒绝。不补缺失字段，不采纳未选项。
+
+推荐请求固定 `mtop.taobao.idle.kgraph.property.recommend` v2.0；controls逐类型固定，title和description绑定原完整desc，imageInfos绑定已冻结请求单图，catId/catName/channelCatId绑定原edit类目。首currentCardList=[]，selectedList由原标签按公开JS产生valueName；第二currentCardList绑定第一响应cardData、selectedList绑定唯一派生标签。两份捕获请求必须精确匹配这些来源；card_source_mode默认identity，显式fill_missing_unselected只在原缺失isClicked且isUserClick='0'时补字符串'0'，原'0'/'1'及所有其他字段/顺序保持，null或未知值拒绝。该模式来自父助手final-contract脱敏证据，不扩展其他卡片转换。
+
+每action在审批前冻结两个新的YG格式读取码，碰撞拒绝，不当平台版本或幂等。仅指定running且已批准item.edit可调用新 `edit.recommend`；provider要求请求全等该action冻结请求，bridge再次限制endpoint/version/controls及大小，不暴露通用URL/API。共享operations.lock内第一次双读后最多两次推荐读取，无重试；响应全等冻结证据且派生标签匹配才继续第二次双读和单次编辑。非选中响应字段变化也停止，不任意忽略推荐内容。
+
+推荐HTTP使用stream=True逐块限60000字节，子进程输出消费期间另限stdout65000字节/stderr8192字节；超限、超时、正常返回及异常退出均回收本次bridge隔离进程组（POSIX须事先确认sid=pgid=pid，绝不信号共享宿主组；Windows沿用taskkill /T），wait直接子进程并关闭全部管道，禁止先完整消费再限额。推荐开始/验证/失败分别写固定元数据审计，与edit提交阶段分开。有界已收到的请求/响应在比较前写入加密settings的edit-label-audit:<action>，失败也保留（超限仅固定拒绝标志），不经Agent动作投影输出。成功依赖原始请求/响应保存在admin-only加密label_dependency_reads，Agent结果严格安全标量白名单不变。推荐失败尚未提交编辑，不伪装unknown写；真正提交后的未知三层锁止保留。新协议/新依赖仍须新revision和逐条审批，verified前后原标签/类目/SKU快照冻结不变。
+
+这些是本地适配与隔离验证，不是平台验收。真实完整请求/响应值由管理员私下录入；无SKU空数组路径及完整响应稳定性若与实际不符，仍拒绝启用，并需父助手提供准确结构证据。
 
 ### 显式 observational_projection（2026-10-19）
 

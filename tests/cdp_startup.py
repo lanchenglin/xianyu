@@ -1,4 +1,5 @@
 """Read readiness only from the freshly launched test browser's private profile."""
+import asyncio
 import re
 import time
 
@@ -22,3 +23,25 @@ def wait_for_cdp_port(process, profile, timeout=15):
         if remaining > 0:
             time.sleep(min(.1, remaining))
     raise AssertionError('isolated Chromium CDP readiness deadline exceeded')
+
+
+async def wait_for_task_pages_closed(context, original, timeout=3):
+    """Observe close events only; a leaked target must fail, never be hidden by cleanup."""
+    deadline = asyncio.get_running_loop().time() + timeout
+    while context.pages != [original]:
+        assert original in context.pages, 'original page lost'
+        pages = [page for page in context.pages if page is not original]
+        changed = asyncio.Event()
+        def closed(*args):
+            changed.set()
+        for page in pages:
+            page.on('close', closed)
+        try:
+            if context.pages == [original]:
+                return
+            await asyncio.wait_for(changed.wait(), max(0, deadline - asyncio.get_running_loop().time()))
+        except TimeoutError:
+            raise AssertionError('task pages still present after close-event deadline') from None
+        finally:
+            for page in pages:
+                page.remove_listener('close', closed)

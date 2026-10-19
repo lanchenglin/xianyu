@@ -173,6 +173,11 @@ def prepare(service, account, payload):
     if bounded:
         from .edit_snapshot import unique_code
         frozen['unique_code'] = unique_code()
+        if protocol.get('label_dependency'):
+            frozen['label_codes'] = [unique_code(), unique_code()]
+            old_codes = [r['uniqueCode'] for r in protocol['label_dependency']['requests']]
+            if len(set([frozen['unique_code'], *frozen['label_codes']])) != 3 or set(frozen['label_codes']) & set(old_codes):
+                raise Problem('edit_code_collision', '推荐读取码碰撞，未创建动作', 409)
         if frozen['unique_code'] == protocol['template']['uniqueCode']:
             raise Problem('edit_code_collision', 'uniqueCode 碰撞，未创建动作', 409)
     return {**payload, '_edit_snapshot': frozen}
@@ -318,6 +323,31 @@ def _execute(service, action_id):
         raise Problem('edit_original_changed', '只读原值、版本、归属或状态不符，未提交编辑', 409)
     account = guard()
     parsed = parse_protocol(protocol)
+    label_reads = []
+    if bounded and protocol.get('label_dependency'):
+        from .edit_labels import equal, frozen_requests, selected_label
+        def label_audit(stage):
+            service.db.execute('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)',
+                               ('edit-label-audit:' + action_id, service.vault.seal({'stage': stage, 'reads': label_reads})))
+        label_audit('reading')
+        try:
+            for index, recommendation in enumerate(frozen_requests(protocol, frozen['label_codes'])):
+                account = guard()
+                service.db.audit('admin', 'edit.recommend_started', action_id, {'index': index})
+                response = call('edit.recommend', {'item_id': payload['item_id'], 'api_version': '2.0', 'template': recommendation})
+                if len(canonical(response).encode()) <= 60000:
+                    label_reads.append({'request': recommendation, 'response': response})
+                else:
+                    label_reads.append({'request': recommendation, 'response_rejected': 'size_limit'})
+                label_audit('reading')
+                equal(selected_label(response, protocol['before']['edit']['itemCatDTO']), protocol['template']['itemLabelExtList'][0])
+                equal(response, protocol['label_dependency']['responses'][index])
+                label_audit('verified' if index == 1 else 'reading')
+                service.db.audit('admin', 'edit.recommend_verified', action_id, {'index': index})
+        except Exception:
+            label_audit('failed')
+            service.db.audit('admin', 'edit.recommend_failed', action_id)
+            raise Problem('edit_label_changed', '推荐依赖校验失败，尚未提交编辑', 409)
     if bounded:
         template = request_template(protocol, payload, frozen['unique_code'])
         try:
@@ -341,7 +371,7 @@ def _execute(service, action_id):
     result = {'stage': 'submitting', 'item_id': payload['item_id'], 'ownership_verified': False,
               'status_verified': False, 'content_verified': False}
     if bounded:
-        result.update(preflight_snapshots=preflight_snapshots,
+        result.update(label_dependency_reads=label_reads, preflight_snapshots=preflight_snapshots,
                       comparison_mode=protocol.get('comparison_mode', 'full_snapshot'),
                       observational_fields=protocol.get('observational_fields', []),
                       before_projection_hash=digest(projection(protocol['before'], protocol)))

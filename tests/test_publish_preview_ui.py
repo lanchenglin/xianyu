@@ -24,7 +24,7 @@ def test_local_publish_preview_ui(api_server):
         with sync_playwright() as pw:
             browser = pw.chromium.launch(executable_path=executable, headless=True)
             try:
-                page = browser.new_page()
+                page = browser.new_page(viewport={"width": 1440, "height": 1000})
                 page.goto(url)
                 page.locator('#login-token').fill(settings.admin_token)
                 page.locator('#login-form button').click()

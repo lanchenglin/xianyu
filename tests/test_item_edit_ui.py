@@ -18,7 +18,7 @@ def test_admin_edit_form_and_single_action_warning():
     assert "$('item-edit-form').reset()" in js
 
 
-@pytest.mark.parametrize('snapshot_mode', [False, True, 'projection', 'transforms'])
+@pytest.mark.parametrize('snapshot_mode', [False, True, 'projection', 'transforms', 'labels'])
 def test_admin_edit_ui_local_only(api_server, snapshot_mode):
     executable = os.getenv('XY_TEST_CHROMIUM')
     if not executable:
@@ -31,7 +31,7 @@ def test_admin_edit_ui_local_only(api_server, snapshot_mode):
     with sync_playwright() as pw:
         browser = pw.chromium.launch(executable_path=executable, headless=True)
         try:
-            page = browser.new_page()
+            page = browser.new_page(viewport={"width": 1440, "height": 1000})
             page.goto(url)
             page.locator('#login-token').fill(settings.admin_token)
             page.locator('#login-form button').click()
@@ -44,6 +44,9 @@ def test_admin_edit_ui_local_only(api_server, snapshot_mode):
             if snapshot_mode == 'transforms':
                 from tests.test_edit_transforms import protocol as transform_protocol
                 chosen = transform_protocol()
+            if snapshot_mode == 'labels':
+                from tests.test_edit_labels import protocol as label_protocol
+                chosen = label_protocol()
             page.locator('#edit-protocol-form textarea').fill(json.dumps(chosen))
             page.locator('#edit-protocol-form button').click()
             expect(page.locator('#toast')).to_contain_text('编辑协议已保存')

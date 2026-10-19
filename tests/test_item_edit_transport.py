@@ -14,14 +14,18 @@ def test_bridge_disabled_before_import(monkeypatch):
         dispatch_edit('edit.submit', {})
 
 
-@pytest.mark.parametrize('operation,api', [('edit.detail', 'mtop.taobao.idle.pc.detail'),
+@pytest.mark.parametrize('operation,api', [('edit.recommend', 'mtop.taobao.idle.kgraph.property.recommend'),
+                                         ('edit.detail', 'mtop.taobao.idle.pc.detail'),
                                          ('edit.read', 'mtop.idle.pc.idleitem.editDetail'),
                                          ('edit.submit', 'mtop.idle.pc.idleitem.edit')])
 def test_bridge_fixed_endpoint_single_attempt(monkeypatch, operation, api):
     monkeypatch.setenv('XY_EDIT_ENABLED', 'true')
     monkeypatch.setenv('XY_OPERATION_UID', '12345')
     posts = []
-    session = SimpleNamespace(unb='12345', http=SimpleNamespace(post=lambda *a, **kw: posts.append(kw)))
+    def post(*args, **kwargs):
+        posts.append(kwargs)
+        return SimpleNamespace(iter_content=lambda **kw: iter([b'{}']), close=lambda: None)
+    session = SimpleNamespace(unb='12345', http=SimpleNamespace(post=post))
     core = ModuleType('goofish_cli.core')
     core.Session = SimpleNamespace(load=lambda: session)
     mtop = ModuleType('goofish_cli.core.mtop')
@@ -36,10 +40,13 @@ def test_bridge_fixed_endpoint_single_attempt(monkeypatch, operation, api):
     payload = {'item_id': '777', 'api_version': '3.2'}
     if operation == 'edit.submit':
         payload['template'] = {'itemId': '777', 'fixture': 'exact'}
+    if operation == 'edit.recommend':
+        from tests.test_edit_labels import protocol
+        payload.update(api_version='2.0', template=protocol()['label_dependency']['requests'][0])
     dispatch_edit(operation, payload)
     assert calls == [{'api': api, 'data': payload.get('template', {'itemId': '777'}),
-                      'version': '3.2', '_auto_refresh': False}]
-    assert posts == [{'allow_redirects': False}]
+                      'version': payload['api_version'], '_auto_refresh': False}]
+    assert posts == [{'allow_redirects': False, **({'stream': True} if operation == 'edit.recommend' else {})}]
 
 
 def test_provider_rejects_unselected_transport(workbench):

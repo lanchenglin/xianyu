@@ -221,7 +221,8 @@ def test_restart_preserves_stage_and_prevents_replay(workbench):
     service.recover()
     restored = client.get(f"/api/actions/{action['id']}").json()
     assert restored['state'] == 'unconfirmed'
-    assert restored['result'] == saved
+    assert restored['result'] == {**saved, 'failure': {'code': 'unknown_historical', 'stage': 'submitting'}}
+    assert service.vault.open(service.db.one('SELECT result FROM actions WHERE id=?', (action['id'],))['result']) == saved
     assert execute(client, action).status_code == 409
     assert service.run_once() is False
 

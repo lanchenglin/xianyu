@@ -8,6 +8,7 @@ from typing import Literal
 
 from pydantic import ConfigDict, Field, StrictStr, model_validator
 
+from .edit_labels import LabelDependency, validate_dependency
 from .edit_transforms import SnapshotInvariantMapping, transform_invariant
 from .item_edit import EditIn, get, leaves
 from .models import Model
@@ -101,6 +102,7 @@ class SnapshotProtocol(Model):
     content_mappings: list[ContentMapping] = Field(min_length=5, max_length=20)
     invariant_mappings: list[SnapshotInvariantMapping] = Field(min_length=1, max_length=200)
     fixed_constants: dict
+    label_dependency: LabelDependency | None = None
     unique_code_mode: Literal['timestamp_random']
     success_ret: list[StrictStr] = Field(min_length=1, max_length=4)
     read_success_ret: list[StrictStr] = Field(min_length=1, max_length=4)
@@ -165,6 +167,9 @@ class SnapshotProtocol(Model):
         if not isinstance(self.template.get('uniqueCode'), str) or not re.fullmatch(r'\d{14,16}', self.template['uniqueCode']):
             raise ValueError('timestamp_random evidence required')
         paths = [('itemTextDTO',), ('itemPriceDTO',), ('uniqueCode',)] + [(k,) for k in self.fixed_constants]
+        if self.label_dependency:
+            validate_dependency(self.model_dump())
+            paths.append(('itemLabelExtList',))
         covered = set().union(*(leaves(get(self.template, p), p) for p in paths))
         for mapping in self.invariant_mappings:
             path, source = tuple(mapping.request_path), mapping.before_path

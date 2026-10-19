@@ -7,7 +7,7 @@ import subprocess
 import pytest
 from test_operations import inventory, orders
 
-from tests.cdp_startup import wait_for_cdp_port
+from tests.cdp_startup import wait_for_cdp_port, wait_for_task_pages_closed
 
 pytestmark = pytest.mark.skipif(not os.getenv('XY_TEST_CHROMIUM'), reason='isolated Chromium opt-in')
 
@@ -86,6 +86,7 @@ def test_real_cdp_network_listener_identity_and_cleanup(tmp_path, monkeypatch):
                 for kind in ('orders', 'inventory'):
                     result = await asyncio.to_thread(collect, kind)
                     assert result['partial'] is (kind == 'orders') and len(result['items']) == 1
+                    await wait_for_task_pages_closed(context, original)
                     assert len(context.pages) == 1
                     assert await original.title() == 'original fixture'
                 state['paginate'] = True
@@ -93,12 +94,14 @@ def test_real_cdp_network_listener_identity_and_cleanup(tmp_path, monkeypatch):
                 assert [item['order_id'] for item in result['items']] == ['9001', '9002']
                 assert result['pages_read'] == 2 and result['partial']
                 assert result['stop_reason'] == 'pagination_semantics_unknown'
+                await wait_for_task_pages_closed(context, original)
                 assert len(context.pages) == 1
                 state['requests'] = 0
                 result = await asyncio.to_thread(collect, 'inventory')
                 assert [item['item_id'] for item in result['items']] == ['1001', '1002']
                 assert result['pages_read'] == 2 and not result['partial']
                 assert result['scope'] == 'self_published' and result['stop_reason'] == 'end_reached'
+                await wait_for_task_pages_closed(context, original)
                 assert len(context.pages) == 1
                 state['paginate'] = False
                 # Full provider → real bridge subprocess → random local CDP → normalized output.
@@ -116,6 +119,7 @@ def test_real_cdp_network_listener_identity_and_cleanup(tmp_path, monkeypatch):
                 account = {'id': 'fictional', 'uid': '12345', 'secret': 'must-not-decrypt'}
                 value = await asyncio.to_thread(provider._live, account, 'orders', {}, write=False)
                 assert value['items'][0]['order_id'] == '9001'
+                await wait_for_task_pages_closed(context, original)
                 assert len(context.pages) == 1
                 from dataclasses import replace
                 provider.s = replace(settings, operation_timeout=20)
@@ -124,6 +128,7 @@ def test_real_cdp_network_listener_identity_and_cleanup(tmp_path, monkeypatch):
                 assert value['items'][0]['body'] == '还有吗？'
                 assert value['items'][0]['recipient_verified'] is False  # fixture UID 12345 is not in pair
                 assert received == []  # No IM commands, ACK, heartbeat or writes from collector.
+                await wait_for_task_pages_closed(context, original)
                 assert len(context.pages) == 1 and not original.is_closed()
                 provider.s = settings
                 # No response on task navigation: cooperative cancellation must close only its tab.
@@ -134,16 +139,19 @@ def test_real_cdp_network_listener_identity_and_cleanup(tmp_path, monkeypatch):
                 with pytest.raises(Problem) as error:
                     await asyncio.to_thread(provider._live, account, 'orders', {}, write=False)
                 assert error.value.code == 'timeout'
+                await wait_for_task_pages_closed(context, original)
                 assert len(context.pages) == 1 and not original.is_closed()
                 await context.unroute('**/*', silence)
                 await context.route('**/*', route)
                 state['self'] = False
                 with pytest.raises(BrowserError, match='identity'):
                     await asyncio.to_thread(collect, 'inventory')
+                await wait_for_task_pages_closed(context, original)
                 assert len(context.pages) == 1
                 state['switch'] = True
                 with pytest.raises(BrowserError, match='identity'):
                     await asyncio.to_thread(collect, 'orders')
+                await wait_for_task_pages_closed(context, original)
                 assert len(context.pages) == 1 and process.poll() is None
                 assert await original.title() == 'original fixture'
         asyncio.run(check())

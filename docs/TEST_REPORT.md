@@ -4,6 +4,22 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
+## 2026-10-19 最终审查进程树/真实契约/CDP观察时序修复
+
+父助手P1实测bridge后代未回收，另全量 **979 passed,1 failed /473.32s**（tests/test_operations_real.py:143观察端仍有两个about:blank），日志xianyu-parent-integrated-tests.log。此前980本地通过不抵消这两项，保持诊断/UI和daily逻辑不变。
+
+真实临时子进程派生后代RED五路径(stdout/stderr超限、timeout、normal、decode)均遗留活跃后代，日志xianyu-tree-red.log；修复仅确认隔离sid=pgid=pid后回收本组，正常返回也清理；真实回归9项通过，验证直接子进程wait、后代不存在或已退出(zombie非活跃)、所有管道关闭，无管道线程。没有声称可wait非直属子进程，Windows未在本轮实测，保留项目taskkill /T策略。
+
+读取指定final-contract md/json，新增sku_source_mode与card_source_mode显式选择。真实缺失SKU/卡片补缺fixture先RED，再新增严格missing+emptyExtra和missing-isClicked/未选0补缺；旧模式不变。关联32项通过。CDP生产task_page已有finally只关闭自己的page，观察测试是另一连接；添加测试端close事件有限等待，不删除len==1/原页断言，不force close。可控延迟close事件确保等待，故意不关闭确保限时失败；真实双连接close后查Target.getTargets只剩原页。最初新增帮助函数缺失为collection RED（不冒充原竞态复现）；中间一次批量编辑缩进collection error已修复并保留日志。真实浏览器+树+契约专项 **20 passed /30.00s**，补双连接后 **16 passed /5.40s**。最终全量 **996 passed,1 warning /475.93s，退出0，无skip**，日志 `/home/lan/.hermes/cache/scratch/xianyu-final-review-fixes-full.log`。ruff、pip check、独立UI smoke、node --check、git diff --check全部通过。唯一warning仍为Starlette/httpx弃用提醒。全部日志位于指定scratch，无生产/私有原件/真实CDP访问，无部署/commit/push。
+
+## 2026-10-19 标签依赖收尾与诊断/UI补丁合并
+
+接续agent_close终止留下工作树，不重做。基线133fb97；父助手提供 `xianyu-diagnostics-current.patch` 已独立950pass，本树git apply --check成功后按上下文合入，未覆盖typed编辑摘要、标签执行或labels UI参数化。新增发布failure诊断码来源隔离、unknown_historical只读投影与初始化完成后才显示shell；桌面1440×1000，无force click。daily未知仍阻断、不重放、不解锁。补丁历史失败/复审记录完整保留于PUBLISH_DIAGNOSTICS。
+
+标签此前RED 4 failed/13 passed，畸形形状RED和内部审查发现：缺字段500、失败依赖响应未存私有审计、输出限额晚于完整消费。已修复前两项并在本轮续完第三项：推荐HTTP stream=True按8192块消费、原始响应最多60000字节；子进程selectors有界消费stdout65000字节（封装余量）/stderr8192字节，超限/超时kill+wait、无重试。非推荐旧传输不变。推荐失败的有界原始响应存加密edit-label-audit:<action>，不假标编辑已尝试；成功结果保留admin-only依赖读取。测试固定不同code，不删除生产碰撞保护。新增HTTP限额RED日志xianyu-label-http-red.log；原输出/审查RED日志保留scratch。
+
+定向标签/诊断 **65 passed /21.82s**；分层标签/输出/传输/诊断/daily/typed隐私/登录/编辑/发布预览真实隔离Chromium **155 passed,1 warning /129.57s，无skip**，日志 `/home/lan/.hermes/cache/scratch/xianyu-resume-layered.log`。最终全量 **980 passed,1 warning /425.89s，退出0，无skip**，日志 `/home/lan/.hermes/cache/scratch/xianyu-resume-final.log`。独立UI smoke、ruff、pip check、node --check、git diff --check全部通过。唯一warning为既有Starlette/httpx弃用提醒；本轮Python3.12，本地全绿不等于真实平台验收。全部本轮命令env -u PYTHONPATH、固定scratch TMPDIR、专用Chromium/缓存/禁止GC；无生产配置/私有快照/真实平台访问，无部署重启/commit/push。
+
 ## 2026-10-19 v3 有限命名转换与公开标签证据
 
 基线eba9b9a，父助手报告已独立866通过并提交推送，未部署。仅读取指定三份脱敏transform结构/控制值/差异；不读私有原件。v3 invariant_mapping新增默认identity的bool_string/single_image_v1/free_shipping_v1/category_v1；固定路径、严格源键/类型/边界、完整原始请求等于转换结果。源快照不归一化，前后变化继续阻断；v2映射结构不变。itemLabelExtList未放行，公开0.0.178 chunk的推荐卡片transportData依赖证据与最小需求见EDIT_LABEL_EVIDENCE。

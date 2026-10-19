@@ -162,6 +162,7 @@ def _execute_locked(service, action_id):
     # Persist before the first external write: crashes never release this action for retry.
     checkpoint(service, action_id, result)
     service.db.execute('UPDATE accounts SET last_write=?,last_call=? WHERE id=?', (time.time(), time.time(), account['id']))
+    contract = None
     try:
         images = []
         for path in paths:
@@ -170,12 +171,14 @@ def _execute_locked(service, action_id):
             checkpoint(service, action_id, result)
             asset = payload['_publish_snapshot']['images'][len(images)]
             image = transport('publish.upload', {'path': path, 'sha256': asset['sha256']}, write=True)
+            contract = 'upload_contract_failed'
             url = urlsplit(image.get('url', ''))
             if (url.scheme != 'https' or not url.hostname or url.username or url.password
                     or not (url.hostname == 'alicdn.com' or url.hostname.endswith('.alicdn.com'))
                     or type(image.get('width')) is not int or type(image.get('height')) is not int
                     or min(image['width'], image['height']) <= 0):
                 raise ValueError('invalid upload response')
+            contract = None
             images.append({'extraInfo': {'isH': 'false', 'isT': 'false', 'raw': 'false'},
                            'isQrCode': False, 'url': image['url'], 'heightSize': image['height'],
                            'widthSize': image['width'], 'major': True, 'type': 0, 'status': 'done'})
@@ -190,15 +193,18 @@ def _execute_locked(service, action_id):
         result.update(stage='submitting', request_digest=digest(request))
         checkpoint(service, action_id, result)
         raw = transport('publish.submit', request, write=True)
+        contract = 'ack_contract_failed'
         item_id = raw.get('data', {}).get('itemId')
         if raw.get('ret') != frozen['success_ret'] or not isinstance(item_id, str) or not re.fullmatch(r'[0-9]{1,30}', item_id):
             raise ValueError('unverified publish response')
+        contract = None
         result.update(stage='verifying', item_id=item_id)
         checkpoint(service, action_id, result)
         from .daily_publish import DailyPublish
         DailyPublish(service).verify_new_item(account['id'], action_id, item_id)
         account = guard()
         raw = transport('publish.readback', {'itemId': item_id}, write=False)
+        contract = 'readback_contract_failed'
         data = raw.get('data', {})
         ret = raw.get('ret')
         if (ret != frozen['readback_success_ret']
@@ -234,10 +240,13 @@ def _execute_locked(service, action_id):
             observed = observed[key]
         if type(observed) is not list or len(observed) != len(images):
             raise ValueError('readback image count differs')
+        contract = None
         guard()
         result.update(stage='verified', ownership_verified=True, status_verified=True, content_verified=True, ok=True)
         return result
-    except Exception:
+    except Exception as exc:
+        from .publish_diagnostics import failure_summary
+        result['failure'] = failure_summary(exc, result['stage'], contract)
         result['notice'] = '上传或发布已尝试，结果不确定；禁止自动重试，请人工核对。'
         checkpoint(service, action_id, result)
         return result

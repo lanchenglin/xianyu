@@ -19,7 +19,15 @@ https://g.alicdn.com/idle-pc/xy-site/0.0.178/js/p_publish-index.js
 6. 初始化合并函数 `I`（offset 1082244附近）按 properties 去重合并原标签与新标签；因此顺序、保留项和服务端补充项都需要实际证据。
 7. 模块18200 `xP`（offset 1341191附近）先展开 `values`，再覆盖文字/金额等；未在该构造器内重新定义 itemLabelExtList。提交标签实际来自表单处理后的数组。
 
-## 当前结论
+## 追加真实匹配证据与本批实现
+
+父助手新增四份脱敏证据（live-evidence/match-evidence/request-evidence/binding-summary）确认：两次推荐唯一选中category的15字段transportData与实际编辑标签严格全等，额外text/properties符合R函数。未选品牌/成色不纳入。null来自响应原值，不补默认。
+
+本批再次核对公开代码：offset1083904 的首selectedList为原标签展开，text/valueName=`old.text || properties.split(':')[1].split('##')[1]`，isUserClick="1"；offset1341191的YG为Date.now字符串拼接floor(1000*Math.random())，实际推荐调用点显式YG。没有未知uniqueCode生成规则，不把它当版本/幂等保证。
+
+可选 `label_dependency.mode=single_category_v1` 绑定两份完整请求与响应证据，执行前仅调用固定推荐v2.0两次，精确重验后再双读/提交。详见ITEM_EDIT。对新实际协议依然需要管理员录入完整脱敏外的值，开发fixture不能作为启用证据；请求/响应过大、额外选中标签、SKU、动态响应差异一律停止，不猜过滤。无平台编辑验收。
+
+## 追加证据前的结论（历史）
 
 公开源码证明标签数据依赖 **推荐卡片 transportData + 表单选中状态 + 原标签合并**，不是从 editDetail 九个字段必然推导成请求十八个字段。脱敏 shape 中的 channelCateName/valueName/tbCatId/subPropertyId/subValueId/propertyName/labelFrom 等新增字段，以及 valueId/labelId 等从字符串变为 null 的原因，仍无法仅凭源码和 shape 对应到该目标。
 

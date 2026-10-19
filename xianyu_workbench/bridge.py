@@ -29,7 +29,7 @@ WRITES = {
 
 
 def dispatch(operation: str, payload: dict):
-    if operation in {'edit.read', 'edit.detail', 'edit.submit'}:
+    if operation in {'edit.read', 'edit.detail', 'edit.recommend', 'edit.submit'}:
         return dispatch_edit(operation, payload)
     if operation in {'publish.upload', 'publish.submit', 'publish.readback'}:
         return dispatch_publish(operation, payload)
@@ -126,11 +126,16 @@ def dispatch_edit(operation, payload):
     import re
     if os.environ.get('XY_EDIT_ENABLED') != 'true':
         raise ValueError('edit_disabled')
-    expected = {'item_id', 'api_version'} | ({'template'} if operation == 'edit.submit' else set())
-    if (operation not in {'edit.read', 'edit.detail', 'edit.submit'} or set(payload) != expected
+    expected = {'item_id', 'api_version'} | ({'template'} if operation in {'edit.submit', 'edit.recommend'} else set())
+    if (operation not in {'edit.read', 'edit.detail', 'edit.recommend', 'edit.submit'} or set(payload) != expected
             or not re.fullmatch(r'\d{1,30}', payload.get('item_id', ''))
             or not re.fullmatch(r'\d{1,2}\.\d{1,2}', payload.get('api_version', ''))):
         raise ValueError('edit_contract_invalid')
+    if operation == 'edit.recommend':
+        from .edit_labels import validate_request
+        if payload['api_version'] != '2.0':
+            raise ValueError('recommend_version_mismatch')
+        validate_request(payload['template'])
     if operation == 'edit.submit' and payload['template'].get('itemId') != payload['item_id']:
         raise ValueError('edit_identity_mismatch')
     from goofish_cli.core import Session
@@ -141,12 +146,17 @@ def dispatch_edit(operation, payload):
     original_post = session.http.post
     def post_once(*args, **kwargs):
         kwargs['allow_redirects'] = False
+        if operation == 'edit.recommend':
+            from .edit_labels import bounded_response
+            kwargs['stream'] = True
+            return bounded_response(original_post(*args, **kwargs))
         return original_post(*args, **kwargs)
     session.http.post = post_once
     api = {'edit.submit': 'mtop.idle.pc.idleitem.edit', 'edit.read': 'mtop.idle.pc.idleitem.editDetail',
-           'edit.detail': 'mtop.taobao.idle.pc.detail'}[operation]
+           'edit.detail': 'mtop.taobao.idle.pc.detail',
+           'edit.recommend': 'mtop.taobao.idle.kgraph.property.recommend'}[operation]
     return call(session, api=api,
-                data=payload['template'] if operation == 'edit.submit' else {'itemId': payload['item_id']},
+                data=payload['template'] if operation in {'edit.submit', 'edit.recommend'} else {'itemId': payload['item_id']},
                 version=payload['api_version'], _auto_refresh=False)
 
 

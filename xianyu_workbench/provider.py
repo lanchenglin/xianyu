@@ -109,7 +109,7 @@ class Provider:
     def _live(self, account: dict, operation: str, payload: dict, *, write: bool):
         if operation in {'orders', 'inventory', 'messages'} and not self.s.browser_cdp_endpoint:
             raise Problem('cdp_required', '单页样本同步仅支持管理员绑定的 CDP 账号', 409)
-        edit_transport = operation in {'edit.read', 'edit.detail', 'edit.submit'}
+        edit_transport = operation in {'edit.read', 'edit.detail', 'edit.recommend', 'edit.submit'}
         if edit_transport:
             action_id = getattr(self._selected, 'edit_action', None)
             self._selected.edit_action = None
@@ -119,6 +119,16 @@ class Provider:
                     or row['account_id'] != account['id'] or row['expires'] <= time.time()
                     or account['paused'] or account['mode'] != 'live' or write != (operation == 'edit.submit')):
                 raise Problem('edit_authorization_required', '编辑传输仅限指定队列执行器', 409)
+            if operation == 'edit.recommend':
+                from .edit_labels import frozen_requests
+                frozen = self.vault.open(row['payload']).get('_edit_snapshot', {})
+                protocol = frozen.get('protocol', {})
+                if not protocol.get('label_dependency'):
+                    raise Problem('edit_authorization_required', '未批准推荐依赖', 409)
+                allowed = [{'item_id': protocol['item_id'], 'api_version': '2.0', 'template': request}
+                           for request in frozen_requests(protocol, frozen.get('label_codes', []))]
+                if not any(canonical(payload) == canonical(request) for request in allowed):
+                    raise Problem('edit_authorization_required', '推荐请求不匹配冻结审批', 409)
         publish_transport = operation in {'publish.upload', 'publish.submit', 'publish.readback'}
         if publish_transport:
             action_id = getattr(self._selected, 'publish_action', None)
@@ -173,9 +183,18 @@ class Provider:
                                        stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
                                        env=env, cwd=home, start_new_session=os.name != "nt")
             try:
-                stdout, _ = process.communicate(canonical({"operation": operation, "payload": payload}),
-                                                timeout=self.s.operation_timeout)
+                if operation == 'edit.recommend':
+                    from .edit_labels import bounded_communicate
+                    try:
+                        stdout = bounded_communicate(process, canonical({'operation': operation, 'payload': payload}), self.s.operation_timeout)
+                    except (ValueError, UnicodeError):
+                        raise Problem('upstream_error', '推荐读取超过限额或编码无效，未提交编辑', 502)
+                else:
+                    stdout, _ = process.communicate(canonical({"operation": operation, "payload": payload}),
+                                                    timeout=self.s.operation_timeout)
             except subprocess.TimeoutExpired:
+                if operation == 'edit.recommend':
+                    raise Problem('timeout', '推荐读取超时，未提交编辑', 504)
                 # Cross-platform cooperative cancellation; do not kill the CDP transport
                 # before the bridge has unwound its owned task page.
                 with suppress(OSError):
