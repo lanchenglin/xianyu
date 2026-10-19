@@ -69,7 +69,7 @@ ACTION_MODELS = {"message.send": MessageIn, "item.publish": PublishIn, "item.del
 
 class ActionIn(Model):
     account_id: str
-    kind: Literal["message.send", "item.publish", "item.delete"]
+    kind: Literal["message.send", "item.publish", "item.delete", "item.edit"]
     payload: dict
     idempotency_key: str = Field(min_length=8, max_length=100, pattern=r"^[\w.:-]+$")
 
@@ -77,6 +77,13 @@ class ActionIn(Model):
 class ApprovalIn(Model):
     digest: str = Field(pattern=r"^[a-f0-9]{64}$")
     confirm: Literal["确认执行"]
+
+
+class ReconciliationIn(Model):
+    account_id: str = Field(min_length=1, max_length=100)
+    outcome: Literal["observed", "not_observed", "unresolved"]
+    evidence: str = Field(min_length=1, max_length=2000)
+    idempotency_key: str = Field(min_length=8, max_length=100, pattern=r"^[\w.:-]+$")
 
 
 class DraftIn(Model):
@@ -90,8 +97,45 @@ class DraftIn(Model):
     can_self_pickup: bool = True
 
 
+class DraftEditIn(DraftIn):
+    revision: int = Field(ge=1)
+
+
+class DraftArchiveIn(Model):
+    account_id: str
+    revision: int = Field(ge=1)
+
+
+class DraftImportIn(Model):
+    account_id: str
+    rows: list[dict] = Field(min_length=1, max_length=50)
+    idempotency_key: str = Field(min_length=8, max_length=100, pattern=r'^[\w.:-]+$')
+
+
+class DraftImportConfirmIn(DraftImportIn):
+    digest: str = Field(pattern=r'^[a-f0-9]{64}$')
+
+
+class AssetRecycleIn(Model):
+    account_id: str
+    sha256: str = Field(pattern=r'^[a-f0-9]{64}$')
+    confirm: Literal['永久删除未引用本地素材']
+
+
 class MonitorIn(SearchIn):
     interval_s: int = Field(default=900, ge=300, le=86400)
+
+
+class NotificationConfigIn(Model):
+    kind: Literal['webhook', 'dingtalk']
+    url: str = Field(min_length=1, max_length=1000)
+    secret: str = Field(min_length=32, max_length=256)
+    enabled: bool = False
+
+
+class NotificationStateIn(Model):
+    read: bool
+    archived: bool
 
 
 class LLMConfigIn(Model):
