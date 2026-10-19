@@ -61,10 +61,16 @@ def follows_previous(before, after, protocol, previous):
 class ContentMapping(Model):
     path: list[StrictStr] = Field(min_length=2, max_length=10)
     field: Literal['title', 'desc', 'price']
-    encoding: Literal['identity', 'yuan_string', 'cent_string']
+    encoding: Literal['identity', 'yuan_string', 'cent_string', 'yuan_integer_string']
 
 
 def encoded(field, encoding, value):
+    if encoding == 'yuan_integer_string':
+        if (field != 'price' or type(value) is not str
+                or not re.fullmatch(r'(?:0|[1-9][0-9]{0,6})\.00', value)
+                or Decimal(value) > Decimal('1000000')):
+            raise ValueError('integer yuan encoding requires canonical whole yuan price')
+        return value[:-3]
     if field == 'price' and encoding == 'cent_string':
         return str(int(Decimal(value) * 100))
     return value
@@ -110,6 +116,8 @@ class SnapshotProtocol(Model):
 
     @model_validator(mode='after')
     def contract(self):
+        if len(canonical(self.model_dump()).encode('utf-8')) > 256 * 1024:
+            raise ValueError('contract too large')
         if set(self.before) != {'detail', 'edit'} or any(not isinstance(v, dict) or not v for v in self.before.values()):
             raise ValueError('complete dual response data required')
         projection(self.before, self.model_dump())
@@ -138,7 +146,7 @@ class SnapshotProtocol(Model):
         for mapping in self.content_mappings:
             if mapping.path[0] not in {'detail', 'edit'}:
                 raise ValueError('dual snapshot content path required')
-            if (mapping.field == 'price') != (mapping.encoding in {'yuan_string', 'cent_string'}):
+            if (mapping.field == 'price') != (mapping.encoding in {'yuan_string', 'cent_string', 'yuan_integer_string'}):
                 raise ValueError('explicit bounded amount encoding required')
             if canonical(get(self.before, mapping.path)) != canonical(encoded(mapping.field, mapping.encoding, values[mapping.field])):
                 raise ValueError('before content mismatch')
@@ -189,8 +197,8 @@ class SnapshotProtocol(Model):
             raise ValueError('unmapped request fields')
         if any(not r.startswith('SUCCESS::') for r in self.success_ret + self.read_success_ret + self.detail_success_ret):
             raise ValueError('exact success ret required')
-        if len(canonical(self.model_dump())) > 60000:
-            raise ValueError('contract too large')
+        if len(canonical(self.template).encode('utf-8')) > 60000:
+            raise ValueError('single edit template too large')
         return self
 
 

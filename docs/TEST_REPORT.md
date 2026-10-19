@@ -4,6 +4,12 @@
 
 以下“已执行”为首次 Linux 开发环境的历史记录；上传后的 GitHub CI 结果另列于下一节，不混为本地主人电脑验收。未完成功能与续开发步骤见 [开发交接清单](DEVELOPMENT_HANDOFF.md)。
 
+## 2026-10-19 整数元回读与256KiB协议总容量
+
+基线3f92303，父助手报告已独立996通过并部署；本轮不操作该部署或daily。仅读取price-size-brief脱敏事实：detail soldPrice='2200'、edit分='220000'，完整协议99461 UTF8字节。EditIn规范两位小数不变，新增price专用yuan_integer_string仅.00编码；非整元提案创建前固定安全422，原raw快照不改。v3协议总容量改为canonical UTF8 256KiB，含模型默认字段不含本地revision；单编辑模板60000字节、单推荐60000/子进程独立限额不放宽。
+
+RED **18 failed,3 passed /2.26s**，日志 `/home/lan/.hermes/cache/scratch/xianyu-price-size-red.log`；补单请求不能随总限额扩大回归另RED **1 failed**。实现后金额/容量/旧snapshot/标签 **67 passed /14.13s**，最终定向含typed隐私与流式限额 **73 passed /19.72s**。含中文精确262144/262145字节、两推荐响应累计容器、单响应超限、保存→冻结→审批→2300整元提交/严格格式回读；错误回读为unknown，不转换raw字符串。父层追踪：settings/Vault/action/digest无另一个60KB限制，prepare保留全协议，跨进程只发送具体template/单推荐request，未调整通用body/bridge/MCP界限；v2不变。最终全量 **1018 passed,1 warning /476.25s，退出0，无skip**，日志 `/home/lan/.hermes/cache/scratch/xianyu-price-size-final.log`。独立Chromium UI smoke、ruff、pip check、node --check、git diff --check全部通过。唯一warning仍为Starlette/httpx弃用提醒。日志临时仅scratch，无生产访问/部署/commit/push/daily改动。
+
 ## 2026-10-19 最终审查进程树/真实契约/CDP观察时序修复
 
 父助手P1实测bridge后代未回收，另全量 **979 passed,1 failed /473.32s**（tests/test_operations_real.py:143观察端仍有两个about:blank），日志xianyu-parent-integrated-tests.log。此前980本地通过不抵消这两项，保持诊断/UI和daily逻辑不变。

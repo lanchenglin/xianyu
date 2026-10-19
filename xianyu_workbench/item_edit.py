@@ -165,6 +165,12 @@ def prepare(service, account, payload):
         raise Problem('account_mismatch', '协议账号或同 ID 不符', 409)
     bounded = protocol.get('concurrency_mode') == 'bounded_snapshot'
     before = protocol['before_values'] if bounded else protocol['before']
+    if bounded:
+        from .edit_snapshot import expected_after
+        try:
+            expected_after(protocol, payload)
+        except ValueError:
+            raise Problem('edit_price_encoding_invalid', '金额不符合已批准的精确回读编码，未创建编辑动作', 422)
     if bounded and payload['title'] != before['title']:
         raise Problem('edit_title_mapping_required', '组合文本尚无独立标题转换证据，须保持原短标题；未提交', 409)
     if all(payload[k] == before[k] for k in ('title', 'desc', 'price')):

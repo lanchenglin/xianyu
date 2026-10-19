@@ -15,7 +15,7 @@
 - `before={detail: <普通 detail 完整 data>, edit: <editDetail 完整 data>}`，不裁剪未知字段。`before_content_hash=digest(before)` 使用项目 typed-canonical SHA-256；**内容 hash 不是平台版本，不是 CAS**。完整类型/值精确比较，额外字段、数组顺序、空容器和 userId 都冻结，但后者不当作身份。
 - `identity_paths.uid` 固定 `detail/sellerDO/sellerId`，`item_id` 固定 `detail/itemDO/itemId`；edit_item_id 为已证 edit 商品路径。只接受严格字符串/整数 ID，比较后仍保留原类型，回读必须原类型全等。
 - `status_path` 必须明确指向普通 detail 已取证状态（非空字符串或严格整数），与身份/内容路径不重叠；原状态逐类型冻结，不以猜测 ONLINE 枚举代替证据。
-- `before_values` 为原 item_id/title/desc/两位小数元价格。`content_mappings` 只允许对象路径和 field=title/desc/price；编码仅 identity（文字）、yuan_string/cent_string（金额）。必须独立覆盖普通 detail 三项及 edit 正文/价格；互不重叠。不支持表达式、JS、任意 URL/API。
+- `before_values` 为原 item_id/title/desc/两位小数元价格。`content_mappings` 只允许对象路径和 field=title/desc/price；编码仅 identity（文字）、yuan_string/cent_string/yuan_integer_string（金额）。yuan_integer_string是显式price专用：规范两位小数输入必须以.00结束，仅输出整数元字符串，如2200.00→2200，不裁剪其他小数、不推断平台格式；非整元申请在创建动作前422，原始detail快照不改。零值可由编码函数表达，但EditIn仍拒绝零价动作，上限仍1000000.00。必须独立覆盖普通 detail 三项及 edit 正文/价格；互不重叠。不支持表达式、JS、任意 URL/API。
 - 请求文字严格固定 `itemTextDTO={title: before.desc, desc: before.desc, titleDescSeparate:false}`，价格严格固定 `itemPriceDTO={priceInCent: 分整数字符串}`。实际提交只替换这两个正文叶子和价格；**独立改短标题尚缺转换证据，申请时拒绝任何 title 变化**。新正文仍要求普通 detail 短标题保持原值；若平台改变它，则 unknown，不能猜截断后宣称 verified。
 - `original_request == template` 全等。其余请求叶子须 `invariant_mappings` 从完整 edit 快照逐类型精确映射；默认 identity；新增下述已证有限命名转换，不支持缺证的任意数组转换。变化内容不能成为固定字段来源。
 - 例外仅 `fixed_constants` 中逐字冻结的 sourceId/bizcode/publishScene（后两者须 pcMainPublish）；sourceId 具体值仍须管理员取证。unique_code_mode 必须 timestamp_random，原始 uniqueCode 保留，申请时按毫秒拼接0～999整数生成一次并冻结到 action/digest；同账号历史碰撞在申请事务内拒绝，不自动重抽。它不是版本、幂等或 CAS 保证。
@@ -39,7 +39,7 @@
 
 ### 可选单类目推荐依赖
 
-v3 `label_dependency` 默认null；显式对象字段为 `mode=single_category_v1`、`requests` 两个完整捕获请求、`responses` 两个完整捕获响应、`unique_code_mode=timestamp_random`、evidence。完整协议大小原上限60000字符保留，单推荐请求/响应另限60000 UTF-8字节、最多20卡/每卡100项；这些是本地边界，不宣称平台上限。
+v3 `label_dependency` 默认null；显式对象字段为 `mode=single_category_v1`、`requests` 两个完整捕获请求、`responses` 两个完整捕获响应、`unique_code_mode=timestamp_random`、evidence。v3完整协议（含模型默认值、不含本地revision）的canonical UTF-8上限256KiB=262144字节，精确边界允许，超限先拒绝。单编辑模板保持60000字节边界；完整协议只在本地加密冻结，不跨bridge发送，因此没有扩大bridge输入/输出、HTTP总body或MCP响应限制。单推荐请求/响应另限60000 UTF-8字节、最多20卡/每卡100项；这些是本地边界，不宣称平台上限。
 
 只支持原edit.itemLabelExtList恰一项category/propertyId=-10000，严格九字段字符串；`sku_source_mode` 默认explicit_empty_arrays，要求edit.itemSkuList和itemProperties显式空数组，若有itemSkuExtra须为空对象；显式missing_with_empty_extra要求两个数组字段均缺失、itemSkuExtra严格{}、冻结multiSKU=false，且原请求无SKU相关字段。两种来源不静默互换，选择冻结revision/digest。唯一选中项须isClicked/isUserClick="1"，类别四字段匹配原类目。transportData严格15字段/原null类型，派生text与properties后必须全等原始编辑请求标签；任一其他选中项拒绝。不补缺失字段，不采纳未选项。
 
